@@ -23,10 +23,17 @@ button,input,select,textarea{font-family:var(--font)}
 button{-webkit-tap-highlight-color:transparent;touch-action:manipulation;cursor:pointer}
 small{font-size:.82em}
 
-.app-bar{background:var(--g);color:#fff;display:flex;align-items:center;gap:12px;padding:10px 16px;padding-top:max(10px,env(safe-area-inset-top));position:sticky;top:0;z-index:500;box-shadow:0 1px 0 rgba(0,0,0,.08);flex-wrap:wrap}
-.app-logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;white-space:nowrap}
-.app-logo .dot{width:8px;height:8px;border-radius:50%;background:var(--gl);box-shadow:0 0 0 3px rgba(93,202,165,.25)}
-.app-sub{font-size:10.5px;color:rgba(255,255,255,.6)}
+.app-bar{background:var(--g);color:#fff;display:flex;align-items:center;gap:12px;padding:14px 18px;padding-top:max(14px,env(safe-area-inset-top));position:sticky;top:0;z-index:500;box-shadow:0 1px 0 rgba(0,0,0,.08);flex-wrap:wrap}
+.app-logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:21px;letter-spacing:-.01em;white-space:nowrap}
+.app-logo .dot{width:11px;height:11px;border-radius:50%;background:var(--gl);box-shadow:0 0 0 4px rgba(93,202,165,.25)}
+.app-sub{display:block;font-size:12.5px;font-weight:600;color:rgba(255,255,255,.82)}
+.app-name-wrap{display:flex;flex-direction:column;gap:1px;line-height:1.15}
+/* Thin live progress strip along the bottom edge of the (sticky) header. */
+.app-progress{position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,.18)}
+.app-progress-fill{height:100%;width:0;background:var(--gl);transition:width .25s ease}
+/* Form intro: question count / time estimate + live answered counter. */
+.form-meta{background:var(--gf);border:1px solid var(--gl);border-radius:var(--r8);padding:9px 13px;margin-bottom:12px;font-size:12.5px;color:var(--inks);display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.form-meta b{color:var(--g)}
 .app-spacer{flex:1}
 .app-tag{font-size:10.5px;color:rgba(255,255,255,.7);background:rgba(255,255,255,.13);border-radius:20px;padding:4px 10px}
 
@@ -191,7 +198,7 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 </head>
 <body>
 <header class="app-bar">
-  <div class="app-logo"><span class="dot"></span>Beyond Mechanics <span class="app-sub">Gut &amp; Systemic Health Screen</span></div>
+  <div class="app-logo"><span class="dot"></span><span class="app-name-wrap">Gut &amp; Systemic Health Screen<span class="app-sub">Beyond Mechanics · GSHS</span></span></div>
   <div class="app-spacer"></div>
   <div class="mode-switch" id="modeSwitch">
     <button class="mode-btn active" data-mode="patient" type="button">Questionnaire</button>
@@ -199,6 +206,7 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
     <button class="mode-btn" data-mode="record" type="button">Patient records</button>
   </div>
   <div class="app-chip" id="activeChip" style="display:none"><span class="nm" id="activeName"></span><button class="x" id="activeClear" type="button" title="Clear patient">✕</button></div>
+  <div class="app-progress" id="appProgress" style="display:none"><div class="app-progress-fill" id="appProgressFill"></div></div>
 </header>
 <main>
   <section id="mode-patient" class="mode show wrap"></section>
@@ -2050,6 +2058,15 @@ function render() {
     `<b>Gut &amp; Systemic Health Screen (GSHS).</b> A multi-axis screening instrument for chronic gut and related systemic symptoms. ` +
     `This is an educational screening tool, not a diagnosis.`));
 
+  // How long this takes — counts only the mandatory questions (optional items
+  // and the supplementary driver/history cards are excluded from the count).
+  const mainQ = QUESTIONS.filter(q => !q.optional).length;
+  const tLo = Math.max(3, Math.round(mainQ * 8 / 60));
+  const tHi = Math.max(tLo + 1, Math.round(mainQ * 12 / 60));
+  root.appendChild(el('div', { class: 'form-meta' },
+    `<span>📋 <b>${mainQ} questions</b> · about <b>${tLo}–${tHi} minutes</b>. <span class="muted">A few optional history/lifestyle questions can be skipped.</span></span>
+     <span id="progressText" class="muted"></span>`));
+
   root.appendChild(patientBanner());
 
   if (RED_FLAGS.length) root.appendChild(redFlagCard());
@@ -2095,6 +2112,22 @@ function render() {
   root.appendChild(actions);
   root.appendChild(el('div', { id: 'patient-results' }));
   updateIdentityChip();
+  updateProgress();
+}
+
+// Live completion progress over the MANDATORY questions only (optional items
+// excluded, per design). Drives the header strip + the "answered N of M" text.
+function updateProgress() {
+  const mandatory = QUESTIONS.filter(q => !q.optional);
+  const total = mandatory.length;
+  const done = mandatory.filter(q => typeof answers[q.id] === 'number').length;
+  const pct = total ? Math.round(done / total * 100) : 0;
+  const fill = document.getElementById('appProgressFill');
+  const bar = document.getElementById('appProgress');
+  const txt = document.getElementById('progressText');
+  if (fill) fill.style.width = pct + '%';
+  if (bar) bar.style.display = 'block';
+  if (txt) txt.innerHTML = `Answered <b>${done}</b> of <b>${total}</b>`;
 }
 
 const PSS4_COLOR = ['s0', 's0', 's1', 's2', 's3']; // map 0–4 anchors to colour classes
@@ -2434,6 +2467,7 @@ function questionRow(q) {
       opts.querySelectorAll('.opt').forEach(o => o.classList.remove('sel'));
       b.classList.add('sel');
       if (naBtn) naBtn.classList.remove('sel');
+      updateProgress();
     };
     opts.appendChild(b);
   });
@@ -3401,6 +3435,9 @@ const { $, $$ } = __req('util.js');
 function setMode(name) {
   $$('.mode').forEach(s => s.classList.toggle('show', s.id === 'mode-' + name));
   $$('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === name));
+  // The header progress strip is only meaningful on the questionnaire.
+  const prog = document.getElementById('appProgress');
+  if (prog) prog.style.display = name === 'patient' ? 'block' : 'none';
   if (name === 'record') Record.show();
   if (name === 'clinician') Patient.renderClinician();
 }
