@@ -2570,24 +2570,20 @@ function calc() {
     `Provisional result — ${score.completeness}% of scored items answered.`));
   out.appendChild(hero);
 
-  // Triage — the headline next step (clinician guidance, not prescription).
-  out.appendChild(triageCard(tri, rome, false));
-
-  // Secondary axes (Inflammatory / Psychosocial / Impact + microbiome correlate).
-  out.appendChild(axisProfileCard(profile, heads));
-
-  // Symptom × microbiome — two independent reads, no blended number.
-  out.appendChild(riskMatrixCard(sv, lens));
+  // Score-then-story order: the cards below are BUILT here but appended in a
+  // single ordered block lower down (headline → symptom detail → by-domain →
+  // secondary axes → patterns → symptom×microbiome → next step → drivers → trend).
 
   // Live trend preview: if this patient reference has prior visits, show the
-  // trajectory now. For a freshly-completed questionnaire the current visit is
+  // trajectory. For a freshly-completed questionnaire the current visit is
   // appended as 'unsaved'; for a loaded saved visit it's already in the DB so
   // we don't duplicate it — just show all saved visits (needs ≥2 to be useful).
   const prior = priorVisits();
+  let trendEl = null;
   if (loadedVisitId) {
-    if (prior.length >= 2) out.appendChild(trendCard(prior, false));
+    if (prior.length >= 2) trendEl = trendCard(prior, false);
   } else {
-    if (prior.length >= 1) out.appendChild(trendCard(prior.concat([currentVisit()]), true));
+    if (prior.length >= 1) trendEl = trendCard(prior.concat([currentVisit()]), true);
   }
 
   const bars = el('div', { class: 'card' });
@@ -2623,7 +2619,6 @@ function calc() {
       });
     }
   });
-  out.appendChild(bars);
 
   // Modifiable drivers — context, not part of the Index (computed above with the
   // triage inputs; rendered here).
@@ -2636,11 +2631,11 @@ function calc() {
      <div class="dv" style="color:${f.color}">${esc(f.band)}</div>
      ${f.score ? `<div class="dl">${esc(f.score)}</div>` : ''}`)));
   driv.appendChild(dg);
-  out.appendChild(driv);
 
   // Patterns — first-cut clinical-discussion patterns from drivers + clusters
   // (computed above with the triage inputs). Conservatively framed; confidence
   // reflects how much supporting data was answered.
+  let patternsEl = null;
   if (patterns.length > 0) {
     const pcard = el('div', { class: 'card' });
     pcard.appendChild(el('h2', {}, 'Patterns to discuss with your clinician'));
@@ -2653,8 +2648,17 @@ function calc() {
          </div>
          <div class="q-sub" style="margin-top:6px;color:var(--inks);line-height:1.5">${esc(p.desc)}</div>`));
     });
-    out.appendChild(pcard);
+    patternsEl = pcard;
   }
+
+  // ── Ordered render (score-then-story) ──────────────────────────────────────
+  out.appendChild(bars);                              // by-domain breakdown (under the headline + symptom detail)
+  out.appendChild(axisProfileCard(profile, heads));   // secondary axes
+  if (patternsEl) out.appendChild(patternsEl);        // patterns to discuss
+  out.appendChild(riskMatrixCard(sv, lens));          // symptom × microbiome
+  out.appendChild(triageCard(tri, rome, false));      // suggested next step
+  out.appendChild(driv);                              // modifiable drivers
+  if (trendEl) out.appendChild(trendEl);              // progress over time
 
   // Clinician detail (item-level responses, Rome IV raw, investigations) lives in
   // the Clinician tab — intentionally not rendered in the patient results.
