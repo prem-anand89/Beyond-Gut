@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Beyond Mechanics · Gut Health Screen (v2)</title>
+<title>Beyond Mechanics · Gut & Systemic Health Screen (GSHS)</title>
 <style>/* ============================================================================
    gut_screen.html (v2) — clean-slate rebuild. Questionnaire + scoring only.
    Single self-contained offline file. Palette ported from BM_Gut_Suite v7.
@@ -191,7 +191,7 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 </head>
 <body>
 <header class="app-bar">
-  <div class="app-logo"><span class="dot"></span>Beyond Mechanics <span class="app-sub">Gut Screen v2</span></div>
+  <div class="app-logo"><span class="dot"></span>Beyond Mechanics <span class="app-sub">Gut &amp; Systemic Health Screen</span></div>
   <div class="app-spacer"></div>
   <div class="mode-switch" id="modeSwitch">
     <button class="mode-btn active" data-mode="patient" type="button">Questionnaire</button>
@@ -354,18 +354,27 @@ const SCHEMA_VERSION = 2; // v2 gen; bumped at the trim/refocus (TRIM_PLAN §8)
 const { scaleFor } = __req('scales.js');
 
 // ── SECTIONS — co-design output. ────────────────────────────────────────────
-// Shape: { id, label, full, role, color, bg }
-//   role 'core'   = validated GI anchor; primary driver of the Index.
-//   role 'screen' = downstream screening domain; modifier, not score-dilator.
+// Shape: { id, label, full, role, axis, color, bg }
+//   role 'core'       = validated GI anchor; the ONLY input to the Gut Symptom
+//                       Burden Index (GSRS). Nothing else touches the Index.
+//   role 'standalone' = scored, banded, separately-labeled axis. NEVER blended
+//                       into the Index — surfaced on its own and rolled up into
+//                       the Systemic Burden headline at the interpretation layer.
+//   axis = the named clinical axis this section maps to (axisProfile()/triage
+//          cite findings by axis; the UI groups axes into headline outputs).
 const SECTIONS = [
   // Domain 1 (locked): GSRS-derived GI core. 15 items, 0–3 severity, 2-wk recall.
-  { id: 'GI', label: 'GI', full: 'Gut symptoms (GSRS-based)',  role: 'core',   color: '#0F6E56', bg: '#E1F5EE' },
+  { id: 'GI',  label: 'GI',  full: 'Gut symptoms (GSRS-based)',          role: 'core',       axis: 'symptom',      color: '#0F6E56', bg: '#E1F5EE' },
   // Connected-axis screening domains, refocused at the trim (TRIM_PLAN §3–§6).
   // Oral/ENT, Hormonal, broad-Metabolic removed (no gut-specific engine pathway);
-  // Sleep relocated to drivers; Skin collapsed into IM.
-  { id: 'IM', label: 'IM', full: 'Immune, inflammatory & skin', role: 'screen', color: '#B04A20', bg: '#FAEEE8' },
-  { id: 'BG', label: 'BG', full: 'Brain-gut & mood',           role: 'screen', color: '#534AB7', bg: '#EEEDFE' },
-  { id: 'NU', label: 'NU', full: 'Nutrient & absorption',      role: 'screen', color: '#185FA5', bg: '#E6F1FB' },
+  // Sleep relocated to drivers; Skin collapsed into IM. All STANDALONE — they no
+  // longer dilute the GSRS Index (axis-model redesign).
+  { id: 'IM',  label: 'IM',  full: 'Immune, inflammatory & skin',        role: 'standalone', axis: 'inflammatory', color: '#B04A20', bg: '#FAEEE8' },
+  { id: 'BG',  label: 'BG',  full: 'Brain-gut & mood',                   role: 'standalone', axis: 'psychosocial', color: '#534AB7', bg: '#EEEDFE' },
+  { id: 'NU',  label: 'NU',  full: 'Nutrient & absorption',              role: 'standalone', axis: 'nutrient',     color: '#185FA5', bg: '#E6F1FB' },
+  // New Impact axis (§7d) — functional / quality-of-life, modeled on Rome IV's own
+  // impact category. Standalone; also drives an independent Tier-2 escalation.
+  { id: 'IMP', label: 'IMP', full: 'Functional / quality-of-life impact', role: 'standalone', axis: 'impact',      color: '#6B7280', bg: '#F1F2F4' },
 ];
 
 // ── QUESTIONS — co-design output. ───────────────────────────────────────────
@@ -427,6 +436,12 @@ const QUESTIONS = [
   // Gut–skin axis: the one retained skin item (atopic/inflammatory readout), folded
   // into the immune domain (TRIM_PLAN §6.1). Feeds the inflammatory_immune pattern.
   { id: 'sk_skin', section: 'IM', patientText: 'Acne, eczema, or unexplained skin rashes' },
+  // Objective inflammatory anchor (§7b) — gives IM a diagnosed-condition anchor the
+  // way NU has nu_known_def, so the domain isn't purely symptom-proxy. Optional
+  // (only counts when answered); weighted like a lab anchor in inflammatory_immune.
+  { id: 'im_known_dx', section: 'IM', optional: true, optionalLabel: 'if diagnosed',
+    patientText: 'Diagnosed autoimmune or inflammatory condition',
+    patientSub: 'e.g. rheumatoid arthritis, psoriasis, lupus, or thyroid disease' },
 
   // ── BG — Brain-gut & mood (DRAFT) ──
   { id: 'bg_brainfog', section: 'BG', patientText: 'Brain fog or poor concentration',
@@ -455,6 +470,17 @@ const QUESTIONS = [
     patientSub: 'Possible iron-deficiency signs' },
   { id: 'nu_mouth', section: 'NU', patientText: 'Cracks at the corners of your mouth, sore tongue, or easy bruising',
     patientSub: 'Possible micronutrient-deficiency signs' },
+
+  // ── IMP — Functional / quality-of-life impact (§7d + §7e) ──
+  // Short, modeled on Rome IV's impact category (work/social function + a global
+  // rating) so it stays recognizable. DEFAULT 0–3 scale — no new rendering code.
+  { id: 'imp_work',   section: 'IMP', patientText: 'Interference with work, study, or daily responsibilities',
+    patientSub: 'Over the last 2 weeks, because of your gut symptoms' },
+  { id: 'imp_social', section: 'IMP', patientText: 'Interference with social or family activities',
+    patientSub: 'Over the last 2 weeks, because of your gut symptoms' },
+  { id: 'imp_food',   section: 'IMP', patientText: 'Avoiding or restricting foods because of your symptoms',
+    patientSub: 'Cutting out foods or eating less than you would like to' },
+  { id: 'imp_global', section: 'IMP', patientText: 'Overall effect on your day-to-day quality of life' },
 ];
 
 // ── Derived index — the ONLY question index in the app. ─────────────────────
@@ -631,6 +657,26 @@ function surgicalFlags(extras) {
   return { adhesion, microbiome, list, count: list.length };
 }
 
+// Known diagnosed/suspected conditions (§7a). The single biggest completeness gap
+// in v2 — a gastroenterologist expects these on any referral, and celiac/IBD are
+// standard differentials for IBS-mimicking presentations. Collected as context
+// (multi-select id list in extras.conditions), NOT scored. `refer:true` marks the
+// conditions that add an interpretation note to triage (does not change the Tier).
+const KNOWN_CONDITIONS = [
+  { id: 'celiac',     label: 'Coeliac disease',                refer: true },
+  { id: 'ibd',        label: 'IBD (Crohn’s or ulcerative colitis)', refer: true },
+  { id: 'thyroid',    label: 'Thyroid disorder' },
+  { id: 'diabetes',   label: 'Diabetes' },
+  { id: 'endo',       label: 'Endometriosis' },
+  { id: 'lactose',    label: 'Lactose intolerance' },
+];
+function knownConditions(extras) {
+  const ids = new Set(((extras || {}).conditions) || []);
+  const list = [], referList = [];
+  KNOWN_CONDITIONS.forEach(c => { if (ids.has(c.id)) { list.push(c.label); if (c.refer) referList.push(c.label); } });
+  return { list, referList, count: list.length };
+}
+
 // Returns the count of dysbiosis-correlate signals present + their labels.
 function dysbiosisLens(extras) {
   const ex = extras || {}, d = ex.dys || {};
@@ -646,12 +692,11 @@ function dysbiosisLens(extras) {
   return { count: signals.length, signals };
 }
 
-// EXPERIMENTAL blended Gut Health Index (TRIM_PLAN §10, pre-validation). A single
-// 0–100 number = a transparent weighted mix of validated-ish symptom severity and
-// the (un-validated) dysbiosis-correlate count. Severity-weighted 0.7 because it's
-// the better-grounded component; the lens contributes 0.3. Higher = worse. This is
-// NOT a substitute for the two component reads — it's shown WITH them, flagged
-// experimental, and the weights are placeholders to refit at pilot.
+// LEGACY — superseded by axisProfile() / headlineOutputs() in scoring.js. This
+// blended single number is NO LONGER surfaced in any patient- or clinician-facing
+// view (it mixed validated severity with the un-validated correlate count, which
+// is exactly the composite the axis-model redesign removed). Retained ONLY so the
+// pilot CSV can still emit it for internal comparison against the old composite.
 const GHI_WEIGHTS = { severity: 0.7, risk: 0.3, riskMax: 6 };
 function gutHealthIndex(severityIndex, lensCount) {
   if (severityIndex == null) return null;
@@ -733,6 +778,7 @@ __e.SLEEP_ITEMS = SLEEP_ITEMS; __e.SLEEP_ANCHORS = SLEEP_ANCHORS; __e.sleepBurde
 __e.FOOD_TRIGGERS = FOOD_TRIGGERS; __e.ABX_COURSES = ABX_COURSES; __e.GAS_LEVELS = GAS_LEVELS; __e.STOOLVAR_LEVELS = STOOLVAR_LEVELS;
 __e.POSTINF_OPTS = POSTINF_OPTS; __e.PARADOX_OPTS = PARADOX_OPTS; __e.dysbiosisLens = dysbiosisLens;
 __e.SURGERIES = SURGERIES; __e.surgicalFlags = surgicalFlags;
+__e.KNOWN_CONDITIONS = KNOWN_CONDITIONS; __e.knownConditions = knownConditions;
 __e.gutHealthIndex = gutHealthIndex; __e.GHI_WEIGHTS = GHI_WEIGHTS;
 __e.TRIM_PLAN = TRIM_PLAN;
 __e.BRISTOL_TYPES = BRISTOL_TYPES; __e.PAIN_REGIONS = PAIN_REGIONS; __e.painBand = painBand; __e.modifiableFactors = modifiableFactors;
@@ -799,14 +845,18 @@ const SEVERITY_DESC = {
   'Severe':        'High gut-symptom burden — comprehensive clinical assessment recommended.',
 };
 
-function bandForPct(pct, coreLow) {
-  let b = BANDS.find(x => pct < x.maxPct) || BANDS[BANDS.length - 1];
-  // GI-dominance: a 'screen'-driven elevation with a low core is capped at
-  // Mild–Moderate (the Phase 0 §2 lesson, built in from the start).
-  if (coreLow && b.label !== 'Minimal' && BANDS.indexOf(b) > 1) {
-    return Object.assign({}, BANDS[1], { capped: true });
-  }
-  return Object.assign({}, b, { capped: false });
+// Plain band lookup on a 0–100 percentage. The old GI-dominance cap is GONE:
+// it existed only to stop SCREEN domains inflating the Index, which can no longer
+// happen now that the Index is GSRS-core ONLY (nothing else feeds it).
+function bandForPct(pct) {
+  return BANDS.find(x => pct < x.maxPct) || BANDS[BANDS.length - 1];
+}
+
+// Reusable qualitative bander for the standalone axes (IM/NU/IMP), so each gets a
+// legible band off its 0–1 norm without re-implementing BANDS.
+function axisBand(norm) {
+  if (norm == null) return null;
+  return bandForPct(Math.round(norm * 100));
 }
 
 // answers: id-map OR positional array. Per item:
@@ -852,7 +902,7 @@ function computeScores(answers, opts) {
 
   const secScores = {}, secNorm = {}, bands = {}, secAnswered = {}, secApplicableMax = {};
   let answeredItems = 0, scoredItems = 0;
-  const coreNorms = [], screenNorms = [];
+  const coreNorms = [];   // ONLY the validated GSRS core feeds the Index now.
 
   for (const sec of SECTIONS) {
     const qs = QUESTIONS.filter(q => q.section === sec.id && !q.driverOnly);
@@ -876,29 +926,21 @@ function computeScores(answers, opts) {
     }
     secNorm[sec.id] = norm;
     scoredItems += denom; answeredItems += n;
-    if (norm != null) (sec.role === 'core' ? coreNorms : screenNorms).push(norm);
+    if (norm != null && sec.role === 'core') coreNorms.push(norm); // standalone axes never enter the Index
   }
 
-  // Hybrid combine (co-design): core weighted 0.6, screens 0.4 (more holistic).
+  // Gut Symptom Burden Index = GSRS core ONLY (no blend). The standalone axes are
+  // scored above and surfaced separately via axisProfile() — they never touch this.
   const coreMean = coreNorms.length ? coreNorms.reduce((a, b) => a + b, 0) / coreNorms.length : null;
-  const screenMean = screenNorms.length ? screenNorms.reduce((a, b) => a + b, 0) / screenNorms.length : null;
-  let blend;
-  if (coreMean != null && screenMean != null) blend = 0.6 * coreMean + 0.4 * screenMean;
-  else blend = (coreMean != null ? coreMean : (screenMean != null ? screenMean : 0));
-  const index = Math.round(blend * 100);
+  const index = coreMean != null ? Math.round(coreMean * 100) : null;
 
   const completeness = scoredItems ? Math.round(answeredItems / scoredItems * 100) : 100;
   const coreUnknown = coreMean == null;                 // GI/GSRS section wasn't answered at all
-  const coreLow = coreUnknown || coreMean < 0.20;        // unknown OR genuinely low — cap either way
-  const band = bandForPct(index, coreLow);
-  const severity = Object.assign({}, band, {
-    index,
-    desc: SEVERITY_DESC[band.label] + (band.capped
-      ? (coreUnknown
-          ? " Capped — the core GI section wasn't answered, so this result can't yet be attributed to direct gut symptoms."
-          : ' Capped — direct gut symptoms are low; the elevation comes mostly from other domains.')
-      : ''),
-  });
+  const band = coreUnknown ? null : bandForPct(index);
+  const severity = band
+    ? Object.assign({}, band, { index, provisional: false, desc: SEVERITY_DESC[band.label] })
+    : { index: null, label: null, provisional: true,
+        desc: 'Core GI section not completed — no Gut Symptom Burden score available.' };
 
   return { secScores, secNorm, secApplicableMax, bands, secAnswered, completeness, index, severity, bristolSignal, clusterAgg, clusterNorm, coreUnknown };
 }
@@ -906,17 +948,99 @@ function computeScores(answers, opts) {
 // Shared confidence descriptor (Phase 0.5 §3 mechanism).
 function scoreConfidence(scoreObj) {
   const c = (scoreObj && scoreObj.completeness != null) ? scoreObj.completeness : 100;
-  const capped = !!(scoreObj && scoreObj.severity && scoreObj.severity.capped === true);
+  const provisional = !!(scoreObj && scoreObj.severity && scoreObj.severity.provisional === true);
   let level, note;
   if (c < 60)      { level = 'Low';      note = `Provisional — only ${c}% of items answered.`; }
   else if (c < 80) { level = 'Moderate'; note = `${c}% of items answered — interpret with care.`; }
   else             { level = 'High';     note = 'All key items answered.'; }
-  if (capped) note += ' Severity capped: direct gut symptoms are low relative to other domains.';
-  return { level, note, completeness: c, capped };
+  if (provisional) note += ' Core GI section not completed — Gut Symptom Burden unavailable.';
+  return { level, note, completeness: c, provisional };
+}
+
+// ── axisProfile() — single source of truth the UI and triage both read from. ──
+// Six standalone, separately-labeled axes. The Symptom axis is the validated
+// GSRS Index; everything else is explicitly flagged draft/correlate. NOTHING here
+// is blended back into the Index — these are independent reads.
+function axisProfile(score, ex, dys) {
+  const S = __req('scales.js');
+  const psych = S.psychLoadScore(ex || {}); // PSS-4 + anxiety + mood, 0–100 (validated PSS-4 anchor)
+  const n  = (k) => (score.secNorm && score.secNorm[k] != null) ? Math.round(score.secNorm[k] * 100) : null;
+  const bl = (k) => { const b = axisBand(score.secNorm && score.secNorm[k]); return b ? b.label : null; };
+  return {
+    symptom:      { axis: 'symptom',      label: 'Symptom (gut)',          value: score.index,
+                    band: score.severity && score.severity.label, validated: true,
+                    note: 'GSRS-based, validated instrument.' },
+    inflammatory: { axis: 'inflammatory', label: 'Inflammatory / immune',  value: n('IM'), band: bl('IM'),
+                    validated: false, note: 'Investigator-built domain, draft pending pilot validation.' },
+    nutrient:     { axis: 'nutrient',     label: 'Nutrient / absorption',  value: n('NU'), band: bl('NU'),
+                    validated: false, note: 'Investigator-built domain, draft pending pilot validation.' },
+    psychosocial: { axis: 'psychosocial', label: 'Psychosocial / gut-brain', value: psych,
+                    band: psych != null ? (psych >= 50 ? 'Significant' : psych >= 25 ? 'Mild–Moderate' : 'Minimal') : null,
+                    validated: 'partial', note: 'PSS-4 is validated; BG screen items are draft.' },
+    microbiome:   { axis: 'microbiome',   label: 'Microbiome correlate',   value: dys ? dys.count : 0, max: 7,
+                    band: dys && dys.count >= 2 ? 'Elevated' : 'Low', validated: false,
+                    note: 'Correlate lens, not a measurement — not validated against stool sequencing.' },
+    impact:       { axis: 'impact',       label: 'Functional impact',      value: n('IMP'), band: bl('IMP'),
+                    validated: false, note: 'New domain — no pilot data yet.' },
+  };
+}
+
+const loadBandFor = (count) => count >= 2 ? 'Elevated' : (count >= 1 ? 'Some' : 'Low');
+
+// ── headlineOutputs() — the GSHS headline reads, derived from axisProfile.
+// Output hierarchy = Option A: FOUR primary headline numbers + THREE secondary
+// reads shown one tier down. Nutrient/Malabsorption is kept PRIMARY on purpose —
+// it's the one draft domain that can independently trigger a Tier-1 referral, so
+// it must never be buried inside a merged composite. Inflammatory, Psychosocial,
+// and Impact are still shown, just one tier down.
+// Burden/Load convention: "Burden" = current symptom severity; "Load" =
+// exposure/risk accumulation; "Risk" = the malabsorption-risk read.
+function headlineOutputs(score, ex, dys) {
+  const S = __req('scales.js');
+  const ax = axisProfile(score, ex, dys);
+
+  // Microbiome split — exposure (objective) vs phenotype correlate (inferred).
+  const meds = (ex && ex.meds) || {};
+  const abxCourses = (ex && typeof ex.abxCourses === 'number') ? ex.abxCourses : 0;
+  const microSurg = S.surgicalFlags(ex).microbiome;
+  const disruption = [];
+  if (meds.abx || abxCourses >= 1) disruption.push('Recent / repeated antibiotics');
+  if (meds.ppi)   disruption.push('Acid blocker (PPI/H2)');
+  if (meds.nsaid) disruption.push('Regular NSAID');
+  if (microSurg)  disruption.push('Microbiome-altering surgery');
+  const CORRELATE_KEYS = ['postinf', 'fodmap', 'gas', 'paradox', 'var'];
+  const correlate = ((dys && dys.signals) || [])
+    .filter(s => CORRELATE_KEYS.includes(s.k)).map(s => s.label);
+
+  const primary = {
+    symptom:    { key: 'gut_symptom_burden', label: 'Gut Symptom Burden', value: score.index,
+                  band: score.severity && score.severity.label, validated: true, sub: ax.symptom },
+    nutrient:   { key: 'nutrient_malabsorption_risk', label: 'Nutrient / Malabsorption Risk',
+                  value: ax.nutrient.value, band: ax.nutrient.band, validated: false, sub: ax.nutrient },
+    disruption: { key: 'disruption_load', label: 'Disruption Load', value: disruption.length,
+                  band: loadBandFor(disruption.length), validated: false, signals: disruption },
+    correlate:  { key: 'dysbiosis_correlate_load', label: 'Dysbiosis Correlate Load', value: correlate.length,
+                  band: loadBandFor(correlate.length), validated: false, signals: correlate },
+  };
+  const secondary = {
+    inflammatory: { key: 'inflammatory_burden', label: 'Inflammatory / Immune Burden',
+                    value: ax.inflammatory.value, band: ax.inflammatory.band, validated: false, sub: ax.inflammatory },
+    psychosocial: { key: 'psychosocial_load', label: 'Psychosocial / Gut-Brain Load',
+                    value: ax.psychosocial.value, band: ax.psychosocial.band, validated: 'partial', sub: ax.psychosocial },
+    impact:       { key: 'functional_impact', label: 'Functional Impact',
+                    value: ax.impact.value, band: ax.impact.band, validated: false, sub: ax.impact },
+  };
+  return {
+    primary, secondary,
+    // ordered flat lists for convenient rendering
+    primaryList:   [primary.symptom, primary.nutrient, primary.disruption, primary.correlate],
+    secondaryList: [secondary.inflammatory, secondary.psychosocial, secondary.impact],
+  };
 }
 
 __e.BANDS = BANDS; __e.computeScores = computeScores; __e.scoreConfidence = scoreConfidence;
 __e.BRISTOL_ALPHA = BRISTOL_ALPHA; __e.bristolTransit = bristolTransit;
+__e.bandForPct = bandForPct; __e.axisBand = axisBand; __e.axisProfile = axisProfile; __e.headlineOutputs = headlineOutputs;
 return __e;
 };
 
@@ -951,6 +1075,23 @@ const ROME_ASSOC = [
   { id: 'rm_assoc_formchange', label: 'Pain comes with a change in stool consistency/appearance' },
 ];
 
+// ── ONE source of truth for bowel subtype ──────────────────────────────────
+// Both Rome IV classification AND the pattern engine derive bowel direction from
+// THIS function (off the GSRS Constipation/Diarrhoea cluster norms), so they can
+// never disagree on the same patient. Previously Rome IV used its own 0.3
+// thresholds while the patterns used 0.4 — a latent contradiction. Lives in
+// romeiv.js (loaded before patterns.js, which already requires this module).
+const BOWEL_HI = 0.3; // cluster-norm threshold for "this direction is prominent"
+function bowelSubtype(clusterNorm) {
+  const cn = clusterNorm || {};
+  const c = (cn.Constipation ?? 0) >= BOWEL_HI;
+  const d = (cn.Diarrhoea ?? 0) >= BOWEL_HI;
+  if (c && d) return 'IBS-M';
+  if (c) return 'IBS-C';
+  if (d) return 'IBS-D';
+  return 'IBS-U';
+}
+
 // Single cross-sectional pass, NOT the prospective diary Rome IV was validated
 // against. Classifies a PATTERN CONSISTENT WITH Rome IV criteria — never call
 // this a diagnosis in any UI string.
@@ -963,24 +1104,17 @@ function classifyRomeIV(rome, clusterNorm) {
   if (!answered) return { criteriaMet: false, answered: false, subtype: null, assocCount };
   const criteriaMet = freqMet && onsetMet && assocCount >= 2;
   if (!criteriaMet) return { criteriaMet: false, answered: true, subtype: null, assocCount };
-
-  const cn = clusterNorm || {};
-  const constip = cn.Constipation ?? 0, diarr = cn.Diarrhoea ?? 0;
-  let subtype = 'IBS-U';
-  if (constip >= 0.3 && diarr < 0.3) subtype = 'IBS-C';
-  else if (diarr >= 0.3 && constip < 0.3) subtype = 'IBS-D';
-  else if (constip >= 0.3 && diarr >= 0.3) subtype = 'IBS-M';
-  return { criteriaMet: true, answered: true, subtype, assocCount };
+  return { criteriaMet: true, answered: true, subtype: bowelSubtype(clusterNorm), assocCount };
 }
 __e.ROME_FREQ = ROME_FREQ; __e.ROME_ONSET = ROME_ONSET; __e.ROME_ASSOC = ROME_ASSOC;
 __e.ROME_FREQ_MET = ROME_FREQ_MET; __e.ROME_ONSET_MET = ROME_ONSET_MET;
-__e.classifyRomeIV = classifyRomeIV;
+__e.classifyRomeIV = classifyRomeIV; __e.bowelSubtype = bowelSubtype;
 return __e;
 };
 
 __modules['patterns.js'] = function(__e){
 const { psychLoadScore, dietBurden } = __req('scales.js');
-const { classifyRomeIV } = __req('romeiv.js');
+const { classifyRomeIV, bowelSubtype } = __req('romeiv.js');
 
 // Helpers: each evaluator returns { fires, signals } so callers can compute a
 // data-coverage confidence without re-checking the same conditions.
@@ -1008,20 +1142,22 @@ const romeSignal = (ex, s, wantSubtype) => {
 
 const PATTERNS = [
   {
-    id: 'constipation_dominant',
+    id: 'constipation_dominant', axis: 'symptom',
     label: 'Constipation-dominant pattern',
     desc: 'Bowel-movement burden weighted toward slow transit. Fibre, hydration, and movement are usually the first lever; rule out other causes with your clinician.',
     eval: (s, ex) => {
+      const sub = bowelSubtype(s.clusterNorm);             // shared source of truth (also drives Rome IV)
       const constipCluster = ge(clu(s, 'Constipation'), 0.4);
       const slowStool      = le(ex.bristol, 2);
-      const diarrCluster   = ge(clu(s, 'Diarrhoea'), 0.3); // signal of interest is "diarrhoea high"; fires uses its negation
+      const diarrCluster   = ge(clu(s, 'Diarrhoea'), 0.3); // confidence coverage only
       const romeIBSC       = romeSignal(ex, s, 'IBS-C');
       const signals = [constipCluster, slowStool, diarrCluster, romeIBSC];
-      return { fires: (constipCluster.t || slowStool.t) && !diarrCluster.t, signals };
+      // Fires on a clear constipation subtype, or a slow stool when clusters are silent.
+      return { fires: sub === 'IBS-C' || (slowStool.t && sub === 'IBS-U'), signals };
     },
   },
   {
-    id: 'diarrhoea_dominant',
+    id: 'diarrhoea_dominant', axis: 'symptom',
     label: 'Loose-stool / urgency pattern',
     desc: 'Bowel-movement burden weighted toward urgency or loose stools. Worth screening with your clinician for triggers and infection.',
     eval: (s, ex) => {
@@ -1034,7 +1170,7 @@ const PATTERNS = [
     },
   },
   {
-    id: 'mixed_bowel',
+    id: 'mixed_bowel', axis: 'symptom',
     label: 'Mixed / alternating bowel pattern',
     desc: 'Symptoms swing between constipation and loose stools (an alternating, IBS-mixed-type picture). This needs a different approach from a single-direction bowel problem — worth mapping the triggers with your clinician.',
     eval: (s, ex) => {
@@ -1047,7 +1183,7 @@ const PATTERNS = [
     },
   },
   {
-    id: 'reflux_upper_gi',
+    id: 'reflux_upper_gi', axis: 'symptom',
     label: 'Reflux / upper-GI pattern',
     desc: 'Symptom burden concentrated in reflux and the upper GI tract. Lifestyle factors and longstanding acid-blocker use are worth reviewing with your clinician.',
     eval: (s, ex) => {
@@ -1059,7 +1195,7 @@ const PATTERNS = [
     },
   },
   {
-    id: 'bloating_fermentation',
+    id: 'bloating_fermentation', axis: 'symptom', // also a microbiome corroborator
     label: 'Bloating / gas-predominant pattern',
     desc: 'Bloating, gas and fullness are prominent — a fermentation-type picture sometimes linked to SIBO. Meal timing, fermentable-carb triggers, and breath testing are worth discussing with your clinician.',
     eval: (s, ex, a) => {
@@ -1075,22 +1211,24 @@ const PATTERNS = [
     },
   },
   {
-    id: 'nutrient_malabsorption',
+    id: 'nutrient_malabsorption', axis: 'nutrient',
     label: 'Nutrient-malabsorption pattern',
     desc: 'Signs of low nutrient status (hair thinning, iron-type signs, mouth changes, or a known deficiency) alongside gut symptoms can suggest malabsorption. Worth checking the relevant bloods with your clinician.',
     eval: (s, ex, a) => {
-      const known  = ge(av(a, 'nu_known_def'), 1); // optional; any positive answer counts
+      const known  = ge(av(a, 'nu_known_def'), 1); // lab-confirmed deficiency (optional item)
       const hair   = ge(av(a, 'nu_hair'), 2);
       const iron   = ge(av(a, 'nu_iron'), 2);
       const mouth  = ge(av(a, 'nu_mouth'), 2);
       const giPresent = ge(gi(s), 0.2);
-      const nuCount = [known, hair, iron, mouth].filter(x => x.t).length;
+      const proxyCount = [hair, iron, mouth].filter(x => x.t).length;
       const signals = [known, hair, iron, mouth, giPresent];
-      return { fires: nuCount >= 2 && giPresent.t, signals };
+      // Lab-confirmed deficiency alone is sufficient on this referral-grade
+      // trigger; otherwise need ≥2 of 3 lower-specificity symptom proxies.
+      return { fires: (known.t || proxyCount >= 2) && giPresent.t, signals };
     },
   },
   {
-    id: 'gut_brain',
+    id: 'gut_brain', axis: 'psychosocial',
     label: 'Gut-brain pattern',
     desc: 'GI symptoms alongside high psychological load and/or cognitive symptoms (brain fog, unrefreshing fatigue). Gut-brain interventions (stress management, sleep, gut-directed therapies) often help here.',
     eval: (s, ex, a) => {
@@ -1104,7 +1242,7 @@ const PATTERNS = [
     },
   },
   {
-    id: 'post_disruptor',
+    id: 'post_disruptor', axis: 'microbiome',
     label: 'Recent gut-disruptor pattern',
     desc: 'Recent antibiotic, acid-blocker, or NSAID use can shift the microbiome. A recovery-supportive window of a few months is usually appropriate — discuss with your clinician.',
     eval: (s, ex) => {
@@ -1116,22 +1254,24 @@ const PATTERNS = [
     },
   },
   {
-    id: 'inflammatory_immune',
+    id: 'inflammatory_immune', axis: 'inflammatory',
     label: 'Inflammatory / immune-leaning pattern',
     desc: 'Food reactions, atopy, or skin involvement alongside gut symptoms — sometimes with a histamine-type picture (flushing/hives after fermented foods, wine, or aged cheese). Worth identifying triggers with your clinician (e.g. a structured elimination trial; a low-histamine or DAO discussion if that fits).',
     eval: (s, ex, a) => {
       const imNorm    = s.secNorm && s.secNorm.IM;
       const imHigh    = ge(imNorm, 0.4);
-      const histamine = ge(av(a, 'im_histamine'), 2); // merged from histamine_intolerance
-      const skin      = ge(av(a, 'sk_skin'), 2);       // relocated gut–skin item
+      const knownDx   = ge(av(a, 'im_known_dx'), 1);   // §7b diagnosed-condition anchor (lab-like, parallels nu_known_def)
+      const histamine = ge(av(a, 'im_histamine'), 2);  // merged from histamine_intolerance
+      const skin      = ge(av(a, 'sk_skin'), 2);        // relocated gut–skin item
       const giPresent = ge(gi(s), 0.25);
-      const signals = [imHigh, histamine, skin, giPresent];
-      // Fires on a high immune domain OR a clear histamine signal, with GI present.
-      return { fires: (imHigh.t || histamine.t) && giPresent.t, signals };
+      const signals = [imHigh, knownDx, histamine, skin, giPresent];
+      // Fires on a diagnosed condition OR a high immune domain OR a clear
+      // histamine signal, with GI present.
+      return { fires: (knownDx.t || imHigh.t || histamine.t) && giPresent.t, signals };
     },
   },
   {
-    id: 'lifestyle_modifiable',
+    id: 'lifestyle_modifiable', axis: 'lifestyle', // action-lever, not a clinical axis
     label: 'Lifestyle-driven modifiable pattern',
     desc: 'Several modifiable factors (diet quality, alcohol, activity) point to high-yield behaviour changes worth focusing on first.',
     eval: (s, ex) => {
@@ -1167,7 +1307,7 @@ function detectPatterns(score, ex, answers) {
     const strength = total > 0 ? hits / total     : 0;
     const conf = CONFIDENCE_BANDS.find(c => coverage >= c.min);
     fired.push({
-      id: p.id, label: p.label, desc: p.desc,
+      id: p.id, axis: p.axis, label: p.label, desc: p.desc,
       confidence: conf.label, confColor: conf.color,
       coverage, strength,                              // 0–1 ratios; different concepts
       signalAnswered: answered, signalHits: hits, signalTotal: total,
@@ -1214,37 +1354,53 @@ const TIERS = {
 function triage(score, patterns, firedFlags, dys, opts) {
   const pids = new Set((patterns || []).map(p => p.id));
   const band = (score && score.severity) ? score.severity.label : null;
-  const capped = !!(score && score.severity && score.severity.capped);
   const pain = (score && score.clusterNorm) ? score.clusterNorm.Pain : null;
   const flags = firedFlags || [];
   const o = opts || {};
   const dysCount = (dys && typeof dys.count === 'number') ? dys.count : 0;
   const has = (id) => pids.has(id);
+  // candidacy[] entries are axis-aware { text, axis } so a referral-summary export
+  // can group reasons by axis instead of one flat list.
   const candidacy = { 1: [], 2: [], 3: [], 4: [] };
+  const add = (lvl, text, axis) => candidacy[lvl].push({ text, axis });
 
   // Tier 1 — refer
-  if (flags.length) candidacy[1].push(flags.length + ' safety red-flag answer' + (flags.length > 1 ? 's' : '') + ' present');
-  if (band === 'Severe' && !capped) candidacy[1].push('Severe GI symptom burden');
-  if (has('nutrient_malabsorption')) candidacy[1].push('Possible malabsorption — bloods / clinical review advised');
+  if (flags.length) add(1, flags.length + ' safety red-flag answer' + (flags.length > 1 ? 's' : '') + ' present', 'safety');
+  if (band === 'Severe') add(1, 'Severe GI symptom burden', 'symptom');
+  if (has('nutrient_malabsorption')) add(1, 'Possible malabsorption — bloods / clinical review advised', 'nutrient');
 
   // Tier 2 — clinician-led / manual-therapy candidacy
-  if (band === 'Significant') candidacy[2].push('Significant GI symptom burden');
-  if (has('constipation_dominant')) candidacy[2].push('Constipation-dominant (visceral / motility) pattern');
-  if (has('mixed_bowel')) candidacy[2].push('Mixed / alternating bowel pattern');
-  if (has('reflux_upper_gi')) candidacy[2].push('Reflux / upper-GI pattern');
-  if (pain != null && pain >= 0.5) candidacy[2].push('Prominent abdominal-pain cluster');
-  if (o.adhesionSurgery) candidacy[2].push('Prior abdominal/pelvic surgery (adhesions — visceral / fascial manual-therapy candidacy)');
-  if (o.romeResult && o.romeResult.criteriaMet) candidacy[2].push(`Meets Rome IV-informed criteria for ${o.romeResult.subtype}`);
+  if (band === 'Significant') add(2, 'Significant GI symptom burden', 'symptom');
+  if (has('constipation_dominant')) add(2, 'Constipation-dominant (visceral / motility) pattern', 'symptom');
+  if (has('mixed_bowel')) add(2, 'Mixed / alternating bowel pattern', 'symptom');
+  if (has('reflux_upper_gi')) add(2, 'Reflux / upper-GI pattern', 'symptom');
+  if (pain != null && pain >= 0.5) add(2, 'Prominent abdominal-pain cluster', 'symptom');
+  if (o.adhesionSurgery) add(2, 'Prior abdominal/pelvic surgery (adhesions — visceral / fascial manual-therapy candidacy)', 'symptom');
+  if (o.romeResult && o.romeResult.criteriaMet) add(2, `Meets Rome IV-informed criteria for ${o.romeResult.subtype}`, 'symptom');
+  // Orphan pattern, now wired: gut-brain is a psychosocial-axis finding where
+  // gut-directed / clinician-led therapy is the appropriate lever.
+  if (has('gut_brain')) add(2, 'Gut-brain pattern (psychosocial axis) — gut-directed therapy may help', 'psychosocial');
+  // Impact axis as an INDEPENDENT escalation trigger — Rome IV treats functional
+  // impact as independent of raw symptom severity in driving care intensity.
+  if (o.impactBand === 'Significant' || o.impactBand === 'Severe')
+    add(2, 'High functional / quality-of-life impact (Impact axis) — consider escalation even if symptom severity alone is lower', 'impact');
+  // Orphan pattern, now wired: inflammatory_immune spans a wide specificity range
+  // (clear histamine/diagnosed signal vs. a high-but-noisy IM mean) — route by confidence.
+  const infl = (patterns || []).find(p => p.id === 'inflammatory_immune');
+  if (infl) {
+    if (infl.confidence === 'High') add(2, 'Inflammatory / immune-leaning pattern (high confidence) — consider a structured elimination trial', 'inflammatory');
+    else add(3, 'Inflammatory / immune-leaning pattern (lower confidence) — monitor alongside microbiome support', 'inflammatory');
+  }
 
   // Tier 3 — microbiome-support candidacy
-  if (has('post_disruptor')) candidacy[3].push('Recent gut-disruptor exposure (strongest probiotic-trial rationale)');
-  if (has('bloating_fermentation')) candidacy[3].push('Bloating / fermentation pattern');
-  if (has('diarrhoea_dominant')) candidacy[3].push('Loose-stool / urgency pattern');
-  if (dysCount >= 2) candidacy[3].push(dysCount + ' dysbiosis-correlate signals (see lens)');
+  if (has('post_disruptor')) add(3, 'Recent gut-disruptor exposure (strongest probiotic-trial rationale)', 'microbiome');
+  if (has('bloating_fermentation')) add(3, 'Bloating / fermentation pattern', 'symptom');
+  if (has('diarrhoea_dominant')) add(3, 'Loose-stool / urgency pattern', 'symptom');
+  if (dysCount >= 2) add(3, dysCount + ' dysbiosis-correlate signals (see lens)', 'microbiome');
 
   // Tier 4 — self-management / monitor
-  if (has('lifestyle_modifiable')) candidacy[4].push('Modifiable lifestyle factors are the main lever');
-  if (band === 'Minimal') candidacy[4].push('Minimal symptom burden');
+  if (has('lifestyle_modifiable')) add(4, 'Modifiable lifestyle factors are the main lever', 'lifestyle');
+  if (band === 'Minimal') add(4, 'Minimal symptom burden', 'symptom');
 
   // Primary = most urgent tier with support; default to Tier 4 (monitor).
   let primary = 4;
@@ -1256,9 +1412,14 @@ function triage(score, patterns, firedFlags, dys, opts) {
   for (const lvl of [2, 3, 4]) {
     if (lvl > primary && candidacy[lvl].length) result.alsoConsider.push({ label: TIERS[lvl].label, reasons: candidacy[lvl] });
   }
+  // §7a — known diagnosed conditions to factor into interpretation. A NOTE only:
+  // it does not by itself change the Tier, but a clinician should see it.
+  result.conditionNote = (o.knownConditions && o.knownConditions.referList && o.knownConditions.referList.length)
+    ? `Reported condition(s) to factor into interpretation: ${o.knownConditions.referList.join(', ')}.`
+    : null;
   // Low data confidence — the core GI section wasn't answered.
   result.coreUnknown = !!(score && score.coreUnknown);
-  if (result.coreUnknown) result.reasons.push('Note: the core GI section was not completed, so this triage is provisional.');
+  if (result.coreUnknown) result.reasons.push({ text: 'Note: the core GI section was not completed, so this triage is provisional.', axis: 'data' });
 
   // Pattern-matched investigations / management steps (clinician guidance only).
   const PI = {
@@ -1504,9 +1665,9 @@ __modules['ui-patient.js'] = function(__e){
 const { SECTIONS, QUESTIONS, questionsOf, sectionMax, itemMax } = __req('schema.js');
 const { scaleFor, RECALL_NOTE, PSS4_ITEMS, PSS4_ANCHORS, pss4Score, BRISTOL_TYPES, PAIN_REGIONS, modifiableFactors,
         DISRUPTORS, ALCOHOL_LEVELS, ACTIVITY_LEVELS, SLEEP_ITEMS, SLEEP_ANCHORS,
-        FOOD_TRIGGERS, ABX_COURSES, GAS_LEVELS, STOOLVAR_LEVELS, POSTINF_OPTS, PARADOX_OPTS, dysbiosisLens, gutHealthIndex,
-        SURGERIES, surgicalFlags } = __req('scales.js');
-const { computeScores, scoreConfidence } = __req('scoring.js');
+        FOOD_TRIGGERS, ABX_COURSES, GAS_LEVELS, STOOLVAR_LEVELS, POSTINF_OPTS, PARADOX_OPTS, dysbiosisLens,
+        SURGERIES, surgicalFlags, KNOWN_CONDITIONS, knownConditions } = __req('scales.js');
+const { computeScores, scoreConfidence, axisProfile, headlineOutputs } = __req('scoring.js');
 const { RED_FLAGS, anyRedFlag, firedRedFlags, RED_FLAG_BANNER } = __req('redflags.js');
 const { el, esc, toast, patientForm } = __req('util.js');
 const Store = __req('storage.js');
@@ -1528,6 +1689,8 @@ const blankExtras = () => ({
   dys: { stoolVar: null, postInfectious: null, gasFoul: null, fibreParadox: null, foodTriggers: [] },
   surgeries: [],                     // surgical history (id list) — VM/fascial + microbiome
   surgeryOther: '',                  // free-text "Other" — stored, not scored
+  conditions: [],                    // §7a known diagnosed/suspected conditions (id list) — context, not scored
+  medsOther: '',                     // §7c other medications free-text — stored, not scored
   rome: { painFreq: null, onset: null, rm_assoc_defecation: false, rm_assoc_freqchange: false, rm_assoc_formchange: false },
 });
 let extras = blankExtras();
@@ -1709,6 +1872,72 @@ function patientBanner() {
 // lens (count) — at the interpretation layer, WITHOUT contaminating either
 // metric. Severity axis: Low = Minimal/Mild–Moderate, High = Significant/Severe.
 // Microbiome-risk axis: High = ≥2 correlate signals (the Tier-3 threshold).
+// Band → pill class, reused by the headline + axis cards so draft axes get the
+// same visual language as the validated Symptom Burden.
+function bandPillClass(band) {
+  return band === 'Severe' ? 'sev-sev'
+    : band === 'Significant' || band === 'Elevated' ? 'sev-sig'
+    : band === 'Mild–Moderate' || band === 'Some' ? 'sev-mod'
+    : 'sev-min';
+}
+// Small "validated / draft / partial" provenance tag, reusing the .opt-tag class.
+function provTag(validated) {
+  const label = validated === true ? 'validated' : validated === 'partial' ? 'part. validated' : 'draft';
+  const bg = validated === true ? '#E1F5EE' : validated === 'partial' ? '#FAEEDA' : '#F1F2F4';
+  const col = validated === true ? '#0F6E56' : validated === 'partial' ? '#7A5800' : '#6B7280';
+  return `<span class="opt-tag" style="background:${bg};color:${col}">${label}</span>`;
+}
+
+// GSHS headline — the four PRIMARY outputs (Option A). Nutrient/Malabsorption is
+// kept primary on purpose so the Tier-1-capable signal is never buried.
+function headlineCard(heads, rome) {
+  const card = el('div', { class: 'card', style: 'border-left:6px solid #0F6E56' });
+  card.appendChild(el('h2', {}, 'Gut & Systemic Health Screen — headline'));
+  card.appendChild(el('div', { class: 'q-sub' }, 'Four separate reads. Burden = current symptom severity · Load = exposure / risk accumulation. The Gut Symptom Burden is the only validated number; the rest are screening reads.'));
+  const grid = el('div', { style: 'display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px' });
+  heads.primaryList.forEach(o => {
+    const isPct = o.key === 'gut_symptom_burden' || o.key === 'nutrient_malabsorption_risk';
+    const val = o.value == null ? '—' : (isPct ? o.value + '%' : o.value);
+    grid.appendChild(el('div', { style: 'border:1px solid var(--bdr);border-radius:10px;padding:11px 12px;background:var(--surf2)' },
+      `<div style="font-size:11.5px;font-weight:700;color:var(--inks)">${esc(o.label)} ${provTag(o.validated)}</div>
+       <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px">
+         <div style="font-size:24px;font-weight:800;color:var(--ink)">${esc(String(val))}</div>
+         ${o.band ? `<span class="pill ${bandPillClass(o.band)}">${esc(o.band)}</span>` : ''}
+       </div>`));
+  });
+  card.appendChild(grid);
+  // Rome IV IBS subtype, foregrounded as a named read under Gut Symptom Burden.
+  if (rome && rome.criteriaMet && rome.subtype) {
+    card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-weight:600;color:#185FA5' },
+      `Under Gut Symptom Burden: pattern consistent with Rome IV ${esc(rome.subtype)} — a single-visit estimate, not a diagnosis.`));
+  }
+  // Show what fed the two microbiome loads, since they are counts not percentages.
+  const dl = heads.primary.disruption, cl = heads.primary.correlate;
+  if ((dl.signals || []).length || (cl.signals || []).length) {
+    const list = (title, sigs) => sigs.length
+      ? `<div style="margin-top:6px"><span style="font-size:11px;font-weight:600;color:var(--inks)">${title}:</span> <span class="q-sub">${sigs.map(esc).join(', ')}</span></div>` : '';
+    card.appendChild(el('div', {}, list('Disruption Load', dl.signals || []) + list('Dysbiosis Correlate Load', cl.signals || [])));
+  }
+  return card;
+}
+
+// Secondary axis reads (Option A): Inflammatory / Psychosocial / Impact — shown
+// one tier below the headline, plus the microbiome correlate axis for completeness.
+function axisProfileCard(profile, heads) {
+  const card = el('div', { class: 'card' });
+  card.appendChild(el('h2', {}, 'Secondary axes'));
+  card.appendChild(el('div', { class: 'q-sub' }, 'Shown one tier below the headline — still scored and banded, never blended into the gut number.'));
+  const rows = heads.secondaryList.concat([profile.microbiome]);
+  rows.forEach(a => {
+    const isCount = a.max != null;
+    const val = a.value == null ? '—' : (isCount ? `${a.value}/${a.max}` : a.value + '%');
+    card.appendChild(el('div', { class: 'row', style: 'justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--surf2)' },
+      `<span style="font-weight:600">${esc(a.label)} ${provTag(a.validated)}</span>
+       <span class="row" style="gap:8px;align-items:center"><span class="muted">${esc(String(val))}</span>${a.band ? `<span class="pill ${bandPillClass(a.band)}">${esc(a.band)}</span>` : ''}</span>`));
+  });
+  return card;
+}
+
 function riskMatrixCard(severity, lens) {
   const sevHigh  = severity.label === 'Significant' || severity.label === 'Severe';
   const riskHigh = lens.count >= 2;
@@ -1719,18 +1948,13 @@ function riskMatrixCard(severity, lens) {
     HH: { t: 'Strong microbiome-support candidate',   c: '#A32D2D' },
   };
   const activeKey = (sevHigh ? 'H' : 'L') + (riskHigh ? 'H' : 'L');
-  const ghi = gutHealthIndex(severity.index, lens.count);
   const card = el('div', { class: 'card', style: 'border-left:6px solid #185FA5' });
-  card.appendChild(el('h2', {}, 'Gut Health Index'));
-  // Single blended number — shown WITH its two component reads.
-  card.appendChild(el('div', { class: 'hero', style: 'align-items:center' },
-    `<div><div class="big">${ghi != null ? ghi : '—'}</div><div class="sub">Gut Health Index</div></div>
-     <div style="flex:1;min-width:180px">
-       <div style="font-size:12px;color:var(--inks);line-height:1.5">A single blended score = <b>0.7 × severity + 0.3 × microbiome-risk</b> (higher = worse). The two components are shown below.</div>
-     </div>`));
+  card.appendChild(el('h2', {}, 'Symptom × Microbiome read'));
+  // Two independent axes — symptom severity vs a microbiome-correlate count. No
+  // blended number (that composite was removed); the quadrant reads both directly.
   card.appendChild(el('div', { class: 'row', style: 'gap:10px;flex-wrap:wrap;margin:4px 0 8px' },
-    `<span class="pill ${severity.cls}">Severity: ${severity.index}% · ${esc(severity.label)}</span>
-     <span class="pill" style="background:#185FA5;color:#fff">Microbiome-risk: ${lens.count}/6 · ${riskHigh ? 'High' : 'Low'}</span>`));
+    `<span class="pill ${severity.cls || bandPillClass(severity.label)}">Symptom: ${severity.index == null ? '—' : severity.index + '%'} · ${esc(severity.label || '—')}</span>
+     <span class="pill" style="background:#185FA5;color:#fff">Microbiome-correlate: ${lens.count}/7 · ${riskHigh ? 'Elevated' : 'Low'}</span>`));
 
   const grid = el('div', { style: 'display:grid;grid-template-columns:96px 1fr 1fr;gap:4px;font-size:12px;margin-top:4px' });
   grid.appendChild(el('div', {}, ''));
@@ -1816,7 +2040,7 @@ function render() {
   const root = document.getElementById('mode-patient');
   root.innerHTML = '';
   root.appendChild(el('div', { class: 'intro' },
-    `<b>Gut Health Screen (v2).</b> A clean-slate screening instrument under co-design. ` +
+    `<b>Gut &amp; Systemic Health Screen (GSHS).</b> A multi-axis screening instrument for chronic gut and related systemic symptoms. ` +
     `This is an educational screening tool, not a diagnosis.`));
 
   root.appendChild(patientBanner());
@@ -1849,6 +2073,7 @@ function render() {
   root.appendChild(lifestyleCard());
   root.appendChild(sleepCard());
   root.appendChild(surgicalCard());
+  root.appendChild(conditionsCard());
   root.appendChild(romeCard());
   root.appendChild(dysCard());
 
@@ -1946,6 +2171,43 @@ function medsCard() {
     b.onclick = () => { extras.meds[d.id] = !extras.meds[d.id]; b.classList.toggle('sel'); };
     chips.appendChild(b);
   });
+  body.appendChild(chips);
+  // §7c — other medications free-text (e.g. opioids, metformin). Stored, not scored.
+  body.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;margin-bottom:4px' }, 'Other regular medications (optional)'));
+  const moInput = el('input', { type: 'text', value: extras.medsOther || '', placeholder: 'e.g. opioids, metformin, iron',
+    style: 'width:100%;padding:9px 12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px' });
+  moInput.oninput = () => { extras.medsOther = moInput.value; };
+  body.appendChild(moInput);
+  card.appendChild(body);
+  return card;
+}
+
+// §7a — known/suspected conditions (multi-select chips + "none of these").
+// Stored in extras.conditions; surfaced in the clinician report + a triage note,
+// not scored into any axis.
+function conditionsCard() {
+  const card = el('div', { class: 'sec-card' });
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:#185FA5' }, 'Diagnosed or suspected conditions'));
+  const body = el('div', { class: 'sec-body' });
+  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, 'Tap any that apply. Helps interpretation (e.g. coeliac, IBD) — not part of the score.'));
+  const chips = el('div', { class: 'chips' });
+  const sel = () => extras.conditions || (extras.conditions = []);
+  const noneBtn = el('button', { class: `chip-opt${(extras.conditionsNone) ? ' sel' : ''}`, type: 'button' }, 'None of these');
+  KNOWN_CONDITIONS.forEach(cnd => {
+    const b = el('button', { class: `chip-opt${sel().includes(cnd.id) ? ' sel' : ''}`, type: 'button' }, esc(cnd.label));
+    b.onclick = () => {
+      const list = sel(); const i = list.indexOf(cnd.id);
+      if (i >= 0) list.splice(i, 1); else { list.push(cnd.id); extras.conditionsNone = false; noneBtn.classList.remove('sel'); }
+      b.classList.toggle('sel');
+    };
+    chips.appendChild(b);
+  });
+  noneBtn.onclick = () => {
+    extras.conditionsNone = !extras.conditionsNone;
+    if (extras.conditionsNone) { extras.conditions = []; chips.querySelectorAll('.chip-opt').forEach(x => { if (x !== noneBtn) x.classList.remove('sel'); }); }
+    noneBtn.classList.toggle('sel', extras.conditionsNone);
+  };
+  chips.appendChild(noneBtn);
   body.appendChild(chips); card.appendChild(body);
   return card;
 }
@@ -2190,19 +2452,29 @@ function computeAll() {
     surgeries: extras.surgeries, surgeryOther: extras.surgeryOther,
     abxCourses: extras.abxCourses, dys: extras.dys,
     rome: extras.rome,
+    medsOther: extras.medsOther,
+    conditions: extras.conditions,
   };
   const patterns = detectPatterns(score, driverExtras, answers);
   const fired = firedRedFlags(redflags);
   const lens = dysbiosisLens(extras);
   const rome = classifyRomeIV(extras.rome, score.clusterNorm);
-  const tri = triage(score, patterns, fired, lens, { adhesionSurgery: surgicalFlags(extras).adhesion, romeResult: rome });
-  return { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri };
+  const profile = axisProfile(score, driverExtras, lens);
+  const heads = headlineOutputs(score, driverExtras, lens);
+  const conditions = knownConditions(extras);
+  const tri = triage(score, patterns, fired, lens, {
+    adhesionSurgery: surgicalFlags(extras).adhesion,
+    romeResult: rome,
+    impactBand: profile.impact.band,
+    knownConditions: conditions,
+  });
+  return { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions };
 }
 
 function calc() {
   const c = computeAll();
   lastCalc = c;
-  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri } = c;
+  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions } = c;
 
   const out = document.getElementById('patient-results');
   out.innerHTML = '';
@@ -2237,11 +2509,15 @@ function calc() {
   togBar.appendChild(ptBtn); togBar.appendChild(clBtn);
   out.appendChild(togBar);
 
+  // GSHS headline — the four PRIMARY outputs (Option A).
+  out.appendChild(headlineCard(heads, rome));
+
+  // Gut Symptom Burden detail — descriptor + completeness/confidence.
   const hero = el('div', { class: 'card' });
   hero.appendChild(el('div', { class: 'hero' },
-    `<div><div class="big">${sv.index}%</div><div class="sub">GI Symptom Burden</div></div>
-     <div style="flex:1;min-width:160px"><span class="pill ${sv.cls}">${esc(sv.label)}</span>
-     <div style="font-size:12px;color:var(--inks);margin-top:8px;line-height:1.5">${esc(sv.desc)}</div>
+    `<div><div class="big">${sv.index == null ? '—' : sv.index + '%'}</div><div class="sub">Gut Symptom Burden</div></div>
+     <div style="flex:1;min-width:160px">${sv.label ? `<span class="pill ${sv.cls || bandPillClass(sv.label)}">${esc(sv.label)}</span>` : ''}
+     <div style="font-size:12px;color:var(--inks);margin-top:8px;line-height:1.5">${esc(sv.desc || '')}</div>
      <div class="conf-note">Confidence: <b>${esc(conf.level)}</b> · ${score.completeness}% complete</div></div>`));
   if (score.completeness < 80) hero.appendChild(el('div', { class: 'prov-caveat' },
     `Provisional result — ${score.completeness}% of scored items answered.`));
@@ -2250,9 +2526,10 @@ function calc() {
   // Triage — the headline next step (clinician guidance, not prescription).
   out.appendChild(triageCard(tri, rome, clinicianView));
 
-  // Severity × microbiome-risk — the two independent reads combined at the
-  // interpretation layer (TRIM_PLAN §10). Kept as one card so the clinician sees
-  // both axes together; neither metric contaminates the other.
+  // Secondary axes (Inflammatory / Psychosocial / Impact + microbiome correlate).
+  out.appendChild(axisProfileCard(profile, heads));
+
+  // Symptom × microbiome — two independent reads, no blended number.
   out.appendChild(riskMatrixCard(sv, lens));
 
   // Live trend preview: if this patient reference has prior visits, show the
@@ -2393,11 +2670,13 @@ function triageCard(tri, rome, showInvestigations) {
     `<span class="pill" style="background:${tri.color};color:#fff">Tier ${tri.level} · ${esc(tri.label)}</span>`));
   tcard.appendChild(el('div', { style: 'font-size:13px;color:var(--inks);line-height:1.5;margin-top:6px' }, esc(tri.action)));
   if (tri.reasons.length) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px' },
-    'Why: ' + tri.reasons.map(esc).join(' · ')));
+    'Why: ' + tri.reasons.map(r => esc(r.text)).join(' · ')));
+  if (tri.conditionNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
+    'ℹ️ ' + esc(tri.conditionNote)));
   if (tri.alsoConsider.length) {
     tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-weight:600' }, 'Also worth noting:'));
     tri.alsoConsider.forEach(a => tcard.appendChild(el('div', { class: 'q-sub', style: 'padding-left:4px' },
-      `• ${esc(a.label)} — ${a.reasons.map(esc).join('; ')}`)));
+      `• ${esc(a.label)} — ${a.reasons.map(r => esc(r.text)).join('; ')}`)));
   }
   if (rome && rome.criteriaMet) {
     tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-weight:600;color:#185FA5' },
@@ -2527,7 +2806,7 @@ function buildPatientPrint(c) {
 
   const div = document.createElement('div');
   let h = `<div class="pr-logo">Beyond Mechanics</div>
-    <div class="pr-title">Gut Health Screen</div>
+    <div class="pr-title">Gut &amp; Systemic Health Screen</div>
     <div class="pr-meta">Prepared for: <b>${esc(patName)}</b>${session.followup ? ' · Follow-up visit' : ' · Baseline screen'}<br>Date: ${esc(dateStr)}</div>
     <hr class="pr-divider">`;
 
@@ -2542,9 +2821,9 @@ function buildPatientPrint(c) {
 
   const svCss = { Severe: '#FCEBEB', Significant: '#FAD7C2', 'Mild–Moderate': '#FAEEDA' }[sv.label] || '#E1F5EE';
   h += `<div class="pr-hero">
-    <div><div class="big">${sv.index}%</div><div class="sub">GI Symptom Burden</div></div>
-    <div><span class="pr-pill" style="background:${svCss};color:#000">${esc(sv.label)}</span>
-    <div style="font-size:10.5px;color:#555;margin-top:4px;max-width:340px">${esc(sv.desc)}</div>
+    <div><div class="big">${sv.index == null ? '—' : sv.index + '%'}</div><div class="sub">Gut Symptom Burden</div></div>
+    <div><span class="pr-pill" style="background:${svCss};color:#000">${esc(sv.label || '—')}</span>
+    <div style="font-size:10.5px;color:#555;margin-top:4px;max-width:340px">${esc(sv.desc || '')}</div>
     <div style="font-size:10px;color:#888;margin-top:4px">Confidence: ${esc(conf.level)} · ${score.completeness}% complete</div></div></div>`;
 
   h += `<div class="pr-section"><div class="pr-sh">By area</div>`;
@@ -2563,7 +2842,7 @@ function buildPatientPrint(c) {
     <div class="pr-triage ${tierCls}">
       <div style="font-weight:700;font-size:12px">Tier ${tri.level} — ${esc(tri.label)}</div>
       <div style="font-size:11px;margin-top:4px">${esc(tri.action)}</div>
-      ${tri.reasons.length ? `<div style="font-size:10.5px;color:#555;margin-top:4px">Why: ${tri.reasons.map(esc).join(' · ')}</div>` : ''}
+      ${tri.reasons.length ? `<div style="font-size:10.5px;color:#555;margin-top:4px">Why: ${tri.reasons.map(r => esc(r.text)).join(' · ')}</div>` : ''}
     </div></div>`;
 
   const mf = modifiableFactors(driverExtras).filter(f => f.band && f.band !== 'Not answered');
@@ -2572,16 +2851,15 @@ function buildPatientPrint(c) {
       <table class="pr-tbl"><tbody>${mf.map(f => `<tr><td>${f.icon} ${esc(f.label)}</td><td style="color:${f.color}">${esc(f.band)}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
-  h += `<div class="pr-footer">This is a screening tool — it is not a diagnosis. Please discuss your results with your clinician.<br>Beyond Mechanics · Gut Health Screen v2 · ${esc(dateStr)}</div>`;
+  h += `<div class="pr-footer">This is a screening tool — it is not a diagnosis. Please discuss your results with your clinician.<br>Beyond Mechanics · Gut & Systemic Health Screen (GSHS) · ${esc(dateStr)}</div>`;
   div.innerHTML = h;
   return div;
 }
 
 function buildClinicianPrint(c) {
-  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri } = c;
+  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions } = c;
   const dateStr = new Date().toLocaleDateString('en-AU', { year: 'numeric', month: 'long', day: 'numeric' });
   const patName = (session.name || '').trim() || 'Not recorded';
-  const ghi = gutHealthIndex(sv.index, lens.count);
   const priors = priorVisits();
   const trendVisits = loadedVisitId ? priors : priors.concat([currentVisit()]);
   const trend = trendVisits.length >= 2 ? buildTrend(trendVisits) : null;
@@ -2591,7 +2869,7 @@ function buildClinicianPrint(c) {
   const isMinor = !isNaN(ageNum) && ageNum < 18;
 
   const div = document.createElement('div');
-  let h = `<div class="pr-logo">Beyond Mechanics · Gut Health Screen v2</div>
+  let h = `<div class="pr-logo">Beyond Mechanics · Gut & Systemic Health Screen (GSHS)</div>
     <div class="pr-title">Clinical Summary</div>
     <div class="pr-meta">
       Patient: <b>${esc(patName)}</b>${session.ref ? ` · Ref: ${esc(session.ref)}` : ''}<br>
@@ -2610,8 +2888,8 @@ function buildClinicianPrint(c) {
     <div class="pr-triage ${tierCls}">
       <div style="font-weight:700">Tier ${tri.level} — ${esc(tri.label)}</div>
       <div style="margin-top:3px;font-size:11px">${esc(tri.action)}</div>
-      ${tri.reasons.length ? `<div style="font-size:10.5px;margin-top:4px">Reasons: ${tri.reasons.map(esc).join(' · ')}</div>` : ''}
-      ${tri.alsoConsider.length ? `<div style="font-size:10.5px;margin-top:3px">Also consider: ${tri.alsoConsider.map(a => `${esc(a.label)} (${a.reasons.map(esc).join('; ')})`).join(' / ')}</div>` : ''}
+      ${tri.reasons.length ? `<div style="font-size:10.5px;margin-top:4px">Reasons: ${tri.reasons.map(r => esc(r.text)).join(' · ')}</div>` : ''}
+      ${tri.alsoConsider.length ? `<div style="font-size:10.5px;margin-top:3px">Also consider: ${tri.alsoConsider.map(a => `${esc(a.label)} (${a.reasons.map(r => esc(r.text)).join('; ')})`).join(' / ')}</div>` : ''}
     </div>
     ${tri.investigations && tri.investigations.length ? `
       <div style="font-weight:600;font-size:11px;margin:6px 0 3px">Suggested investigations / management:</div>
@@ -2620,15 +2898,24 @@ function buildClinicianPrint(c) {
     ` : ''}
   </div>`;
 
-  // Scores
-  h += `<div class="pr-section"><div class="pr-sh">Scores</div>
+  // Scores — GSHS headline (4 primary) + secondary axes. No blended index.
+  const pctOrCount = (o) => o.value == null ? '—'
+    : (o.max != null ? `${o.value}/${o.max}` : (o.key && (o.key.endsWith('_load')) ? o.value : o.value + '%'));
+  const headRow = (o) => `<tr><td>${esc(o.label)}</td><td><b>${esc(String(pctOrCount(o)))}</b>${o.band ? ` — ${esc(o.band)}` : ''}</td></tr>`;
+  h += `<div class="pr-section"><div class="pr-sh">Scores — primary</div>
     <table class="pr-tbl"><tbody>
-      <tr><td>GI Symptom Burden</td><td><b>${sv.index}%</b> — ${esc(sv.label)}</td></tr>
-      <tr><td>Gut Health Index (blended)</td><td><b>${ghi != null ? ghi : '—'}</b></td></tr>
-      <tr><td>Microbiome-correlate signals</td><td>${lens.count}/6 · ${lens.count >= 2 ? 'High risk' : 'Low risk'}</td></tr>
+      ${heads.primaryList.map(headRow).join('')}
       <tr><td>Confidence</td><td>${esc(conf.level)} · ${score.completeness}% complete</td></tr>
-      ${score.coreUnknown ? '<tr><td colspan="2" style="color:#A32D2D;font-weight:600">⚠ Core GI section not answered — result provisional</td></tr>' : ''}
+      ${score.coreUnknown ? '<tr><td colspan="2" style="color:#A32D2D;font-weight:600">⚠ Core GI section not answered — Gut Symptom Burden provisional</td></tr>' : ''}
     </tbody></table></div>`;
+  h += `<div class="pr-section"><div class="pr-sh">Scores — secondary axes</div>
+    <table class="pr-tbl"><tbody>
+      ${heads.secondaryList.concat([profile.microbiome]).map(headRow).join('')}
+    </tbody></table></div>`;
+  if (conditions && conditions.list && conditions.list.length) {
+    h += `<div class="pr-section"><div class="pr-sh">Known conditions reported</div>
+      <div style="font-size:10.5px">${esc(conditions.list.join(', '))}</div></div>`;
+  }
 
   // Red flags
   h += `<div class="pr-section"><div class="pr-sh">Red flags</div>`;
@@ -2716,7 +3003,7 @@ function buildClinicianPrint(c) {
     </div>`;
   }
 
-  h += `<div class="pr-footer">Clinical summary — Gut Health Screen v2 · Beyond Mechanics · ${esc(dateStr)}<br>Screening tool only — not a diagnosis or prescription. Apply clinical judgement.</div>`;
+  h += `<div class="pr-footer">Clinical summary — Gut & Systemic Health Screen (GSHS) · Beyond Mechanics · ${esc(dateStr)}<br>Screening tool only — not a diagnosis or prescription. Apply clinical judgement.</div>`;
   div.innerHTML = h;
   return div;
 }
@@ -2770,7 +3057,7 @@ function renderClinician() {
   if (!root) return;
   root.innerHTML = '';
   root.appendChild(el('div', { class: 'intro' },
-    '<b>Clinician workspace.</b> Detailed results and management plan for the current screen. ' +
+    '<b>Clinician &amp; physiotherapist workspace.</b> Gut and systemic axes side-by-side, with a manual-therapy candidacy read (prior abdominal/pelvic surgery → visceral / fascial Tier-2) for whole-person screening. ' +
     'Run a questionnaire, or open a saved visit from Patient records (“View results”), to populate this view.'));
 
   if (!lastCalc) {
@@ -2780,7 +3067,7 @@ function renderClinician() {
     return;
   }
   const c = lastCalc;
-  const { score, sv, conf, lens, rome, tri } = c;
+  const { score, sv, conf, lens, rome, tri, profile, heads } = c;
 
   // Identity + print header
   const who = (session.name || '').trim() || (session.ref || '').trim() || 'Anonymous screen';
@@ -2799,17 +3086,19 @@ function renderClinician() {
   head.appendChild(printBtn);
   root.appendChild(head);
 
-  // Hero score
+  // GSHS headline (four primary outputs) + symptom-burden detail
+  root.appendChild(headlineCard(heads, rome));
   const hero = el('div', { class: 'card' });
   hero.appendChild(el('div', { class: 'hero' },
-    `<div><div class="big">${sv.index}%</div><div class="sub">GI Symptom Burden</div></div>
-     <div style="flex:1;min-width:160px"><span class="pill ${sv.cls}">${esc(sv.label)}</span>
-     <div style="font-size:12px;color:var(--inks);margin-top:8px;line-height:1.5">${esc(sv.desc)}</div>
+    `<div><div class="big">${sv.index == null ? '—' : sv.index + '%'}</div><div class="sub">Gut Symptom Burden</div></div>
+     <div style="flex:1;min-width:160px">${sv.label ? `<span class="pill ${sv.cls || bandPillClass(sv.label)}">${esc(sv.label)}</span>` : ''}
+     <div style="font-size:12px;color:var(--inks);margin-top:8px;line-height:1.5">${esc(sv.desc || '')}</div>
      <div class="conf-note">Confidence: <b>${esc(conf.level)}</b> · ${score.completeness}% complete</div></div>`));
   root.appendChild(hero);
 
-  // Plan (triage + investigations always shown here) + risk matrix + full detail
+  // Plan (triage + investigations always shown here) + secondary axes + risk matrix + full detail
   root.appendChild(triageCard(tri, rome, true));
+  root.appendChild(axisProfileCard(profile, heads));
   root.appendChild(riskMatrixCard(sv, lens));
   root.appendChild(clinicianDetailCard(c));
 
