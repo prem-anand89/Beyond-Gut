@@ -30,6 +30,7 @@ const scoring = req('scoring.js');
 const patterns = req('patterns.js');
 const triage = req('triage.js').triage;
 const rome = req('romeiv.js');
+const storage = req('storage.js');
 
 let failed = 0;
 const ok = (cond, label) => { console.log(`${cond ? 'ok  ' : 'FAIL'} - ${label}`); if (!cond) failed++; };
@@ -84,6 +85,15 @@ const score7 = scoring.computeScores(a7, {});
 const rr7 = rome.classifyRomeIV({ painFreq: 3, onset: 3, rm_assoc_defecation: true, rm_assoc_freqchange: true }, score7.clusterNorm);
 const pat7 = patterns.detectPatterns(score7, { dys: {} }, a7);
 ok(rr7.subtype === 'IBS-C' && pat7.some(p => p.id === 'constipation_dominant'), 'Rome IV subtype agrees with bowel pattern');
+
+// 8. Site-code prefix for cross-clinic patient IDs.
+const dbDefault = storage.blankDB();
+ok(storage.nextPatientCode(dbDefault).startsWith('BMG-'), 'default patient code prefix is BMG');
+const dbSite = storage.blankDB(); dbSite.meta.siteCode = 'clina';
+ok(storage.nextPatientCode(dbSite).startsWith('CLINA-'), 'site code prefixes patient IDs (upper-cased)');
+
+// 9. PSS-4 reverse-scoring metadata present (drives the colour fix).
+ok(Array.isArray(scales.PSS4_REVERSED) && scales.PSS4_REVERSED.length === 4 && scales.PSS4_REVERSED[1] === true && scales.PSS4_REVERSED[2] === true, 'PSS-4 reverse-scored items flagged (2 & 3)');
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

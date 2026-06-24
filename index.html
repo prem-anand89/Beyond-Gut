@@ -1518,11 +1518,18 @@ __modules['storage.js'] = function(__e){
 const { SCHEMA_VERSION } = __req('schema.js');
 const KEY = 'bmgutscreen_v2';
 
-function blankDB() { return { patients: [], meta: { schemaVersion: SCHEMA_VERSION, remindEvery: 5, visitsSinceExport: 0, patientSeq: 0 } }; }
+function blankDB() { return { patients: [], meta: { schemaVersion: SCHEMA_VERSION, remindEvery: 5, visitsSinceExport: 0, patientSeq: 0, siteCode: '' } }; }
+// Human-facing patient code. Prefixed with a per-clinic SITE CODE so several
+// clinics minting automated IDs into one central dataset never collide
+// (CLINA-0001 vs CLINB-0001). The internal uid() remains the true merge key.
+function sitePrefix(db) {
+  const s = ((db && db.meta && db.meta.siteCode) || '').trim().toUpperCase();
+  return s || 'BMG';
+}
 function nextPatientCode(db) {
   db.meta = db.meta || {};
   db.meta.patientSeq = (db.meta.patientSeq || 0) + 1;
-  return 'BMG-' + String(db.meta.patientSeq).padStart(4, '0');
+  return sitePrefix(db) + '-' + String(db.meta.patientSeq).padStart(4, '0');
 }
 function loadDB() {
   let raw; try { raw = localStorage.getItem(KEY); } catch { raw = null; }
@@ -1549,10 +1556,11 @@ function patientByRef(db, ref) {
 function normalise(db) {
   if (!db || !Array.isArray(db.patients)) return blankDB();
   const meta = { ...blankDB().meta, ...(db.meta || {}), schemaVersion: SCHEMA_VERSION };
-  // Backfill any patients missing a code (legacy records).
+  // Backfill any patients missing a code (legacy records), using the site prefix.
+  const prefix = ((meta.siteCode || '').trim().toUpperCase()) || 'BMG';
   let seq = meta.patientSeq || 0;
   for (const p of db.patients) {
-    if (!p.code) { seq++; p.code = 'BMG-' + String(seq).padStart(4, '0'); }
+    if (!p.code) { seq++; p.code = prefix + '-' + String(seq).padStart(4, '0'); }
   }
   meta.patientSeq = seq;
   return { patients: db.patients, meta };
@@ -1578,7 +1586,7 @@ function mergeImport(currentDb, importedRaw) {
   }
   return { db: cur, added: { patients: addedPatients, visits: addedVisits } };
 }
-__e.blankDB = blankDB; __e.loadDB = loadDB; __e.saveDB = saveDB; __e.uid = uid; __e.nextPatientCode = nextPatientCode; __e.patientByRef = patientByRef; __e.exportDB = exportDB; __e.mergeImport = mergeImport;
+__e.blankDB = blankDB; __e.loadDB = loadDB; __e.saveDB = saveDB; __e.uid = uid; __e.nextPatientCode = nextPatientCode; __e.sitePrefix = sitePrefix; __e.patientByRef = patientByRef; __e.exportDB = exportDB; __e.mergeImport = mergeImport;
 
 // ── PILOT / RESEARCH EXPORT ──────────────────────────────────────────────────
 // De-identified, schema-driven CSV: one row per visit, one column per item +
@@ -1663,7 +1671,7 @@ return __e;
    ========================================================================== */
 __modules['ui-patient.js'] = function(__e){
 const { SECTIONS, QUESTIONS, questionsOf, sectionMax, itemMax } = __req('schema.js');
-const { scaleFor, RECALL_NOTE, PSS4_ITEMS, PSS4_ANCHORS, pss4Score, BRISTOL_TYPES, PAIN_REGIONS, modifiableFactors,
+const { scaleFor, RECALL_NOTE, PSS4_ITEMS, PSS4_ANCHORS, PSS4_REVERSED, pss4Score, BRISTOL_TYPES, PAIN_REGIONS, modifiableFactors,
         DISRUPTORS, ALCOHOL_LEVELS, ACTIVITY_LEVELS, SLEEP_ITEMS, SLEEP_ANCHORS,
         FOOD_TRIGGERS, ABX_COURSES, GAS_LEVELS, STOOLVAR_LEVELS, POSTINF_OPTS, PARADOX_OPTS, dysbiosisLens,
         SURGERIES, surgicalFlags, KNOWN_CONDITIONS, knownConditions } = __req('scales.js');
@@ -1701,7 +1709,6 @@ let extras = blankExtras();
 // browser's local storage only (never transmitted).
 let session = { name: '', age: '', gender: '', ref: '', followup: false, pregnant: '' };
 let lastCalc = null;       // cached result from the most recent calc(); used by print functions
-let clinicianView = false; // toggle between patient-friendly and clinician-detail results layout
 let loadedVisitId = null;  // set when a saved visit is loaded; saveVisit() updates it in-place
 
 function reset() { answers = {}; redflags = {}; extras = blankExtras(); session.followup = false; loadedVisitId = null; }
@@ -2047,6 +2054,13 @@ function render() {
 
   if (RED_FLAGS.length) root.appendChild(redFlagCard());
 
+  // History-taking — grouped up front with the safety screen (clinical flow):
+  // diagnosed/suspected conditions, surgical history, and current medications.
+  root.appendChild(el('div', { class: 'grp-label', style: 'margin:6px 2px 2px' }, 'History'));
+  root.appendChild(conditionsCard());
+  root.appendChild(surgicalCard());
+  root.appendChild(medsCard());
+
   if (!SECTIONS.length || !QUESTIONS.length) {
     root.appendChild(el('div', { class: 'card' },
       '<div class="empty-note">🌱<br>No domains locked yet.<br>' +
@@ -2066,14 +2080,13 @@ function render() {
   });
 
   // Modifiable drivers (not part of the Index; stored for patterns/strains).
+  // (Conditions / surgeries / medications moved up to the History block above.)
+  root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Drivers & context'));
   root.appendChild(bristolCard());
   root.appendChild(pss4Card());
   root.appendChild(painCard());
-  root.appendChild(medsCard());
   root.appendChild(lifestyleCard());
   root.appendChild(sleepCard());
-  root.appendChild(surgicalCard());
-  root.appendChild(conditionsCard());
   root.appendChild(romeCard());
   root.appendChild(dysCard());
 
@@ -2107,13 +2120,16 @@ function pss4Card() {
   const card = el('div', { class: 'sec-card' });
   card.appendChild(el('div', { class: 'sec-head', style: 'background:#5A6EA7' }, 'Stress (PSS-4)'));
   const body = el('div', { class: 'sec-body' });
-  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, 'Over the last month. (Shown alongside your result, not part of the score.)'));
+  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, 'Over the last month. (Shown alongside your result, not part of the score.) Items 2–3 are positively worded — colour reflects the stress level each answer represents, not the wording.'));
   PSS4_ITEMS.forEach((q, qi) => {
     const row = el('div', { class: 'q' });
     row.appendChild(el('div', { class: 'q-txt', style: 'font-weight:500' }, esc(q)));
     const opts = el('div', { class: 'opts', style: 'flex-wrap:nowrap;gap:4px' });
+    // Colour by STRESS CONTRIBUTION, not the raw anchor index: positively-framed
+    // items (PSS4_REVERSED) are reverse-scored, so a high anchor = LOW stress.
     PSS4_ANCHORS.forEach((lab, v) => {
-      const col = PSS4_COLOR[v] || 's1';
+      const stress = PSS4_REVERSED[qi] ? (PSS4_ANCHORS.length - 1 - v) : v;
+      const col = PSS4_COLOR[stress] || 's1';
       const b = el('button', { class: `opt${extras.pss4[qi] === v ? ` sel ${col}` : ''}`, type: 'button', style: 'min-width:0;flex:1;font-size:11px;padding:6px 4px' },
         `<span class="on">${v}</span>${esc(lab)}`);
       b.onclick = () => { extras.pss4[qi] = v; opts.querySelectorAll('.opt').forEach(o => o.classList.remove('sel', ...PSS4_COLOR)); b.classList.add('sel', col); };
@@ -2500,14 +2516,11 @@ function calc() {
 
   if (score.completeness < 80) toast(`${score.completeness}% complete — result shown as provisional.`);
 
-  // Patient / Clinician view toggle
-  const togBar = el('div', { class: 'row', style: 'justify-content:flex-end;gap:6px;margin-bottom:8px' });
-  const ptBtn = el('button', { class: `btn ${clinicianView ? 'btn-gh' : 'btn-o'}`, type: 'button' }, 'Patient view');
-  const clBtn = el('button', { class: `btn ${clinicianView ? 'btn-g' : 'btn-gh'}`, type: 'button' }, 'Clinician view');
-  ptBtn.onclick = () => { clinicianView = false; calc(); };
-  clBtn.onclick = () => { clinicianView = true; calc(); };
-  togBar.appendChild(ptBtn); togBar.appendChild(clBtn);
-  out.appendChild(togBar);
+  // Patient-facing results only. The clinical summary (item-level detail,
+  // investigations) lives in the Clinician tab — no inline toggle here, so
+  // clinical content no longer spills under the questionnaire.
+  out.appendChild(el('div', { class: 'q-sub', style: 'text-align:right;margin-bottom:6px' },
+    'For the full clinical summary, open the <b>Clinician</b> tab.'));
 
   // GSHS headline — the four PRIMARY outputs (Option A).
   out.appendChild(headlineCard(heads, rome));
@@ -2524,7 +2537,7 @@ function calc() {
   out.appendChild(hero);
 
   // Triage — the headline next step (clinician guidance, not prescription).
-  out.appendChild(triageCard(tri, rome, clinicianView));
+  out.appendChild(triageCard(tri, rome, false));
 
   // Secondary axes (Inflammatory / Psychosocial / Impact + microbiome correlate).
   out.appendChild(axisProfileCard(profile, heads));
@@ -2609,9 +2622,8 @@ function calc() {
     out.appendChild(pcard);
   }
 
-  // Clinician detail card — item-level responses, Rome IV raw, pattern rationale,
-  // driver table, and investigation checklist.
-  if (clinicianView) out.appendChild(clinicianDetailCard(c));
+  // Clinician detail (item-level responses, Rome IV raw, investigations) lives in
+  // the Clinician tab — intentionally not rendered in the patient results.
 
   // Save-a-visit + pilot-CSV download + print.
   const actions = el('div', { class: 'card row', style: 'justify-content:flex-end;gap:8px;flex-wrap:wrap' });
@@ -3024,9 +3036,10 @@ function newVisitFor(identity, followup) {
 }
 
 // Load a SAVED visit back into the live questionnaire state (answers, drivers,
-// red flags) and bind the patient identity. Used by the Patient-records tab to
-// re-open a past session. showResults=true also runs calc() so the results
-// render immediately (and lastCalc is populated for the Clinician tab).
+// red flags) and bind the patient identity. Used by the Patient-records tab.
+// showResults=true populates lastCalc so the Clinician tab can show the summary
+// WITHOUT dumping the editable questionnaire + results inline; the caller routes
+// to the Clinician tab. showResults=false loads the answers for editing.
 function loadVisit(identity, visit, showResults) {
   const id = identity || {}, v = visit || {};
   answers = { ...(v.answers || {}) };
@@ -3046,7 +3059,10 @@ function loadVisit(identity, visit, showResults) {
   session.followup = !!v.followup;
   loadedVisitId = v.id || null;  // save → update this record in-place
   render();
-  if (showResults) calc();
+  // Populate lastCalc so the Clinician tab renders the summary on demand. We do
+  // NOT call calc() here — that would append results under the editable form
+  // (the spill the records "View results" flow is meant to avoid).
+  if (showResults) lastCalc = computeAll();
 }
 
 // Clinician tab — detailed results + management plan for the current screen
@@ -3129,7 +3145,7 @@ return __e;
 __modules['ui-record.js'] = function(__e){
 const { buildTrend } = __req('trend.js');
 const { dysbiosisLens, modifiableFactors } = __req('scales.js');
-const { el, esc, fmtDate, toast, dialogConfirm, patientForm } = __req('util.js');
+const { el, esc, fmtDate, toast, dialogConfirm, dialogForm, patientForm } = __req('util.js');
 const Store = __req('storage.js');
 
 let ctx;                                   // { goQuestionnaire(ref, followup) }
@@ -3169,10 +3185,27 @@ function renderList(root, db) {
   const fileInput = el('input', { type: 'file', accept: 'application/json,.json', style: 'display:none' });
   fileInput.onchange = () => importMerge(fileInput.files[0]);
   bar.appendChild(imp); bar.appendChild(fileInput);
+  bar.appendChild(el('button', { class: 'btn btn-gh', type: 'button', title: 'Per-clinic prefix for automated patient IDs — set a unique code at each clinic to avoid ID overlap when pooling data', onclick: setSiteCode }, `Site: ${esc(Store.sitePrefix(db))}`));
   root.appendChild(bar);
 
   root.appendChild(el('div', { class: 'db-grid', id: 'dbGrid' }));
   paint(db);
+}
+
+// Set this clinic's site code (prefix for automated patient IDs). Set once per
+// device; existing patient codes are NOT renumbered, only new ones use it.
+async function setSiteCode() {
+  const db = Store.loadDB();
+  const cur = (db.meta && db.meta.siteCode) || '';
+  const r = await dialogForm('Clinic / site code', [
+    { key: 'site', label: 'Short code for THIS clinic (e.g. CLINA) — keep it unique per site', value: cur, placeholder: 'BMG' },
+  ], { okLabel: 'Save' });
+  if (!r) return;
+  db.meta = db.meta || {};
+  db.meta.siteCode = (r.site || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  Store.saveDB(db);
+  toast(`Site code set to ${Store.sitePrefix(db)} — new patient IDs will use this prefix.`);
+  render();
 }
 
 // Capture a new patient's details, then start their (baseline) questionnaire.
@@ -3376,9 +3409,14 @@ function boot() {
   Record.init({
     // Switch to the questionnaire, optionally pre-bound to a patient identity + follow-up.
     goQuestionnaire: (identity, followup) => { Patient.newVisitFor(identity, followup); setMode('patient'); window.scrollTo({ top: 0 }); },
-    // Re-open a SAVED visit. showResults=true runs the results (and lands on the
-    // questionnaire with results below); false just loads the answers for review.
-    openVisit: (identity, visit, showResults) => { Patient.loadVisit(identity, visit, showResults); setMode('patient'); window.scrollTo({ top: 0 }); },
+    // Re-open a SAVED visit. showResults=true → read-only summary on the
+    // Clinician tab (no editable-form dump); false → load answers into the
+    // questionnaire for editing.
+    openVisit: (identity, visit, showResults) => {
+      Patient.loadVisit(identity, visit, showResults);
+      setMode(showResults ? 'clinician' : 'patient');
+      window.scrollTo({ top: 0 });
+    },
   });
   // Let the questionnaire banner jump to the records tab (to pick/manage patients).
   Patient.init({ goRecords: () => setMode('record') });
