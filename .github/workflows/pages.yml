@@ -2,7 +2,7 @@ name: Deploy Pages
 
 on:
   push:
-    branches: ["main", "claude/upbeat-hamilton-gh2920"]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
