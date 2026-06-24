@@ -1,0 +1,3112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Beyond Mechanics · Gut Health Screen (v2)</title>
+<style>/* ============================================================================
+   gut_screen.html (v2) — clean-slate rebuild. Questionnaire + scoring only.
+   Single self-contained offline file. Palette ported from BM_Gut_Suite v7.
+   ========================================================================== */
+:root{
+  --g:#0F6E56;--gm:#1D9E75;--gl:#5DCAA5;--gp:#E1F5EE;--gf:#F4FBF7;
+  --am:#BA7517;--ap:#FAEEDA;--re:#A32D2D;--rp:#FCEBEB;
+  --pu:#534AB7;--pp:#EEEDFE;--bl:#185FA5;--blp:#E6F1FB;
+  --ink:#1A1A17;--inks:#3A3A37;--inkt:#707070;
+  --bdr:#E0DDD6;--bdrm:#C0BDB6;--bg:#F5F3EE;--surf:#FFFFFF;--surf2:#FAFAF8;
+  --r6:6px;--r8:8px;--r12:12px;
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.5;min-height:100vh;-webkit-text-size-adjust:100%}
+button,input,select,textarea{font-family:var(--font)}
+button{-webkit-tap-highlight-color:transparent;touch-action:manipulation;cursor:pointer}
+small{font-size:.82em}
+
+.app-bar{background:var(--g);color:#fff;display:flex;align-items:center;gap:12px;padding:10px 16px;padding-top:max(10px,env(safe-area-inset-top));position:sticky;top:0;z-index:500;box-shadow:0 1px 0 rgba(0,0,0,.08);flex-wrap:wrap}
+.app-logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;white-space:nowrap}
+.app-logo .dot{width:8px;height:8px;border-radius:50%;background:var(--gl);box-shadow:0 0 0 3px rgba(93,202,165,.25)}
+.app-sub{font-size:10.5px;color:rgba(255,255,255,.6)}
+.app-spacer{flex:1}
+.app-tag{font-size:10.5px;color:rgba(255,255,255,.7);background:rgba(255,255,255,.13);border-radius:20px;padding:4px 10px}
+
+.wrap{max-width:880px;margin:0 auto;padding:16px}
+.btn{border:none;border-radius:var(--r8);font-size:13px;font-weight:600;padding:9px 15px;transition:all .15s;white-space:nowrap}
+.btn-g{background:var(--g);color:#fff}.btn-g:hover{background:var(--gm)}
+.btn-o{background:var(--surf);color:var(--g);border:1px solid var(--g)}.btn-o:hover{background:var(--gp)}
+.btn-gh{background:transparent;color:var(--inkt);border:1px solid var(--bdr)}.btn-gh:hover{background:var(--surf);color:var(--ink)}
+.card{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r12);padding:16px;margin-bottom:14px}
+.muted{color:var(--inkt)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
+.pill{display:inline-block;padding:3px 11px;border-radius:20px;font-size:12px;font-weight:700}
+.sev-min{background:var(--gp);color:#085041}.sev-mod{background:var(--ap);color:#7A5800}
+.sev-sig{background:var(--cop,#FAECE7);color:#7A3410}.sev-sev{background:var(--rp);color:#7A1515}
+
+.intro{background:var(--gf);border:1px solid var(--gl);border-radius:var(--r12);padding:14px 16px;margin-bottom:14px;font-size:13px;color:var(--inks)}
+.sec-card{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r12);margin-bottom:12px;overflow:hidden}
+.sec-head{padding:11px 15px;font-weight:700;font-size:13px;color:#fff;display:flex;justify-content:space-between;align-items:center}
+.sec-body{padding:6px 15px 12px}
+.q{padding:11px 0;border-bottom:1px solid var(--surf2)}
+.q:last-child{border-bottom:none}
+.q-txt{font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:2px}
+.q-sub{font-size:11.5px;color:var(--inkt);margin-bottom:8px}
+.opts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.opt{border:1.5px solid var(--bdr);background:var(--surf);border-radius:8px;padding:9px 6px;text-align:center;font-size:11.5px;font-weight:600;color:var(--inks);line-height:1.25;transition:all .12s}
+.opt:hover{border-color:var(--bdrm)}
+.opt .on{display:block;font-size:14px;font-weight:800;margin-bottom:2px}
+/* Generic selected state for segmented rows that carry no s{v} colour class
+   (diet/lifestyle, sleep, the abx/stool/gas microbiome rows). The s0–s4 rules
+   below are more specific, so colour-coded items still win. */
+.opt.sel{border-color:var(--g);background:var(--gp);color:var(--g)}
+.opt.s0.sel{border-color:#0F6E56;background:#E1F5EE;color:#085041}
+.opt.s1.sel{border-color:#BA7517;background:#FCEFCF;color:#7A5800}
+.opt.s2.sel{border-color:#C2622E;background:#FAD7C2;color:#7A3410}
+.opt.s3.sel{border-color:#A32D2D;background:#F7CBCB;color:#7A1515}
+.opt.s4.sel{border-color:#A32D2D;background:#F7CBCB;color:#7A1515}
+@media(max-width:520px){.opts{grid-template-columns:repeat(2,1fr)}}
+.chips{display:flex;gap:7px;flex-wrap:wrap}
+.chip-opt{border:1.5px solid var(--bdr);background:var(--surf);border-radius:20px;padding:7px 14px;font-size:12px;font-weight:600;color:var(--inks)}
+.chip-opt.sel{border-color:var(--g);background:var(--gp);color:var(--g)}
+.opt-tag{display:inline-block;font-size:9px;font-weight:700;color:var(--bl);background:var(--blp);border-radius:9px;padding:1px 7px;margin-left:4px;text-transform:uppercase;letter-spacing:.03em;vertical-align:middle}
+.na-wrap{margin-top:6px}
+.na-opt{font-size:11px;padding:5px 12px}
+.na-opt.sel{border-color:var(--inkt);background:#ECEAE4;color:var(--inks)}
+/* instruments (modifiable drivers) */
+.bristol-grid{display:grid;grid-template-columns:1fr;gap:6px}
+.bristol-opt{display:flex;gap:10px;align-items:center;border:1.5px solid var(--bdr);border-radius:8px;padding:9px 12px;background:var(--surf);text-align:left;width:100%}
+.bristol-opt.sel{border-color:var(--g);background:var(--gp)}
+.bristol-n{width:24px;height:24px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0}
+.nrs-row{display:flex;gap:4px;flex-wrap:wrap}
+.nrs-opt{flex:1;min-width:30px;border:1.5px solid var(--bdr);background:var(--surf);border-radius:7px;padding:9px 0;text-align:center;font-weight:700;font-size:13px;color:var(--inks)}
+.nrs-opt.sel{border-color:var(--re);background:#FCEBEB;color:var(--re)}
+.grp-label{font-size:10px;font-weight:700;color:var(--inkt);text-transform:uppercase;letter-spacing:.06em;margin:8px 0 4px}
+.drivers{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+@media(max-width:520px){.drivers{grid-template-columns:repeat(2,1fr)}}
+.driver{border:1px solid var(--bdr);border-radius:9px;padding:8px;background:var(--surf2);text-align:center}
+.driver .dv{font-size:15px;font-weight:700}
+.driver .dl{font-size:9.5px;color:var(--inkt);margin-top:2px}
+
+.hero{display:flex;align-items:center;gap:20px;background:var(--gf);border:1px solid var(--gl);border-radius:var(--r12);padding:18px;flex-wrap:wrap}
+.hero .big{font-size:42px;font-weight:800;line-height:.95;color:var(--g)}
+.hero .sub{font-size:11px;color:var(--inkt)}
+.bar-row{margin:7px 0}
+.bar-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px}
+.bar-track{height:8px;background:#F0EFEA;border-radius:4px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px}
+.conf-note{font-size:11.5px;color:var(--inkt);margin-top:8px;line-height:1.45}
+.prov-caveat{background:#FFF6E7;border:1px solid var(--am);border-radius:var(--r8);padding:8px 11px;font-size:11.5px;color:#5C4406;margin-top:8px;line-height:1.45}
+
+.rf-banner{background:var(--rp);border:1.5px solid var(--re);border-radius:var(--r12);padding:13px 15px;margin-bottom:14px;display:flex;gap:12px;align-items:flex-start}
+.rf-ic{font-size:20px;flex-shrink:0;line-height:1.2}
+.rf-title{font-size:13.5px;font-weight:700;color:var(--re);margin-bottom:3px}
+.rf-body{font-size:12px;color:#5A1414;line-height:1.5}
+.rf-list{margin:6px 0 0 16px;padding:0;font-size:11.5px;color:#5A1414}
+
+.empty-note{text-align:center;padding:40px 20px;color:var(--inkt);font-size:13px}
+
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--ink);color:#fff;padding:11px 20px;border-radius:24px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:all .3s;box-shadow:0 6px 24px rgba(0,0,0,.25);pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.ov{position:fixed;inset:0;background:rgba(20,20,18,.46);z-index:10000;display:none;align-items:center;justify-content:center;padding:18px}
+.ov.show{display:flex}
+.dlg{background:var(--surf);border-radius:16px;width:100%;max-width:400px;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden}
+.dlg-h{font-size:16px;font-weight:700;padding:18px 20px 4px}
+.dlg-m{font-size:13px;color:var(--inks);padding:0 20px 8px;line-height:1.5;white-space:pre-line}
+.dlg-b{padding:6px 20px}
+.dlg-b input{width:100%;padding:11px 13px;border:1.5px solid var(--bdr);border-radius:10px;font-size:16px;margin-bottom:10px}
+.dlg-acts{display:flex;gap:9px;padding:10px 20px 18px}
+.dlg-acts .btn{flex:1;padding:12px}
+/* mode switch (tab nav) */
+.mode-switch{display:flex;background:rgba(255,255,255,.13);border-radius:20px;padding:2px;gap:2px}
+.mode-btn{border:none;background:transparent;color:rgba(255,255,255,.78);font-size:12px;font-weight:600;padding:6px 14px;border-radius:18px;transition:all .15s;white-space:nowrap;cursor:pointer}
+.mode-btn.active{background:#fff;color:var(--g)}
+.mode{display:none}.mode.show{display:block}
+.app-chip{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.13);border-radius:20px;padding:4px 6px 4px 12px;font-size:12px;font-weight:600;color:#fff;max-width:240px}
+.app-chip .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app-chip .x{background:rgba(255,255,255,.2);border:none;color:#fff;width:18px;height:18px;border-radius:50%;font-size:11px;line-height:1;flex-shrink:0;cursor:pointer}
+/* patient records */
+.db-search{flex:1;min-width:180px;padding:9px 13px;border:1px solid var(--bdr);border-radius:var(--r8);font-size:14px;background:var(--surf)}
+.db-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.db-empty{text-align:center;color:var(--inkt);padding:48px 16px;line-height:1.8}
+.pt-card{position:relative;background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r12);padding:14px;cursor:pointer;transition:all .15s}
+.pt-card:hover{border-color:var(--g);box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.pt-del{position:absolute;top:8px;right:8px;border:none;background:transparent;color:var(--inkt);font-size:13px;cursor:pointer;border-radius:6px;padding:2px 6px}
+.pt-del:hover{background:#FCEBEB;color:var(--re)}
+.pt-top{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.pt-av{width:38px;height:38px;border-radius:50%;background:var(--gp);color:var(--g);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px}
+.pt-name{font-weight:700;font-size:14px}.pt-meta{font-size:11px;color:var(--inkt)}
+.pt-stats{display:flex;gap:8px}
+.pt-stat{flex:1;text-align:center;background:var(--gf);border-radius:8px;padding:8px 4px}
+.pt-stat .v{font-weight:800;font-size:16px}.pt-stat .l{font-size:9.5px;color:var(--inkt);text-transform:uppercase;letter-spacing:.03em;margin-top:2px}
+.back-btn{border:none;background:transparent;color:var(--g);font-weight:600;font-size:13px;cursor:pointer;padding:6px 0}
+.visit-card{display:flex;align-items:center;gap:12px;background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r12);padding:12px 14px;margin-bottom:10px;flex-wrap:wrap}
+.visit-card.latest{border-color:var(--g);background:var(--gf)}
+.visit-num{width:26px;height:26px;border-radius:50%;background:var(--g);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}
+.visit-info{flex:1;min-width:140px}.visit-date{font-weight:600;font-size:13px}.visit-sub{font-size:11px;color:var(--inkt);margin-top:1px}
+.visit-score{text-align:center}.visit-score .v{font-weight:800;font-size:17px}.visit-score .l{font-size:10px;color:var(--inkt)}
+.delta-down{color:#0F6E56}.delta-up{color:#A32D2D}.delta-flat{color:#999}
+
+/* ── Clinician view ──────────────────────────── */
+.clin-badge{display:inline-block;padding:2px 8px;background:#3A4A5A;color:#fff;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-left:6px;vertical-align:middle}
+.clin-detail{background:#F5F7FA;border:1px solid #C0C8D2;border-radius:var(--r12);padding:16px;margin-bottom:14px}
+.clin-detail .clin-h{font-size:11.5px;font-weight:700;color:#3A4A5A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #D0D7DF;padding-bottom:3px;margin:12px 0 6px}
+.clin-detail .clin-h:first-of-type{margin-top:0}
+.clin-tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.clin-tbl th{text-align:left;padding:4px 8px;background:#EAEDF0;font-weight:600;font-size:11px}
+.clin-tbl td{padding:4px 8px;border-bottom:1px solid #E8EAED;vertical-align:top}
+.clin-tbl tr:last-child td{border-bottom:none}
+
+/* ── Print layout ────────────────────────────── */
+#print-area{display:none}
+@media print{
+  header,.toast,.ov,.mode{display:none!important}
+  #print-area{display:block!important;font-size:11.5px;line-height:1.5;color:#000;background:#fff;padding:10mm}
+  .pr-logo{font-size:14px;font-weight:700;color:#0F6E56}
+  .pr-title{font-size:20px;font-weight:800;margin:3px 0 2px}
+  .pr-meta{font-size:10.5px;color:#555;margin-bottom:10px;line-height:1.7}
+  hr.pr-divider{border:none;border-top:1.5px solid #D0D0C8;margin:10px 0}
+  .pr-section{margin-bottom:12px}
+  .pr-sh{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#3A4A5A;border-bottom:1px solid #D0D0C8;padding-bottom:3px;margin-bottom:6px}
+  .pr-hero{display:flex;gap:14px;align-items:center;background:#F4FBF7;border:1px solid #5DCAA5;border-radius:8px;padding:10px 12px;margin-bottom:8px}
+  .pr-hero .big{font-size:36px;font-weight:800;color:#0F6E56;line-height:.95}
+  .pr-hero .sub{font-size:10px;color:#555;margin-top:2px}
+  .pr-pill{display:inline-block;padding:2px 8px;border-radius:14px;font-size:10px;font-weight:700;margin-right:3px}
+  .pr-bar-row{display:flex;align-items:center;gap:6px;padding:2px 0;font-size:10.5px}
+  .pr-bar-track{flex:1;height:6px;background:#EEECEA;border-radius:3px;overflow:hidden}
+  .pr-bar-fill{height:100%;border-radius:3px}
+  .pr-alert{background:#FCEBEB;border:1px solid #A32D2D;border-radius:6px;padding:8px 10px;margin-bottom:8px}
+  .pr-alert-t{font-weight:700;color:#A32D2D;font-size:11.5px;margin-bottom:2px}
+  .pr-info{background:#FFF3CD;border:1px solid #FECB1F;border-radius:6px;padding:8px 10px;margin-bottom:8px}
+  .pr-triage{border-radius:6px;padding:8px 10px;margin-bottom:8px;border:1px solid #ccc}
+  .pr-triage.t1{background:#FCEBEB;border-color:#A32D2D}.pr-triage.t2{background:#FAD7C2;border-color:#C2622E}
+  .pr-triage.t3{background:#FAEEDA;border-color:#BA7517}.pr-triage.t4{background:#E1F5EE;border-color:#0F6E56}
+  .pr-tbl{width:100%;border-collapse:collapse;font-size:10.5px;margin-top:2px}
+  .pr-tbl th{text-align:left;padding:3px 6px;background:#F2F0EB;font-weight:600;border-bottom:1px solid #D0D0C8;font-size:10px}
+  .pr-tbl td{padding:3px 6px;border-bottom:1px solid #ECEAEA;vertical-align:top}
+  .pr-tbl tr:last-child td{border-bottom:none}
+  .pr-footer{font-size:9px;color:#999;margin-top:14px;padding-top:8px;border-top:1px solid #D0D0C8;text-align:center}
+  .pr-page-break{page-break-before:always}
+}
+</style>
+</head>
+<body>
+<header class="app-bar">
+  <div class="app-logo"><span class="dot"></span>Beyond Mechanics <span class="app-sub">Gut Screen v2</span></div>
+  <div class="app-spacer"></div>
+  <div class="mode-switch" id="modeSwitch">
+    <button class="mode-btn active" data-mode="patient" type="button">Questionnaire</button>
+    <button class="mode-btn" data-mode="clinician" type="button">Clinician</button>
+    <button class="mode-btn" data-mode="record" type="button">Patient records</button>
+  </div>
+  <div class="app-chip" id="activeChip" style="display:none"><span class="nm" id="activeName"></span><button class="x" id="activeClear" type="button" title="Clear patient">✕</button></div>
+</header>
+<main>
+  <section id="mode-patient" class="mode show wrap"></section>
+  <section id="mode-clinician" class="mode wrap"></section>
+  <section id="mode-record" class="mode wrap"></section>
+</main>
+<div class="toast" id="toast"></div>
+<div class="ov" id="overlay"><div class="dlg" id="dlg"></div></div>
+<div id="print-area"></div>
+<script>
+
+const __modules = {}; const __cache = {};
+function __req(name){ if(__cache[name]) return __cache[name]; const e = __cache[name] = {}; __modules[name](e); return e; }
+
+/* ============================================================================
+   util.js — tiny shared UI helpers. Ported from BM_Gut_Suite v1.
+   ========================================================================== */
+__modules['util.js'] = function(__e){
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+function el(tag, attrs = {}, html) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') n.className = v;
+    else if (k === 'dataset') Object.assign(n.dataset, v);
+    else if (k.startsWith('on') && typeof v === 'function') n.addEventListener(k.slice(2), v);
+    else if (v != null) n.setAttribute(k, v);
+  }
+  if (html != null) n.innerHTML = html;
+  return n;
+}
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function fmtDate(ts) {
+  if (!ts) return '—';
+  try { return new Date(ts).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }); }
+  catch { return '—'; }
+}
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast'); if (!t) return;
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+const overlay = () => $('#overlay');
+const dlgBox = () => $('#dlg');
+function openDlg(html) { dlgBox().innerHTML = html; overlay().classList.add('show'); }
+function closeDlg() { overlay().classList.remove('show'); }
+function dialogConfirm(message, { title = '', okLabel = 'OK', danger = false } = {}) {
+  return new Promise(resolve => {
+    openDlg(`
+      ${title ? `<div class="dlg-h">${esc(title)}</div>` : ''}
+      <div class="dlg-m">${esc(message)}</div>
+      <div class="dlg-acts">
+        <button class="btn btn-gh" id="dlgCancel">Cancel</button>
+        <button class="btn ${danger ? 'btn-re' : 'btn-g'}" id="dlgOk">${esc(okLabel)}</button>
+      </div>`);
+    $('#dlgOk').onclick = () => { closeDlg(); resolve(true); };
+    $('#dlgCancel').onclick = () => { closeDlg(); resolve(false); };
+  });
+}
+function dialogForm(title, fields, { okLabel = 'Save' } = {}) {
+  return new Promise(resolve => {
+    openDlg(`
+      <div class="dlg-h">${esc(title)}</div>
+      <div class="dlg-b">${fields.map(f =>
+        `<label style="font-size:11px;font-weight:600;color:var(--inkt)">${esc(f.label)}</label>
+         <input data-key="${esc(f.key)}" value="${esc(f.value || '')}" placeholder="${esc(f.placeholder || '')}">`).join('')}
+      </div>
+      <div class="dlg-acts">
+        <button class="btn btn-gh" id="dlgCancel">Cancel</button>
+        <button class="btn btn-g" id="dlgOk">${esc(okLabel)}</button>
+      </div>`);
+    const get = () => { const o = {}; $$('#dlg input[data-key]').forEach(i => { o[i.dataset.key] = i.value.trim(); }); return o; };
+    $('#dlgOk').onclick = () => { closeDlg(); resolve(get()); };
+    $('#dlgCancel').onclick = () => { closeDlg(); resolve(null); };
+  });
+}
+// Richer patient-details capture (name/age/gender/pregnant/ref). Gender and
+// pregnancy are chip selects, so this can't use the text-only dialogForm.
+// Resolves to { name, age, gender, pregnant, ref } or null on cancel.
+function patientForm(initial = {}, { title = 'Patient details', okLabel = 'Start screening →' } = {}) {
+  return new Promise(resolve => {
+    const v = {
+      name: initial.name || '', age: initial.age || '', gender: initial.gender || '',
+      pregnant: initial.pregnant || '', ref: initial.ref || '',
+    };
+    const lblStyle = 'font-size:11px;font-weight:600;color:var(--inkt)';
+    const genderChips = ['Female', 'Male', 'Other'].map(g =>
+      `<button class="chip-opt pf-gender${v.gender === g ? ' sel' : ''}" data-g="${esc(g)}" type="button">${esc(g)}</button>`).join('');
+    const pregChips = [['Pregnant', 'yes'], ['Not pregnant', 'no']].map(([l, val]) =>
+      `<button class="chip-opt pf-preg${v.pregnant === val ? ' sel' : ''}" data-p="${val}" type="button">${esc(l)}</button>`).join('');
+    openDlg(`
+      <div class="dlg-h">${esc(title)}</div>
+      <div class="dlg-b">
+        <label style="${lblStyle}">Name</label>
+        <input data-key="name" value="${esc(v.name)}" placeholder="Patient name">
+        <label style="${lblStyle}">Age</label>
+        <input data-key="age" inputmode="numeric" value="${esc(v.age)}" placeholder="Age">
+        <label style="${lblStyle}">Gender</label>
+        <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">${genderChips}</div>
+        <label style="${lblStyle}">Applicability notes (optional)</label>
+        <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">${pregChips}</div>
+        <label style="${lblStyle}">Reference / ID (optional)</label>
+        <input data-key="ref" value="${esc(v.ref)}" placeholder="e.g. P-1042">
+      </div>
+      <div class="dlg-acts">
+        <button class="btn btn-gh" id="dlgCancel">Cancel</button>
+        <button class="btn btn-g" id="dlgOk">${esc(okLabel)}</button>
+      </div>`);
+    $$('#dlg .pf-gender').forEach(b => b.onclick = () => {
+      v.gender = v.gender === b.dataset.g ? '' : b.dataset.g;
+      $$('#dlg .pf-gender').forEach(x => x.classList.remove('sel')); if (v.gender) b.classList.add('sel');
+    });
+    $$('#dlg .pf-preg').forEach(b => b.onclick = () => {
+      v.pregnant = v.pregnant === b.dataset.p ? '' : b.dataset.p;
+      $$('#dlg .pf-preg').forEach(x => x.classList.remove('sel')); if (v.pregnant) b.classList.add('sel');
+    });
+    $('#dlgOk').onclick = () => {
+      $$('#dlg input[data-key]').forEach(i => { v[i.dataset.key] = i.value.trim(); });
+      closeDlg(); resolve(v);
+    };
+    $('#dlgCancel').onclick = () => { closeDlg(); resolve(null); };
+  });
+}
+__e.$ = $; __e.$$ = $$; __e.el = el; __e.esc = esc; __e.fmtDate = fmtDate; __e.toast = toast; __e.dialogConfirm = dialogConfirm; __e.dialogForm = dialogForm; __e.patientForm = patientForm;
+return __e;
+};
+
+/* ============================================================================
+   schema.js — single source of truth for v2. CLEAN SLATE: domains and items
+   are filled in domain-by-domain through co-design. Everything downstream
+   (rendering, scoring, storage) reads from here, so adding a domain/item is a
+   data edit, never a code change.
+
+   Conventions (carried from v1, proven):
+     - Question ids are `section_concept`, globally unique, APPEND-ONLY.
+     - QID (id -> flat index) is COMPUTED once; nothing hardcodes a position.
+     - Section max is COMPUTED from items × scale-max; never hand-declared.
+     - `role` on a section controls how scoring treats it:
+         'core'      -> the validated GI core; primary driver of the Index.
+         'screen'    -> downstream screening domain; modifier, not score-dilator.
+       (The exact hybrid combination is finalised in scoring.js during co-design.)
+   ========================================================================== */
+__modules['schema.js'] = function(__e){
+const SCHEMA_VERSION = 2; // v2 gen; bumped at the trim/refocus (TRIM_PLAN §8)
+
+// Default 0..N option count per scale, resolved via scales.js. Items may set
+// `scale` to pick a vocabulary; the per-item max comes from that vocabulary.
+const { scaleFor } = __req('scales.js');
+
+// ── SECTIONS — co-design output. ────────────────────────────────────────────
+// Shape: { id, label, full, role, color, bg }
+//   role 'core'   = validated GI anchor; primary driver of the Index.
+//   role 'screen' = downstream screening domain; modifier, not score-dilator.
+const SECTIONS = [
+  // Domain 1 (locked): GSRS-derived GI core. 15 items, 0–3 severity, 2-wk recall.
+  { id: 'GI', label: 'GI', full: 'Gut symptoms (GSRS-based)',  role: 'core',   color: '#0F6E56', bg: '#E1F5EE' },
+  // Connected-axis screening domains, refocused at the trim (TRIM_PLAN §3–§6).
+  // Oral/ENT, Hormonal, broad-Metabolic removed (no gut-specific engine pathway);
+  // Sleep relocated to drivers; Skin collapsed into IM.
+  { id: 'IM', label: 'IM', full: 'Immune, inflammatory & skin', role: 'screen', color: '#B04A20', bg: '#FAEEE8' },
+  { id: 'BG', label: 'BG', full: 'Brain-gut & mood',           role: 'screen', color: '#534AB7', bg: '#EEEDFE' },
+  { id: 'NU', label: 'NU', full: 'Nutrient & absorption',      role: 'screen', color: '#185FA5', bg: '#E6F1FB' },
+];
+
+// ── QUESTIONS — co-design output. ───────────────────────────────────────────
+// Shape: { id, section, scale?, cluster?, patientText, patientSub? }
+// GI items use the DEFAULT 0–3 severity scale. `cluster` tags the 5 validated
+// GSRS syndromes for the per-cluster breakdown shown on results.
+const QUESTIONS = [
+  // ── GI core — Reflux cluster ──
+  { id: 'gsrs_heartburn', section: 'GI', cluster: 'Reflux',
+    patientText: 'Heartburn', patientSub: 'A burning feeling rising from your stomach or chest' },
+  { id: 'gsrs_regurg', section: 'GI', cluster: 'Reflux',
+    patientText: 'Acid reflux', patientSub: 'Sour or bitter fluid coming back up into your throat or mouth' },
+
+  // ── GI core — Abdominal pain cluster ──
+  { id: 'gsrs_pain', section: 'GI', cluster: 'Pain',
+    patientText: 'Abdominal pain', patientSub: 'Aches or pain anywhere in your stomach or abdomen' },
+  { id: 'gsrs_hunger', section: 'GI', cluster: 'Pain',
+    patientText: 'Hunger pains', patientSub: 'A hollow, gnawing, empty feeling that eases after eating' },
+  { id: 'gsrs_nausea', section: 'GI', cluster: 'Pain',
+    patientText: 'Nausea', patientSub: 'Feeling sick or queasy, as if you might vomit' },
+
+  // ── GI core — Indigestion cluster ──
+  { id: 'gsrs_rumbling', section: 'GI', cluster: 'Indigestion',
+    patientText: 'Rumbling or gurgling', patientSub: 'Vibrations or noises in your stomach' },
+  { id: 'gsrs_bloating', section: 'GI', cluster: 'Indigestion',
+    patientText: 'Bloating', patientSub: 'A swollen, tight, or full feeling in your abdomen' },
+  { id: 'gsrs_burping', section: 'GI', cluster: 'Indigestion',
+    patientText: 'Burping or belching', patientSub: 'Bringing up air to relieve pressure' },
+  { id: 'gsrs_gas', section: 'GI', cluster: 'Indigestion',
+    patientText: 'Passing gas / wind', patientSub: 'Needing to pass wind frequently' },
+
+  // ── GI core — Diarrhoea cluster ──
+  { id: 'gsrs_diarrhoea', section: 'GI', cluster: 'Diarrhoea',
+    patientText: 'Diarrhoea', patientSub: 'Passing stools more often than normal' },
+  { id: 'gsrs_loose', section: 'GI', cluster: 'Diarrhoea',
+    patientText: 'Loose or watery stools', patientSub: 'Soft, sloppy, or liquid stools' },
+  { id: 'gsrs_urgency', section: 'GI', cluster: 'Diarrhoea',
+    patientText: 'Urgency', patientSub: 'A sudden, urgent need to pass stool with little warning' },
+
+  // ── GI core — Constipation cluster ──
+  { id: 'gsrs_constip', section: 'GI', cluster: 'Constipation',
+    patientText: 'Constipation', patientSub: 'Passing stools less often than normal' },
+  { id: 'gsrs_hard', section: 'GI', cluster: 'Constipation',
+    patientText: 'Hard stools', patientSub: 'Hard stools that are difficult to pass' },
+  { id: 'gsrs_incomplete', section: 'GI', cluster: 'Constipation',
+    patientText: 'Incomplete emptying', patientSub: "A feeling your bowel isn't completely empty afterward" },
+
+  // ── IM — Immune, inflammatory & skin (DRAFT) ──
+  { id: 'im_food_react', section: 'IM', patientText: 'Reactions to certain foods',
+    patientSub: 'Bloating, rash, headache, or congestion after eating particular foods' },
+  { id: 'im_infections', section: 'IM', patientText: 'Frequent infections',
+    patientSub: 'Colds, UTIs, or skin infections several times a year' },
+  { id: 'im_allergies', section: 'IM', patientText: 'Allergies or hay fever',
+    patientSub: 'Runny nose, itchy eyes, sneezing, or other atopy' },
+  { id: 'im_joint', section: 'IM', patientText: 'Joint aches or stiffness',
+    patientSub: 'Without a clear injury or mechanical cause' },
+  { id: 'im_histamine', section: 'IM', patientText: 'Flushing, hives, or headache after fermented foods, wine, or aged cheese',
+    patientSub: 'A possible histamine-intolerance signal' },
+  // Gut–skin axis: the one retained skin item (atopic/inflammatory readout), folded
+  // into the immune domain (TRIM_PLAN §6.1). Feeds the inflammatory_immune pattern.
+  { id: 'sk_skin', section: 'IM', patientText: 'Acne, eczema, or unexplained skin rashes' },
+
+  // ── BG — Brain-gut & mood (DRAFT) ──
+  { id: 'bg_brainfog', section: 'BG', patientText: 'Brain fog or poor concentration',
+    patientSub: 'Difficulty thinking clearly, word-finding, mental fatigue' },
+  // Affective items are DUAL-ROLE (like Bristol): scored in the BG *screen* of
+  // the Index AND folded into the Psychological-load driver. `driverGroup` marks
+  // the driver membership; they are NOT driverOnly, so they count toward the
+  // Index. They land in a screen (never core), so the GI-dominance cap stops
+  // affective symptoms alone from inflating the band. PSS-4 stays driver-only
+  // (a modifiable cause, not a symptom). See TRIM_PLAN.
+  { id: 'bg_anxiety', section: 'BG', driverGroup: 'psych',
+    patientText: 'Anxiety or nervousness',
+    patientSub: 'Restlessness, racing thoughts, or unease' },
+  { id: 'bg_mood', section: 'BG', driverGroup: 'psych',
+    patientText: 'Low mood or loss of interest',
+    patientSub: 'Persistent low mood or reduced enjoyment of things' },
+  { id: 'bg_fatigue', section: 'BG', patientText: 'Fatigue not relieved by rest',
+    patientSub: 'Ongoing tiredness or energy crashes, especially after meals' },
+  { id: 'bg_headache', section: 'BG', patientText: 'Headaches or migraines' },
+
+  // ── NU — Nutrient & absorption (DRAFT) ──
+  { id: 'nu_known_def', section: 'NU', optional: true, optionalLabel: 'if tested',
+    patientText: 'Known low B12, iron, vitamin D, or magnesium', patientSub: 'Found on past blood work' },
+  { id: 'nu_hair', section: 'NU', patientText: 'Hair thinning or hair loss' },
+  { id: 'nu_iron', section: 'NU', patientText: 'Pallor, breathlessness, or restless legs',
+    patientSub: 'Possible iron-deficiency signs' },
+  { id: 'nu_mouth', section: 'NU', patientText: 'Cracks at the corners of your mouth, sore tongue, or easy bruising',
+    patientSub: 'Possible micronutrient-deficiency signs' },
+];
+
+// ── Derived index — the ONLY question index in the app. ─────────────────────
+const QID = Object.freeze(QUESTIONS.reduce((m, q, i) => { m[q.id] = i; return m; }, {}));
+const QTOTAL = QUESTIONS.length;
+
+// Per-item max = (scale option count − 1). Per-section max = Σ item maxes.
+function itemMax(q) { return scaleFor(q.scale).length - 1; }
+const _sectionMax = SECTIONS.reduce((m, s) => {
+  m[s.id] = QUESTIONS.filter(q => q.section === s.id && !q.driverOnly).reduce((t, q) => t + itemMax(q), 0);
+  return m;
+}, {});
+function sectionMax(sectionId) { return _sectionMax[sectionId] || 0; }
+function questionsOf(sectionId) { return QUESTIONS.filter(q => q.section === sectionId); }
+
+__e.SCHEMA_VERSION = SCHEMA_VERSION; __e.SECTIONS = SECTIONS; __e.QUESTIONS = QUESTIONS;
+__e.QID = QID; __e.QTOTAL = QTOTAL; __e.itemMax = itemMax; __e.sectionMax = sectionMax; __e.questionsOf = questionsOf;
+return __e;
+};
+
+/* ============================================================================
+   scales.js — answer-option vocabularies + validated-instrument definitions.
+   CLEAN SLATE: vocabularies are re-decided in co-design. A small generic set is
+   provided so the scaffold renders; instruments (e.g. a validated GI core) are
+   added as their own scales/blocks when locked.
+   ========================================================================== */
+__modules['scales.js'] = function(__e){
+const SCALES = {
+  // generic 0–3 severity fallback (placeholder; real scales added in co-design)
+  DEFAULT: ['None', 'Mild', 'Moderate', 'Severe'],
+};
+function scaleFor(name) { return SCALES[name] || SCALES.DEFAULT; }
+
+// Recall window note (Phase 0.5 §1 mechanism, carried forward). Shown under
+// scored symptom sections in the patient view; suppressed where a section opts
+// out via `noRecall:true`.
+const RECALL_NOTE = 'Answer for how things have been over the past 2 weeks.';
+
+// ── MODIFIABLE-DRIVER INSTRUMENTS ───────────────────────────────────────────
+// Shown alongside the result and stored on the visit (extras), but kept OUT of
+// the GI Symptom Burden score. Designed to be consumed by the patterns/triage
+// engines (e.g. high PSS-4 -> psychobiotic pattern; Bristol -> bowel direction).
+
+// Modified 4-item Perceived Stress Scale (Du et al. 2023). 0–4 anchors; items
+// 2 & 3 are positively framed and reverse-scored. Total 0–16.
+const PSS4_ITEMS = [
+  'In the last month, how often have you felt unable to control the important things in your life?',
+  'In the last month, how often have you felt confident about your ability to handle your personal problems?',
+  'In the last month, how often have you felt that things were going your way?',
+  'In the last month, how often have you felt difficulties were piling up so high you could not overcome them?',
+];
+const PSS4_REVERSED = [false, true, true, false];
+const PSS4_ANCHORS = ['Never', 'Almost never', 'Sometimes', 'Fairly often', 'Very often']; // 0–4
+function pss4Score(arr) {
+  if (!arr || arr.some(v => v == null)) return null;
+  return arr.reduce((sum, v, i) => sum + (PSS4_REVERSED[i] ? (4 - v) : v), 0);
+}
+function pss4Band(s) {
+  if (s == null) return null;
+  return s <= 5 ? { l: 'Low', c: '#0F6E56' } : s <= 9 ? { l: 'Moderate', c: '#BA7517' } : { l: 'High', c: '#A32D2D' };
+}
+
+// Bristol Stool Form Scale (Lewis & Heaton 1997), types 1–7.
+const BRISTOL_TYPES = [
+  { n: 1, label: 'Separate hard lumps',     sub: 'like nuts, hard to pass',          tag: 'Constipated',          col: '#7A4A1E' },
+  { n: 2, label: 'Lumpy and sausage-like',  sub: 'sausage-shaped but lumpy',         tag: 'Slightly constipated', col: '#9A6B2E' },
+  { n: 3, label: 'Sausage with cracks',     sub: 'sausage with surface cracks',      tag: 'Near normal',          col: '#3B6D11' },
+  { n: 4, label: 'Smooth, soft sausage',    sub: 'like a smooth soft snake — ideal', tag: 'Normal / ideal',       col: '#0F6E56' },
+  { n: 5, label: 'Soft blobs, clear edges', sub: 'soft blobs that pass easily',      tag: 'Lacking fibre',        col: '#BA7517' },
+  { n: 6, label: 'Mushy, ragged edges',     sub: 'fluffy pieces, mushy stool',       tag: 'Mild diarrhoea',       col: '#C2622E' },
+  { n: 7, label: 'Watery, no solid pieces', sub: 'entirely liquid',                  tag: 'Diarrhoea',            col: '#A32D2D' },
+];
+
+// NRS pain 0–10 + body region (observational; never feeds the Index).
+const PAIN_REGIONS = [
+  { id: 'low_back', label: 'Low back' }, { id: 'neck', label: 'Neck' },
+  { id: 'joints', label: 'Joints' }, { id: 'abdomen', label: 'Abdomen' }, { id: 'other', label: 'Other' },
+];
+function painBand(s) {
+  if (s == null) return null;
+  return s === 0 ? { l: 'None', c: '#0F6E56' } : s <= 3 ? { l: 'Mild', c: '#3B6D11' }
+    : s <= 6 ? { l: 'Moderate', c: '#BA7517' } : { l: 'Severe', c: '#A32D2D' };
+}
+
+// Composite PSYCHOLOGICAL LOAD (co-design): folds the validated PSS-4 together
+// with the two affective brain-gut items (anxiety, low mood) that were moved OUT
+// of the Index to stop double-counting stress. PSS-4 stays preserved and
+// reportable on its own (ex.pss4Score); this composite is what trends as the
+// driver. Weights provisional (PSS-4 0.5, anxiety 0.25, low mood 0.25) — see
+// TRIM_PLAN; recalibrate at pilot. Components renormalise over whatever's answered.
+function psychLoadScore(ex) {
+  const parts = [];
+  if (ex.pss4Score != null) parts.push([ex.pss4Score / 16, 0.5]);
+  if (ex.bgAnxiety  != null) parts.push([ex.bgAnxiety / 3,  0.25]);
+  if (ex.bgMood     != null) parts.push([ex.bgMood / 3,     0.25]);
+  if (!parts.length) return null;
+  const wsum = parts.reduce((a, [, w]) => a + w, 0);
+  return Math.round(parts.reduce((a, [x, w]) => a + x * w, 0) / wsum * 100); // 0–100
+}
+function loadBand(p) {
+  if (p == null) return null;
+  return p < 33 ? { l: 'Low', c: '#0F6E56' } : p < 66 ? { l: 'Moderate', c: '#BA7517' } : { l: 'High', c: '#A32D2D' };
+}
+
+// New modifiable drivers (co-design). All provisional, all kept OUT of the Index.
+// Recent gut disruptors — strongest modifiable microbiome influences.
+const DISRUPTORS = [
+  { id: 'abx',   label: 'Antibiotics' },
+  { id: 'ppi',   label: 'Acid blocker (PPI/H2)' },
+  { id: 'nsaid', label: 'Regular NSAID' },
+];
+const ALCOHOL_LEVELS  = ['None', 'Light', 'Moderate', 'Heavy'];        // 0–3
+const ACTIVITY_LEVELS = ['Sedentary', 'Light', 'Moderate', 'Active'];  // 0–3
+// Sleep — relocated from a scored screen domain to a modifiable DRIVER (TRIM_PLAN
+// §8.3). Context only: tracked over time, kept OUT of the GI Symptom Burden score.
+const SLEEP_ITEMS   = ['Trouble falling asleep', 'Waking during the night', 'Waking unrefreshed', 'Fewer hours than you need'];
+const SLEEP_ANCHORS = ['Never', 'Sometimes', 'Often', 'Most nights']; // 0–3
+function sleepBurden(arr) {
+  const xs = (arr || []).filter(v => typeof v === 'number');
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / (xs.length * 3) : null; // 0–1
+}
+function sleepBand(b) {
+  if (b == null) return null;
+  return b < 0.34 ? { l: 'Good', c: '#0F6E56' } : b < 0.67 ? { l: 'Fair', c: '#BA7517' } : { l: 'Poor', c: '#A32D2D' };
+}
+// Diet quality: protective fibre/fermented intake vs harmful ultra-processed/
+// sugar intake (each 0–3 frequency). Burden 0–1, higher = worse.
+function dietBurden(ex) {
+  const f = ex.dietFibre     != null ? (3 - ex.dietFibre) / 3 : null; // low fibre  = worse
+  const p = ex.dietProcessed != null ? ex.dietProcessed / 3   : null; // high processed = worse
+  const xs = [f, p].filter(x => x != null);
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+}
+function dietBand(b) {
+  if (b == null) return null;
+  return b < 0.34 ? { l: 'Good', c: '#0F6E56' } : b < 0.67 ? { l: 'Fair', c: '#BA7517' } : { l: 'Poor', c: '#A32D2D' };
+}
+
+// ── DYS-R: dysbiosis-correlate lens (TRIM_PLAN §10) ─────────────────────────
+// Items mechanistically enriched for microbiome-altered phenotypes. Kept in a
+// SEPARATE lens, never folded into the GI Symptom Burden score, and labelled
+// "correlate" (NOT a dysbiosis measurement) until validated against stool
+// sequencing. Feeds Triage Tier 3 + the bloating/post-disruptor patterns.
+const FOOD_TRIGGERS = [
+  { id: 'alliums', label: 'Onion / garlic' },
+  { id: 'legumes', label: 'Beans / lentils' },
+  { id: 'wheat',   label: 'Wheat / bread' },
+  { id: 'dairy',   label: 'Dairy' },
+  { id: 'polyols', label: "Sugar-free ('-ol') sweeteners" },
+];
+const ABX_COURSES   = ['0', '1', '2', '3+'];                  // 0–3 (courses /12mo)
+const GAS_LEVELS     = ['Not at all', 'Mild', 'Moderate', 'Marked']; // 0–3
+const STOOLVAR_LEVELS = ['Never', 'Sometimes', 'Often'];      // 0–2
+const POSTINF_OPTS   = ['No', 'Yes', 'Not sure'];             // 0/1/2 (1 = Yes)
+const PARADOX_OPTS   = ['No', 'Yes', "Haven't tried"];        // 0/1/2 (1 = Yes)
+
+// Surgical history (asked routinely for visceral / fascial manipulation). Two
+// orthogonal relevances: `adhesion` surgeries → manual-therapy candidacy (Tier 2);
+// `microbiome` surgeries (cholecystectomy, resection, bariatric) → a dysbiosis-
+// correlate signal. Stored per-visit in extras.surgeries (id list).
+const SURGERIES = [
+  { id: 'abdominal',   label: 'Abdominal surgery',            adhesion: true },
+  { id: 'pelvic',      label: 'Pelvic surgery / C-section',   adhesion: true },
+  { id: 'hernia',      label: 'Hernia repair',                adhesion: true },
+  { id: 'bowel',       label: 'Bowel resection',              adhesion: true, microbiome: true },
+  { id: 'gallbladder', label: 'Gallbladder removal',          microbiome: true },
+  { id: 'appendix',    label: 'Appendix removal',             microbiome: true },
+  { id: 'bariatric',   label: 'Weight-loss (bariatric) surgery', microbiome: true },
+];
+function surgicalFlags(extras) {
+  const ids = new Set(((extras || {}).surgeries) || []);
+  let adhesion = false, microbiome = false; const list = [];
+  SURGERIES.forEach(s => { if (ids.has(s.id)) { list.push(s.label); if (s.adhesion) adhesion = true; if (s.microbiome) microbiome = true; } });
+  return { adhesion, microbiome, list, count: list.length };
+}
+
+// Returns the count of dysbiosis-correlate signals present + their labels.
+function dysbiosisLens(extras) {
+  const ex = extras || {}, d = ex.dys || {};
+  const signals = [];
+  if (typeof ex.abxCourses === 'number' && ex.abxCourses >= 1)
+    signals.push({ k: 'abx', label: (ABX_COURSES[ex.abxCourses] || ex.abxCourses) + ' antibiotic course(s) in 12mo' });
+  if (d.postInfectious === 1) signals.push({ k: 'postinf', label: 'Post-infectious onset' });
+  if ((d.foodTriggers || []).length >= 2) signals.push({ k: 'fodmap', label: d.foodTriggers.length + ' fermentable-food triggers' });
+  if (typeof d.gasFoul === 'number' && d.gasFoul >= 2) signals.push({ k: 'gas', label: 'Foul / excessive gas' });
+  if (d.fibreParadox === 1) signals.push({ k: 'paradox', label: 'Worse with fibre / probiotics' });
+  if (typeof d.stoolVar === 'number' && d.stoolVar >= 1) signals.push({ k: 'var', label: 'Day-to-day stool variability' });
+  if (surgicalFlags(ex).microbiome) signals.push({ k: 'surg', label: 'Microbiome-altering surgery' });
+  return { count: signals.length, signals };
+}
+
+// EXPERIMENTAL blended Gut Health Index (TRIM_PLAN §10, pre-validation). A single
+// 0–100 number = a transparent weighted mix of validated-ish symptom severity and
+// the (un-validated) dysbiosis-correlate count. Severity-weighted 0.7 because it's
+// the better-grounded component; the lens contributes 0.3. Higher = worse. This is
+// NOT a substitute for the two component reads — it's shown WITH them, flagged
+// experimental, and the weights are placeholders to refit at pilot.
+const GHI_WEIGHTS = { severity: 0.7, risk: 0.3, riskMax: 6 };
+function gutHealthIndex(severityIndex, lensCount) {
+  if (severityIndex == null) return null;
+  const risk = Math.min(1, (lensCount || 0) / GHI_WEIGHTS.riskMax) * 100;
+  return Math.round(GHI_WEIGHTS.severity * severityIndex + GHI_WEIGHTS.risk * risk);
+}
+
+// ONE shared driver descriptor used by every surface (results now; report later).
+function modifiableFactors(extras) {
+  const ex = extras || {};
+  const plPct = psychLoadScore(ex);
+  const pl = loadBand(plPct);
+  const pn = painBand(ex.nrsPain ?? null);
+  const bt = ex.bristol != null ? BRISTOL_TYPES.find(t => t.n === ex.bristol) : null;
+  const db = dietBand(dietBurden(ex));
+  const disrupt = DISRUPTORS.filter(d => ex.meds && ex.meds[d.id]);
+  const alc = ex.alcohol  != null ? ALCOHOL_LEVELS[ex.alcohol]   : null;
+  const act = ex.activity != null ? ACTIVITY_LEVELS[ex.activity] : null;
+  const sBurden = sleepBurden(ex.sleep);
+  const sb = sleepBand(sBurden);
+  const surg = surgicalFlags(ex);
+  return [
+    { icon: '🧠', label: 'Psychological load', band: pl ? pl.l : '—',
+      score: plPct != null ? `${plPct}/100${ex.pss4Score != null ? ` · PSS-4 ${ex.pss4Score}/16` : ''}` : null,
+      color: pl ? pl.c : '#999' },
+    { icon: '⚡', label: 'Pain (NRS)', band: pn ? pn.l : '—', score: ex.nrsPain != null ? `${ex.nrsPain}/10` : null, color: pn ? pn.c : '#999' },
+    { icon: '💩', label: 'Bristol stool', band: bt ? `Type ${bt.n}` : '—', score: bt ? bt.tag : null, color: bt ? bt.col : '#999' },
+    { icon: '💊', label: 'Recent disruptors', band: disrupt.length ? `${disrupt.length} flagged` : (ex.meds ? 'None' : '—'),
+      score: disrupt.length ? disrupt.map(d => d.label).join(', ') : null, color: disrupt.length ? '#A32D2D' : (ex.meds ? '#0F6E56' : '#999') },
+    { icon: '🥗', label: 'Diet quality', band: db ? db.l : '—', score: null, color: db ? db.c : '#999' },
+    { icon: '🏃', label: 'Lifestyle', band: act || '—', score: alc != null ? `Alcohol: ${alc}` : null, color: act ? '#117A8B' : '#999' },
+    { icon: '😴', label: 'Sleep', band: sb ? sb.l : '—', score: sBurden != null ? `${Math.round(sBurden * 100)}/100 disturbance` : null, color: sb ? sb.c : '#999' },
+    { icon: '🔪', label: 'Surgical history', band: surg.count ? `${surg.count} noted` : 'None noted',
+      score: surg.count ? surg.list.join(', ') : null, color: surg.count ? '#185FA5' : '#999' },
+  ];
+}
+
+__e.SCALES = SCALES; __e.scaleFor = scaleFor; __e.RECALL_NOTE = RECALL_NOTE;
+// TRIM_PLAN — the de-dup decisions ("conceptual now, empirical at pilot").
+// Conceptual decisions applied NOW: the affective BG items are dual-role (scored
+// in the BG screen AND folded into the Psychological-load driver). Everything else
+// is FLAGGED, not cut — the pilot makes the call. method[] is the empirical recipe
+// to run once responses exist; tuning[] holds weight questions (not cuts).
+const TRIM_PLAN = {
+  applied: [
+    { ids: ['bg_anxiety', 'bg_mood'], action: 'dual-role:BG-screen + driver:psych',
+      reason: 'Scored in the BG screen (capped, never core) AND folded into the Psychological-load driver. Not double-counting: PSS-4 — the correlated stress measure — is driver-only and never in the Index.' },
+    { action: 'trim/refocus (schema v2)',
+      reason: 'Removed Oral/ENT, Hormonal, broad-Metabolic domains (no gut-specific engine pathway). Skin collapsed into IM (kept sk_skin). 52 -> 30 scored items. See TRIM_PLAN.md §3–§6.' },
+    { ids: ['sl_onset', 'sl_waking', 'sl_unrefreshed', 'sl_short'], action: 'relocate:scored-domain -> driver',
+      reason: 'Sleep is a modifier, not a gut symptom — moved to extras.sleep, out of the burden score (§8.3).' },
+    { action: 'patterns 12 -> 10',
+      reason: 'Cut candida_yeast (speculative). Merged histamine_intolerance into inflammatory_immune. Renamed stress_driven -> gut_brain, wiring in bg_brainfog/bg_fatigue (§5, §6).' },
+    { action: 'add:Dys-R dysbiosis-correlate lens',
+      reason: 'abxCourses + dys.{stoolVar,postInfectious,gasFoul,fibreParadox,foodTriggers}; reported SEPARATELY from burden, feeds bloating/post_disruptor + Tier 3. Labelled correlate, not diagnosis (§10).' },
+  ],
+  candidates: [
+    { ids: ['gsrs_rumbling', 'gsrs_burping', 'gsrs_gas'], reason: 'Indigestion trio likely co-varies; collapse to ~2 once pilot confirms inter-item r (§6.3). Validated GSRS — do not cut pre-data.' },
+    { id: 'im_food_react', reason: 'May co-move with diet driver / dys food-triggers; verify added value to the IM domain.' },
+  ],
+  tuning: [
+    { ids: ['bg_anxiety', 'bg_mood'], question: 'Full weight vs down-weighted in the BG screen?',
+      reason: 'Affective symptoms have substantial non-gut causes. Currently full weight, with the GI-dominance cap as the only guardrail. At pilot, compare their item-total correlation to the GI core against the other BG items; if they carry less gut-brain signal, apply a sub-1 weight rather than dropping them.' },
+  ],
+  // Drivers + the Dys-R lens, intentionally kept separate from the Index (modifiable / correlate, tracked):
+  drivers: ['psych(PSS-4+anxiety+mood)', 'pain(NRS)', 'bristol', 'disruptors(abx/ppi/nsaid)', 'diet(fibre/processed)', 'alcohol', 'activity', 'sleep', 'dys-R(microbiome-correlate lens)'],
+  method: [
+    'Need ~100+ pilot responses before cutting any candidate.',
+    'Drop items with low corrected item-total correlation to the GI core.',
+    'Collapse item pairs with inter-item r > ~.75 (redundant).',
+    'Keep ≥1 item per screening domain for coverage even if weak.',
+    'Validate each Dys-R signal against stool sequencing before any dysbiosis claim (§10.5).',
+  ],
+};
+__e.PSS4_ITEMS = PSS4_ITEMS; __e.PSS4_REVERSED = PSS4_REVERSED; __e.PSS4_ANCHORS = PSS4_ANCHORS; __e.pss4Score = pss4Score; __e.pss4Band = pss4Band;
+__e.psychLoadScore = psychLoadScore; __e.loadBand = loadBand;
+__e.DISRUPTORS = DISRUPTORS; __e.ALCOHOL_LEVELS = ALCOHOL_LEVELS; __e.ACTIVITY_LEVELS = ACTIVITY_LEVELS; __e.dietBurden = dietBurden; __e.dietBand = dietBand;
+__e.SLEEP_ITEMS = SLEEP_ITEMS; __e.SLEEP_ANCHORS = SLEEP_ANCHORS; __e.sleepBurden = sleepBurden; __e.sleepBand = sleepBand;
+__e.FOOD_TRIGGERS = FOOD_TRIGGERS; __e.ABX_COURSES = ABX_COURSES; __e.GAS_LEVELS = GAS_LEVELS; __e.STOOLVAR_LEVELS = STOOLVAR_LEVELS;
+__e.POSTINF_OPTS = POSTINF_OPTS; __e.PARADOX_OPTS = PARADOX_OPTS; __e.dysbiosisLens = dysbiosisLens;
+__e.SURGERIES = SURGERIES; __e.surgicalFlags = surgicalFlags;
+__e.gutHealthIndex = gutHealthIndex; __e.GHI_WEIGHTS = GHI_WEIGHTS;
+__e.TRIM_PLAN = TRIM_PLAN;
+__e.BRISTOL_TYPES = BRISTOL_TYPES; __e.PAIN_REGIONS = PAIN_REGIONS; __e.painBand = painBand; __e.modifiableFactors = modifiableFactors;
+return __e;
+};
+
+/* ============================================================================
+   redflags.js — alarm / organic-pathology screen. SEPARATE module so these can
+   never be summed into the score. Binary Yes/No, surfaced as a banner before
+   the result. CLEAN SLATE: item list co-designed; mechanism ported from v1.
+   ========================================================================== */
+__modules['redflags.js'] = function(__e){
+const RED_FLAGS = [
+  // Lower-GI / colorectal alarm features
+  { id: 'rf_bleeding',   label: 'Blood in your stool, rectal bleeding, or black tarry stools' },
+  { id: 'rf_weightloss', label: 'Unintentional weight loss' },
+  { id: 'rf_nocturnal',  label: 'Gut symptoms that wake you from sleep at night' },
+  { id: 'rf_newonset50', label: 'A new, persistent change in bowel habit starting after age 50' },
+  { id: 'rf_mass',       label: 'A lump or mass you (or a doctor) can feel in your abdomen' },
+  { id: 'rf_famhist',    label: 'Family history of bowel/colorectal cancer or IBD (close relative, especially under 50)' },
+  // Upper-GI alarm features
+  { id: 'rf_dysphagia',  label: 'Difficulty or pain when swallowing' },
+  { id: 'rf_vomiting',   label: 'Persistent vomiting, or vomiting blood / coffee-ground material' },
+  // Systemic / other
+  { id: 'rf_anaemia',    label: 'Diagnosed iron-deficiency anaemia without a clear cause' },
+  { id: 'rf_jaundice',   label: 'Yellowing of the skin or eyes (jaundice)' },
+  { id: 'rf_fever',      label: 'Fever accompanying your gut symptoms' },
+];
+function anyRedFlag(answers) { return !!answers && RED_FLAGS.some(f => answers[f.id] === true); }
+function firedRedFlags(answers) { return answers ? RED_FLAGS.filter(f => answers[f.id] === true) : []; }
+const RED_FLAG_BANNER = "One or more of your answers suggest symptoms that should be assessed directly by a clinician before starting a gut-health protocol. This doesn't replace that evaluation — please discuss these specific answers with your clinician.";
+__e.RED_FLAGS = RED_FLAGS; __e.anyRedFlag = anyRedFlag; __e.firedRedFlags = firedRedFlags; __e.RED_FLAG_BANNER = RED_FLAG_BANNER;
+return __e;
+};
+
+/* ============================================================================
+   scoring.js — hybrid GI Symptom Burden index (STUB, provisional until co-design
+   locks the model). Carries forward the proven Phase 0/0.5 mechanisms:
+     - null = unanswered (NOT 0): honest completeness, no false "minimal".
+     - domain-MEAN normalisation (0–1) to remove item-count weighting bias.
+     - GI-dominance hook: 'core'-role domains drive the Index; 'screen' domains
+       modify but must not dilate a low-core presentation into a high band.
+     - scoreConfidence(): completeness + cap-fired descriptor.
+   The exact weights, combination rule, and band cutoffs are co-design outputs;
+   what's here is a working, testable placeholder.
+   ========================================================================== */
+__modules['scoring.js'] = function(__e){
+const { SECTIONS, QUESTIONS, QID, itemMax, sectionMax } = __req('schema.js');
+
+// Provisional bands on the 0–100 Index. Co-design: stricter 20/40/60 cutoffs.
+// TODO[recalibration, opened 2026-06]: cutoffs AND the 0.6/0.4 core/screen
+// weighting are provisional placeholders — refit against pilot distribution +
+// any lab-confirmed outcomes (breath test, GI-MAP) before treating as final.
+const BANDS = [
+  { label: 'Minimal',       maxPct: 20,        color: '#0F6E56', bg: '#E1F5EE', cls: 'sev-min' },
+  { label: 'Mild–Moderate', maxPct: 40,        color: '#BA7517', bg: '#FAEEDA', cls: 'sev-mod' },
+  { label: 'Significant',   maxPct: 60,        color: '#C2622E', bg: '#FAECE7', cls: 'sev-sig' },
+  { label: 'Severe',        maxPct: Infinity,  color: '#A32D2D', bg: '#FCEBEB', cls: 'sev-sev' },
+];
+const SEVERITY_DESC = {
+  'Minimal':       'Minimal gut-symptom burden on this screen.',
+  'Mild–Moderate': 'Mild-to-moderate gut-symptom burden — worth discussing with your clinician.',
+  'Significant':   'Significant gut-symptom burden — clinician-guided assessment recommended.',
+  'Severe':        'High gut-symptom burden — comprehensive clinical assessment recommended.',
+};
+
+function bandForPct(pct, coreLow) {
+  let b = BANDS.find(x => pct < x.maxPct) || BANDS[BANDS.length - 1];
+  // GI-dominance: a 'screen'-driven elevation with a low core is capped at
+  // Mild–Moderate (the Phase 0 §2 lesson, built in from the start).
+  if (coreLow && b.label !== 'Minimal' && BANDS.indexOf(b) > 1) {
+    return Object.assign({}, BANDS[1], { capped: true });
+  }
+  return Object.assign({}, b, { capped: false });
+}
+
+// answers: id-map OR positional array. Per item:
+//   number (0..N) = answered · null/undefined = unanswered · 'na' = not applicable.
+// Optional items (q.optional / sex-age-specific) excluded from the completeness
+// denominator unless actually answered, and 'na' items are excluded from the
+// score AND the denominator entirely — so skipping items that don't apply to
+// you never makes the result read as incomplete (the gender/age requirement).
+// Bristol stool form as a DUAL-ROLE factor (co-design): the raw type is still
+// tracked separately as a modifiable driver, AND a bounded transit-deviation
+// signal feeds the GI core. Signal = |type − 4| / 3 (type 4 ideal → 0; types 1
+// and 7 → 1), U-shaped because both constipation and diarrhoea are abnormal.
+// Added to the GI norm as a ONE-DIRECTIONAL nudge of up to BRISTOL_ALPHA: an
+// abnormal stool can raise GI burden, but a normal stool never discounts a
+// symptomatic questionnaire (a coincidentally-perfect stool must not mask
+// reported symptoms). The cap is deliberately < the 0.20 coreLow threshold so a
+// bad stool form ALONE can never lift the GI core out of "low" — it augments the
+// questionnaire, it can't override it.
+const BRISTOL_ALPHA = 0.15;
+function bristolTransit(b) {
+  return (typeof b === 'number') ? Math.abs(b - 4) / 3 : null; // 0–1, null if absent
+}
+
+// answers: id-map OR positional array. opts.bristol (1–7) optionally feeds the
+// GI core via bristolTransit() — see BRISTOL_ALPHA note above.
+function computeScores(answers, opts) {
+  const raw = Array.isArray(answers) ? (id) => answers[QID[id]] : (id) => answers[id];
+  const bristolSignal = bristolTransit(opts && opts.bristol);
+
+  // GSRS-cluster aggregation — co-design output: per-cluster norms feed the
+  // per-cluster bars on results and the pattern engine. Computed only over
+  // items that have a `cluster` tag (currently the 15 GI core items).
+  const clusterAgg = {};
+  for (const q of QUESTIONS) {
+    if (!q.cluster) continue;
+    const v = raw(q.id);
+    if (v === 'na') continue;
+    const c = clusterAgg[q.cluster] = clusterAgg[q.cluster] || { sum: 0, max: 0, answered: 0 };
+    if (typeof v === 'number') { c.sum += v; c.max += itemMax(q); c.answered++; }
+  }
+  const clusterNorm = {};
+  for (const k of Object.keys(clusterAgg)) clusterNorm[k] = clusterAgg[k].max > 0 ? clusterAgg[k].sum / clusterAgg[k].max : null;
+
+  const secScores = {}, secNorm = {}, bands = {}, secAnswered = {}, secApplicableMax = {};
+  let answeredItems = 0, scoredItems = 0;
+  const coreNorms = [], screenNorms = [];
+
+  for (const sec of SECTIONS) {
+    const qs = QUESTIONS.filter(q => q.section === sec.id && !q.driverOnly);
+    let sum = 0, n = 0, maxSum = 0, denom = 0;
+    for (const q of qs) {
+      const v = raw(q.id);
+      if (v === 'na') continue;                 // not applicable — excluded from score + completeness
+      const hasVal = typeof v === 'number';
+      if (hasVal) { sum += v; n++; maxSum += itemMax(q); denom++; }
+      else if (!q.optional) { denom++; }        // mandatory blank counts against completeness; optional blank doesn't
+    }
+    secScores[sec.id] = sum;
+    secApplicableMax[sec.id] = maxSum;
+    secAnswered[sec.id] = { answered: n, of: qs.length };
+    bands[sec.id] = maxSum ? Math.min(3, Math.floor(sum / maxSum * 4)) : 0;
+    let norm = maxSum > 0 ? sum / maxSum : null; // domain MEAN over APPLICABLE items, 0–1
+    // Dual-role Bristol: nudge the GI core only when the GI questionnaire itself
+    // was answered (Bristol augments, it never substitutes for, the items).
+    if (sec.id === 'GI' && norm != null && bristolSignal != null) {
+      norm = Math.min(1, norm + BRISTOL_ALPHA * bristolSignal);
+    }
+    secNorm[sec.id] = norm;
+    scoredItems += denom; answeredItems += n;
+    if (norm != null) (sec.role === 'core' ? coreNorms : screenNorms).push(norm);
+  }
+
+  // Hybrid combine (co-design): core weighted 0.6, screens 0.4 (more holistic).
+  const coreMean = coreNorms.length ? coreNorms.reduce((a, b) => a + b, 0) / coreNorms.length : null;
+  const screenMean = screenNorms.length ? screenNorms.reduce((a, b) => a + b, 0) / screenNorms.length : null;
+  let blend;
+  if (coreMean != null && screenMean != null) blend = 0.6 * coreMean + 0.4 * screenMean;
+  else blend = (coreMean != null ? coreMean : (screenMean != null ? screenMean : 0));
+  const index = Math.round(blend * 100);
+
+  const completeness = scoredItems ? Math.round(answeredItems / scoredItems * 100) : 100;
+  const coreUnknown = coreMean == null;                 // GI/GSRS section wasn't answered at all
+  const coreLow = coreUnknown || coreMean < 0.20;        // unknown OR genuinely low — cap either way
+  const band = bandForPct(index, coreLow);
+  const severity = Object.assign({}, band, {
+    index,
+    desc: SEVERITY_DESC[band.label] + (band.capped
+      ? (coreUnknown
+          ? " Capped — the core GI section wasn't answered, so this result can't yet be attributed to direct gut symptoms."
+          : ' Capped — direct gut symptoms are low; the elevation comes mostly from other domains.')
+      : ''),
+  });
+
+  return { secScores, secNorm, secApplicableMax, bands, secAnswered, completeness, index, severity, bristolSignal, clusterAgg, clusterNorm, coreUnknown };
+}
+
+// Shared confidence descriptor (Phase 0.5 §3 mechanism).
+function scoreConfidence(scoreObj) {
+  const c = (scoreObj && scoreObj.completeness != null) ? scoreObj.completeness : 100;
+  const capped = !!(scoreObj && scoreObj.severity && scoreObj.severity.capped === true);
+  let level, note;
+  if (c < 60)      { level = 'Low';      note = `Provisional — only ${c}% of items answered.`; }
+  else if (c < 80) { level = 'Moderate'; note = `${c}% of items answered — interpret with care.`; }
+  else             { level = 'High';     note = 'All key items answered.'; }
+  if (capped) note += ' Severity capped: direct gut symptoms are low relative to other domains.';
+  return { level, note, completeness: c, capped };
+}
+
+__e.BANDS = BANDS; __e.computeScores = computeScores; __e.scoreConfidence = scoreConfidence;
+__e.BRISTOL_ALPHA = BRISTOL_ALPHA; __e.bristolTransit = bristolTransit;
+return __e;
+};
+
+/* ============================================================================
+   patterns.js — first-cut pattern engine (co-design DRAFT). Consumes scoring
+   output + driver extras, returns an ordered list of patterns the patient
+   should "discuss with your clinician." NOT a diagnosis layer: each pattern
+   has a plain-English description and a conservative framing. Rules are
+   intentionally simple (sum-of-conditions, thresholded), so they're auditable
+   and easy to tune against pilot data — see TRIM_PLAN.method.
+
+   Each pattern fires if its rule returns truthy. Confidence comes from how
+   many of the supporting signals were actually answered (so a pattern firing
+   off a single sparse driver gets "Low" confidence, not "High"). Patterns are
+   returned ordered by the engine's listed priority then by the confidence,
+   so the most actionable item shows first.
+   ========================================================================== */
+__modules['romeiv.js'] = function(__e){
+const ROME_FREQ = [
+  'Less than 1 day a month', '1–3 days a month', '1 day a week',
+  '2–3 days a week', 'More than half the days', 'Every day',
+];
+const ROME_FREQ_MET = 2; // index >= this meets Rome IV's "≥1 day/week"
+const ROME_ONSET = [
+  'Less than 3 months ago', '3–6 months ago',
+  '6 months to a year ago', '1–3 years ago', 'More than 3 years ago',
+];
+const ROME_ONSET_MET = 2; // index >= this meets Rome IV's "onset ≥6 months ago"
+const ROME_ASSOC = [
+  { id: 'rm_assoc_defecation', label: 'Pain is better or worse around a bowel movement' },
+  { id: 'rm_assoc_freqchange', label: 'Pain comes with a change in how often you pass stool' },
+  { id: 'rm_assoc_formchange', label: 'Pain comes with a change in stool consistency/appearance' },
+];
+
+// Single cross-sectional pass, NOT the prospective diary Rome IV was validated
+// against. Classifies a PATTERN CONSISTENT WITH Rome IV criteria — never call
+// this a diagnosis in any UI string.
+function classifyRomeIV(rome, clusterNorm) {
+  const r = rome || {};
+  const freqMet = typeof r.painFreq === 'number' && r.painFreq >= ROME_FREQ_MET;
+  const onsetMet = typeof r.onset === 'number' && r.onset >= ROME_ONSET_MET;
+  const assocCount = ROME_ASSOC.filter(a => !!r[a.id]).length;
+  const answered = typeof r.painFreq === 'number' && typeof r.onset === 'number';
+  if (!answered) return { criteriaMet: false, answered: false, subtype: null, assocCount };
+  const criteriaMet = freqMet && onsetMet && assocCount >= 2;
+  if (!criteriaMet) return { criteriaMet: false, answered: true, subtype: null, assocCount };
+
+  const cn = clusterNorm || {};
+  const constip = cn.Constipation ?? 0, diarr = cn.Diarrhoea ?? 0;
+  let subtype = 'IBS-U';
+  if (constip >= 0.3 && diarr < 0.3) subtype = 'IBS-C';
+  else if (diarr >= 0.3 && constip < 0.3) subtype = 'IBS-D';
+  else if (constip >= 0.3 && diarr >= 0.3) subtype = 'IBS-M';
+  return { criteriaMet: true, answered: true, subtype, assocCount };
+}
+__e.ROME_FREQ = ROME_FREQ; __e.ROME_ONSET = ROME_ONSET; __e.ROME_ASSOC = ROME_ASSOC;
+__e.ROME_FREQ_MET = ROME_FREQ_MET; __e.ROME_ONSET_MET = ROME_ONSET_MET;
+__e.classifyRomeIV = classifyRomeIV;
+return __e;
+};
+
+__modules['patterns.js'] = function(__e){
+const { psychLoadScore, dietBurden } = __req('scales.js');
+const { classifyRomeIV } = __req('romeiv.js');
+
+// Helpers: each evaluator returns { fires, signals } so callers can compute a
+// data-coverage confidence without re-checking the same conditions.
+// Each signal is {a: was-answered, t: passed-threshold-given-data}. The pattern's
+// `fires` logic reads .t; CONFIDENCE reads .a (i.e. data coverage, NOT how
+// strongly the data corroborates). Strength-of-corroboration is exposed
+// separately on the engine output so it can be displayed (under a different
+// label) without conflating the two.
+const sig = (v, ok) => ({ a: v != null, t: v != null && ok(v) });
+const ge  = (v, t)  => sig(v, x => x >= t);
+const le  = (v, t)  => sig(v, x => x <= t);
+// Driver booleans (e.g. meds toggles) need to distinguish "card not opened" from
+// "answered no" — pass the *carrier object* so we can read both facts.
+const hasFlag = (carrier, val) => carrier == null ? { a: false, t: false } : { a: true, t: !!val };
+const clu = (s, k) => (s.clusterNorm && s.clusterNorm[k] != null) ? s.clusterNorm[k] : null;
+const gi  = (s) => (s.secNorm && s.secNorm.GI != null) ? s.secNorm.GI : null;
+// Individual item value (id-map answers); 'na'/blank → null so they never count.
+const av  = (a, id) => (a && typeof a[id] === 'number') ? a[id] : null;
+
+// Rome IV as a corroborating signal only — never gates firing, just adds to coverage.
+const romeSignal = (ex, s, wantSubtype) => {
+  const r = classifyRomeIV((ex && ex.rome) || {}, (s && s.clusterNorm) || {});
+  return { a: r.answered, t: r.criteriaMet && r.subtype === wantSubtype };
+};
+
+const PATTERNS = [
+  {
+    id: 'constipation_dominant',
+    label: 'Constipation-dominant pattern',
+    desc: 'Bowel-movement burden weighted toward slow transit. Fibre, hydration, and movement are usually the first lever; rule out other causes with your clinician.',
+    eval: (s, ex) => {
+      const constipCluster = ge(clu(s, 'Constipation'), 0.4);
+      const slowStool      = le(ex.bristol, 2);
+      const diarrCluster   = ge(clu(s, 'Diarrhoea'), 0.3); // signal of interest is "diarrhoea high"; fires uses its negation
+      const romeIBSC       = romeSignal(ex, s, 'IBS-C');
+      const signals = [constipCluster, slowStool, diarrCluster, romeIBSC];
+      return { fires: (constipCluster.t || slowStool.t) && !diarrCluster.t, signals };
+    },
+  },
+  {
+    id: 'diarrhoea_dominant',
+    label: 'Loose-stool / urgency pattern',
+    desc: 'Bowel-movement burden weighted toward urgency or loose stools. Worth screening with your clinician for triggers and infection.',
+    eval: (s, ex) => {
+      const diarrCluster   = ge(clu(s, 'Diarrhoea'), 0.4);
+      const fastStool      = ge(ex.bristol, 6);
+      const constipCluster = ge(clu(s, 'Constipation'), 0.3);
+      const romeIBSD        = romeSignal(ex, s, 'IBS-D');
+      const signals = [diarrCluster, fastStool, constipCluster, romeIBSD];
+      return { fires: (diarrCluster.t || fastStool.t) && !constipCluster.t, signals };
+    },
+  },
+  {
+    id: 'mixed_bowel',
+    label: 'Mixed / alternating bowel pattern',
+    desc: 'Symptoms swing between constipation and loose stools (an alternating, IBS-mixed-type picture). This needs a different approach from a single-direction bowel problem — worth mapping the triggers with your clinician.',
+    eval: (s, ex) => {
+      const constip = ge(clu(s, 'Constipation'), 0.3);
+      const diarr   = ge(clu(s, 'Diarrhoea'), 0.3);
+      const urgency = ge(clu(s, 'Pain'), 0.3); // pain/cramping often accompanies alternating bowel
+      const romeIBSM = romeSignal(ex, s, 'IBS-M');
+      const signals = [constip, diarr, urgency, romeIBSM];
+      return { fires: constip.t && diarr.t, signals }; // exactly the case the single-direction patterns suppress
+    },
+  },
+  {
+    id: 'reflux_upper_gi',
+    label: 'Reflux / upper-GI pattern',
+    desc: 'Symptom burden concentrated in reflux and the upper GI tract. Lifestyle factors and longstanding acid-blocker use are worth reviewing with your clinician.',
+    eval: (s, ex) => {
+      const reflux = ge(clu(s, 'Reflux'), 0.4);
+      const indig  = ge(clu(s, 'Indigestion'), 0.5); // confidence signal only — Indigestion now owns the bloating pattern
+      const ppi    = hasFlag(ex.meds, ex.meds && ex.meds.ppi);
+      const signals = [reflux, indig, ppi];
+      return { fires: reflux.t, signals };
+    },
+  },
+  {
+    id: 'bloating_fermentation',
+    label: 'Bloating / gas-predominant pattern',
+    desc: 'Bloating, gas and fullness are prominent — a fermentation-type picture sometimes linked to SIBO. Meal timing, fermentable-carb triggers, and breath testing are worth discussing with your clinician.',
+    eval: (s, ex, a) => {
+      const d = (ex && ex.dys) || {};
+      const indig     = ge(clu(s, 'Indigestion'), 0.5);
+      const bloating  = ge(av(a, 'gsrs_bloating'), 2);
+      const foodReact = ge(av(a, 'im_food_react'), 2);
+      const gasFoul   = ge(d.gasFoul, 2);                 // Dys-R: H2S/excessive gas
+      const paradox   = d.fibreParadox === 1 ? { a: true, t: true } : (d.fibreParadox == null ? { a: false, t: false } : { a: true, t: false });
+      const triggers  = ge((d.foodTriggers || []).length, 2); // ≥2 fermentable triggers
+      const signals = [indig, bloating, foodReact, gasFoul, paradox, triggers];
+      return { fires: indig.t || bloating.t || gasFoul.t || paradox.t, signals };
+    },
+  },
+  {
+    id: 'nutrient_malabsorption',
+    label: 'Nutrient-malabsorption pattern',
+    desc: 'Signs of low nutrient status (hair thinning, iron-type signs, mouth changes, or a known deficiency) alongside gut symptoms can suggest malabsorption. Worth checking the relevant bloods with your clinician.',
+    eval: (s, ex, a) => {
+      const known  = ge(av(a, 'nu_known_def'), 1); // optional; any positive answer counts
+      const hair   = ge(av(a, 'nu_hair'), 2);
+      const iron   = ge(av(a, 'nu_iron'), 2);
+      const mouth  = ge(av(a, 'nu_mouth'), 2);
+      const giPresent = ge(gi(s), 0.2);
+      const nuCount = [known, hair, iron, mouth].filter(x => x.t).length;
+      const signals = [known, hair, iron, mouth, giPresent];
+      return { fires: nuCount >= 2 && giPresent.t, signals };
+    },
+  },
+  {
+    id: 'gut_brain',
+    label: 'Gut-brain pattern',
+    desc: 'GI symptoms alongside high psychological load and/or cognitive symptoms (brain fog, unrefreshing fatigue). Gut-brain interventions (stress management, sleep, gut-directed therapies) often help here.',
+    eval: (s, ex, a) => {
+      const giPresent = ge(gi(s), 0.25);
+      const psych = psychLoadScore({ pss4Score: ex.pss4Score, bgAnxiety: ex.bgAnxiety, bgMood: ex.bgMood });
+      const highPsych = ge(psych, 50);
+      const brainfog = ge(av(a, 'bg_brainfog'), 2); // wired in (TRIM_PLAN §6.2) so they earn their place
+      const fatigue  = ge(av(a, 'bg_fatigue'), 2);
+      const signals = [giPresent, highPsych, brainfog, fatigue];
+      return { fires: giPresent.t && (highPsych.t || brainfog.t || fatigue.t), signals };
+    },
+  },
+  {
+    id: 'post_disruptor',
+    label: 'Recent gut-disruptor pattern',
+    desc: 'Recent antibiotic, acid-blocker, or NSAID use can shift the microbiome. A recovery-supportive window of a few months is usually appropriate — discuss with your clinician.',
+    eval: (s, ex) => {
+      const anyDisruptor = hasFlag(ex.meds, ex.meds && (ex.meds.abx || ex.meds.ppi || ex.meds.nsaid));
+      const courses = ge(ex.abxCourses, 1);            // Dys-R: antibiotic dose /12mo
+      const giPresent = ge(gi(s), 0.2);
+      const signals = [anyDisruptor, courses, giPresent];
+      return { fires: (anyDisruptor.t || courses.t) && giPresent.t, signals };
+    },
+  },
+  {
+    id: 'inflammatory_immune',
+    label: 'Inflammatory / immune-leaning pattern',
+    desc: 'Food reactions, atopy, or skin involvement alongside gut symptoms — sometimes with a histamine-type picture (flushing/hives after fermented foods, wine, or aged cheese). Worth identifying triggers with your clinician (e.g. a structured elimination trial; a low-histamine or DAO discussion if that fits).',
+    eval: (s, ex, a) => {
+      const imNorm    = s.secNorm && s.secNorm.IM;
+      const imHigh    = ge(imNorm, 0.4);
+      const histamine = ge(av(a, 'im_histamine'), 2); // merged from histamine_intolerance
+      const skin      = ge(av(a, 'sk_skin'), 2);       // relocated gut–skin item
+      const giPresent = ge(gi(s), 0.25);
+      const signals = [imHigh, histamine, skin, giPresent];
+      // Fires on a high immune domain OR a clear histamine signal, with GI present.
+      return { fires: (imHigh.t || histamine.t) && giPresent.t, signals };
+    },
+  },
+  {
+    id: 'lifestyle_modifiable',
+    label: 'Lifestyle-driven modifiable pattern',
+    desc: 'Several modifiable factors (diet quality, alcohol, activity) point to high-yield behaviour changes worth focusing on first.',
+    eval: (s, ex) => {
+      const db = dietBurden({ dietFibre: ex.dietFibre, dietProcessed: ex.dietProcessed });
+      const dietBad = ge(db, 0.5);
+      const alcHigh = ge(ex.alcohol, 2);
+      const lowAct  = le(ex.activity, 1);
+      const signals = [dietBad, alcHigh, lowAct];
+      return { fires: signals.filter(x => x.t).length >= 2, signals };
+    },
+  },
+];
+
+// Ratio-based bands — comparable across patterns regardless of how many signals
+// each pattern lists. Confidence is data coverage (answered / total).
+const CONFIDENCE_BANDS = [
+  { min: 0.75, label: 'High',     color: '#0F6E56' },
+  { min: 0.5,  label: 'Moderate', color: '#BA7517' },
+  { min: 0,    label: 'Low',      color: '#999' },
+];
+
+function detectPatterns(score, ex, answers) {
+  const ex_ = ex || {};
+  const a = answers || {};
+  const fired = [];
+  for (const p of PATTERNS) {
+    const r = p.eval(score, ex_, a);
+    if (!r.fires) continue;
+    const total    = r.signals.length;
+    const answered = r.signals.filter(x => x.a).length;
+    const hits     = r.signals.filter(x => x.t).length;
+    const coverage = total > 0 ? answered / total : 0;
+    const strength = total > 0 ? hits / total     : 0;
+    const conf = CONFIDENCE_BANDS.find(c => coverage >= c.min);
+    fired.push({
+      id: p.id, label: p.label, desc: p.desc,
+      confidence: conf.label, confColor: conf.color,
+      coverage, strength,                              // 0–1 ratios; different concepts
+      signalAnswered: answered, signalHits: hits, signalTotal: total,
+    });
+  }
+  // Stable order by confidence (data we have), then engine priority.
+  const order = ['High', 'Moderate', 'Low'];
+  return fired.sort((a, b) => order.indexOf(a.confidence) - order.indexOf(b.confidence));
+}
+
+__e.PATTERNS = PATTERNS; __e.detectPatterns = detectPatterns;
+return __e;
+};
+
+/* ============================================================================
+   triage.js — clinical triage layer (co-design DRAFT). Maps the safety screen +
+   GI symptom burden + detected patterns onto ONE recommended next step, plus any
+   secondary candidacies. This is clinician-facing GUIDANCE, not prescription, and
+   never names products or specific organisms. The mapping is deliberately simple
+   and auditable; thresholds are provisional and refit at pilot.
+
+   Tier 1 Refer            — safety flags, or uncapped Severe burden, or a
+                             malabsorption signal that needs bloods/clinical review.
+   Tier 2 Clinician-led    — Significant burden or functional motility/visceral
+                             patterns; manual / physical therapy may be an adjunct.
+   Tier 3 Microbiome-support— recent disruptor exposure (strongest rationale) or a
+                             bloating / loose-stool pattern, absent Tier-1 features.
+   Tier 4 Self-management  — lifestyle-led / minimal burden; re-screen to track.
+   ========================================================================== */
+__modules['triage.js'] = function(__e){
+
+const TIERS = {
+  1: { level: 1, label: 'Refer for clinical assessment', color: '#A32D2D',
+       action: 'One or more answers warrant clinician assessment before starting a gut-health program.' },
+  2: { level: 2, label: 'Clinician-led management', color: '#C2622E',
+       action: 'A clinician-guided plan is appropriate; manual or physical therapy may be a useful adjunct for these symptoms.' },
+  3: { level: 3, label: 'Microbiome-support candidate', color: '#BA7517',
+       action: 'A reasonable candidate for a clinician-supervised trial of probiotic / microbiome support.' },
+  4: { level: 4, label: 'Self-management & monitoring', color: '#0F6E56',
+       action: 'Lifestyle-focused self-management is reasonable. Re-screen in 4–6 weeks to track change.' },
+};
+
+// score: computeScores() output · patterns: detectPatterns() output · firedFlags: array
+function triage(score, patterns, firedFlags, dys, opts) {
+  const pids = new Set((patterns || []).map(p => p.id));
+  const band = (score && score.severity) ? score.severity.label : null;
+  const capped = !!(score && score.severity && score.severity.capped);
+  const pain = (score && score.clusterNorm) ? score.clusterNorm.Pain : null;
+  const flags = firedFlags || [];
+  const o = opts || {};
+  const dysCount = (dys && typeof dys.count === 'number') ? dys.count : 0;
+  const has = (id) => pids.has(id);
+  const candidacy = { 1: [], 2: [], 3: [], 4: [] };
+
+  // Tier 1 — refer
+  if (flags.length) candidacy[1].push(flags.length + ' safety red-flag answer' + (flags.length > 1 ? 's' : '') + ' present');
+  if (band === 'Severe' && !capped) candidacy[1].push('Severe GI symptom burden');
+  if (has('nutrient_malabsorption')) candidacy[1].push('Possible malabsorption — bloods / clinical review advised');
+
+  // Tier 2 — clinician-led / manual-therapy candidacy
+  if (band === 'Significant') candidacy[2].push('Significant GI symptom burden');
+  if (has('constipation_dominant')) candidacy[2].push('Constipation-dominant (visceral / motility) pattern');
+  if (has('mixed_bowel')) candidacy[2].push('Mixed / alternating bowel pattern');
+  if (has('reflux_upper_gi')) candidacy[2].push('Reflux / upper-GI pattern');
+  if (pain != null && pain >= 0.5) candidacy[2].push('Prominent abdominal-pain cluster');
+  if (o.adhesionSurgery) candidacy[2].push('Prior abdominal/pelvic surgery (adhesions — visceral / fascial manual-therapy candidacy)');
+  if (o.romeResult && o.romeResult.criteriaMet) candidacy[2].push(`Meets Rome IV-informed criteria for ${o.romeResult.subtype}`);
+
+  // Tier 3 — microbiome-support candidacy
+  if (has('post_disruptor')) candidacy[3].push('Recent gut-disruptor exposure (strongest probiotic-trial rationale)');
+  if (has('bloating_fermentation')) candidacy[3].push('Bloating / fermentation pattern');
+  if (has('diarrhoea_dominant')) candidacy[3].push('Loose-stool / urgency pattern');
+  if (dysCount >= 2) candidacy[3].push(dysCount + ' dysbiosis-correlate signals (see lens)');
+
+  // Tier 4 — self-management / monitor
+  if (has('lifestyle_modifiable')) candidacy[4].push('Modifiable lifestyle factors are the main lever');
+  if (band === 'Minimal') candidacy[4].push('Minimal symptom burden');
+
+  // Primary = most urgent tier with support; default to Tier 4 (monitor).
+  let primary = 4;
+  for (const lvl of [1, 2, 3]) { if (candidacy[lvl].length) { primary = lvl; break; } }
+
+  const result = Object.assign({}, TIERS[primary], { reasons: candidacy[primary].slice() });
+  // Secondary candidacies worth flagging (lower-urgency tiers that still apply).
+  result.alsoConsider = [];
+  for (const lvl of [2, 3, 4]) {
+    if (lvl > primary && candidacy[lvl].length) result.alsoConsider.push({ label: TIERS[lvl].label, reasons: candidacy[lvl] });
+  }
+  // Low data confidence — the core GI section wasn't answered.
+  result.coreUnknown = !!(score && score.coreUnknown);
+  if (result.coreUnknown) result.reasons.push('Note: the core GI section was not completed, so this triage is provisional.');
+
+  // Pattern-matched investigations / management steps (clinician guidance only).
+  const PI = {
+    nutrient_malabsorption: ['FBC, iron studies, serum B12, folate, vitamin D', 'Coeliac serology (anti-tTG IgA + total IgA)', 'Clinical examination for malabsorption signs'],
+    reflux_upper_gi: ['Empirical PPI trial (4–8 weeks)', 'GI referral if refractory, dysphagia, or unintentional weight loss', 'Review NSAID / aspirin / alcohol intake'],
+    post_disruptor: ['Stool PCR if acutely symptomatic', 'C. difficile PCR if antibiotics in past 3 months', 'Probiotic trial (Lactobacillus rhamnosus GG or Saccharomyces boulardii)'],
+    bloating_fermentation: ['SIBO breath test (lactulose or glucose H₂/CH₄)', 'Low-FODMAP dietitian referral', 'Note fibre/prebiotic paradox response if present'],
+    diarrhoea_dominant: ['Stool calprotectin + stool PCR', 'Coeliac screen (anti-tTG IgA, total IgA)', 'Consider bile acid malabsorption (empirical trial or SeHCAT)'],
+    constipation_dominant: ['Dietary fibre and fluid intake assessment', 'Pelvic floor physiotherapy referral', 'Exclude hypothyroidism (TSH), hypercalcaemia'],
+    mixed_bowel: ['Low-FODMAP dietitian referral', 'Visceral/pelvic manual therapy assessment', 'Gut-brain axis psychological assessment'],
+    psych_gut_load: ['Consider PHQ-9 / GAD-7 if PSS-4 ≥ 10', 'Gut-directed hypnotherapy or CBT referral', 'Mind-body approach to symptom management'],
+  };
+  const RI = {
+    'IBS-C': ['Low-FODMAP trial with dietitian', 'Pelvic floor physiotherapy assessment', 'Soluble fibre (ispaghula husk)'],
+    'IBS-D': ['Stool calprotectin / PCR (exclude infection or IBD)', 'Consider bile acid malabsorption', 'Low-FODMAP trial with supervised reintroduction'],
+    'IBS-M': ['Low-FODMAP dietitian referral', 'Gut-directed psychological intervention (hypnotherapy / CBT)', 'Visceral manual therapy candidacy'],
+    'IBS-U': ['2–4 week symptom diary before specialist referral', 'Dietary trigger review (FODMAP, fibre)', 'Gut-brain axis assessment'],
+  };
+  result.investigations = [];
+  pids.forEach(pid => { if (PI[pid]) result.investigations.push(...PI[pid]); });
+  if (o.romeResult && o.romeResult.criteriaMet && o.romeResult.subtype && RI[o.romeResult.subtype])
+    result.investigations.push(...RI[o.romeResult.subtype]);
+  result.investigations = [...new Set(result.investigations)];
+
+  return result;
+}
+
+__e.TIERS = TIERS; __e.triage = triage;
+return __e;
+};
+
+/* ============================================================================
+   trend.js — longitudinal view (co-design DRAFT). Recomputes each visit's score
+   + patterns from raw answers (so trends always reflect the current model), then
+   derives visit-to-visit deltas and pattern persistence. The whole point is
+   sensitivity: clusters and the overall burden are tracked so a clinician can
+   see improvement or worsening between visits.
+
+   Delta thresholds are PROVISIONAL (refit at pilot, see TRIM_PLAN): a drop in
+   burden is improvement. |Δ| < 5 = stable (noise); 5–9 = slight; ≥10 = meaningful.
+   ========================================================================== */
+__modules['trend.js'] = function(__e){
+const { computeScores } = __req('scoring.js');
+const { detectPatterns } = __req('patterns.js');
+const { pss4Score } = __req('scales.js');
+
+function visitScore(v) {
+  const a = v.answers || {}, ex = v.extras || {};
+  const sc = computeScores(a, { bristol: ex.bristol });
+  const drv = {
+    pss4Score: pss4Score(ex.pss4), bgAnxiety: a.bg_anxiety, bgMood: a.bg_mood,
+    dietFibre: ex.dietFibre, dietProcessed: ex.dietProcessed,
+    bristol: ex.bristol, meds: ex.meds, alcohol: ex.alcohol, activity: ex.activity,
+    abxCourses: ex.abxCourses, dys: ex.dys,           // Dys-R inputs (keep trend patterns in sync with live)
+  };
+  const patterns = detectPatterns(sc, drv, a).map(p => p.id);
+  return {
+    id: v.id, date: v.date || 0, followup: !!v.followup,
+    index: sc.index, band: sc.severity.label, capped: sc.severity.capped,
+    completeness: sc.completeness, clusterNorm: sc.clusterNorm, patterns,
+  };
+}
+
+// Lower burden = improvement. Returns null for the first visit (no prior).
+function deltaLabel(curr, prev) {
+  if (prev == null) return null;
+  const d = curr - prev, ad = Math.abs(d);
+  if (ad < 5) return { dir: 'stable', label: 'Stable', delta: d, color: '#999' };
+  const meaningful = ad >= 10;
+  if (d < 0) return { dir: 'improved', label: meaningful ? 'Improved' : 'Slightly improved', delta: d, color: '#0F6E56' };
+  return { dir: 'worsened', label: meaningful ? 'Worsened' : 'Slightly worse', delta: d, color: '#A32D2D' };
+}
+
+function buildTrend(visits) {
+  const points = (visits || []).slice().sort((a, b) => (a.date || 0) - (b.date || 0)).map(visitScore);
+  points.forEach((p, i) => { p.delta = i > 0 ? deltaLabel(p.index, points[i - 1].index) : null; });
+  // Persistence: patterns that fired on BOTH the latest and the prior visit.
+  let persistent = [];
+  if (points.length >= 2) {
+    const prev = new Set(points[points.length - 2].patterns);
+    persistent = points[points.length - 1].patterns.filter(id => prev.has(id));
+  }
+  return { points, persistent, latest: points[points.length - 1] || null };
+}
+
+__e.visitScore = visitScore; __e.deltaLabel = deltaLabel; __e.buildTrend = buildTrend;
+return __e;
+};
+
+/* ============================================================================
+   storage.js — localStorage persistence + export / merge-import. Machinery
+   ported from v1 (merge by patient id + visit id = the two-device sync path).
+   Visit record shape is generic over the schema, so it survives co-design edits.
+   ========================================================================== */
+__modules['storage.js'] = function(__e){
+const { SCHEMA_VERSION } = __req('schema.js');
+const KEY = 'bmgutscreen_v2';
+
+function blankDB() { return { patients: [], meta: { schemaVersion: SCHEMA_VERSION, remindEvery: 5, visitsSinceExport: 0, patientSeq: 0 } }; }
+function nextPatientCode(db) {
+  db.meta = db.meta || {};
+  db.meta.patientSeq = (db.meta.patientSeq || 0) + 1;
+  return 'BMG-' + String(db.meta.patientSeq).padStart(4, '0');
+}
+function loadDB() {
+  let raw; try { raw = localStorage.getItem(KEY); } catch { raw = null; }
+  if (!raw) return blankDB();
+  try { return normalise(JSON.parse(raw)); } catch { return blankDB(); }
+}
+function saveDB(db) {
+  db.meta = db.meta || {}; db.meta.schemaVersion = SCHEMA_VERSION;
+  try {
+    localStorage.setItem(KEY, JSON.stringify(db));
+    return db;
+  } catch (e) {
+    console.warn('[gutscreen] save failed', e);
+    return null; // signal failure to the caller instead of pretending success
+  }
+}
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+// Find a patient by clinician-assigned reference code (case-insensitive, trimmed).
+function patientByRef(db, ref) {
+  if (!ref) return null;
+  const key = String(ref).trim().toLowerCase();
+  return (db.patients || []).find(p => p.ref && String(p.ref).trim().toLowerCase() === key) || null;
+}
+function normalise(db) {
+  if (!db || !Array.isArray(db.patients)) return blankDB();
+  const meta = { ...blankDB().meta, ...(db.meta || {}), schemaVersion: SCHEMA_VERSION };
+  // Backfill any patients missing a code (legacy records).
+  let seq = meta.patientSeq || 0;
+  for (const p of db.patients) {
+    if (!p.code) { seq++; p.code = 'BMG-' + String(seq).padStart(4, '0'); }
+  }
+  meta.patientSeq = seq;
+  return { patients: db.patients, meta };
+}
+function exportDB(db, deviceLabel) {
+  return JSON.stringify({ ...db, meta: { ...(db.meta || {}), schemaVersion: SCHEMA_VERSION, exportedFrom: deviceLabel || 'device', date: Date.now() } }, null, 2);
+}
+function mergeImport(currentDb, importedRaw) {
+  const imported = typeof importedRaw === 'string' ? JSON.parse(importedRaw) : importedRaw;
+  const cur = normalise(currentDb), imp = normalise(imported);
+  const byId = new Map(cur.patients.map(p => [p.id, p]));
+  let addedPatients = 0, addedVisits = 0;
+  for (const ip of imp.patients) {
+    let t = byId.get(ip.id);
+    if (!t) { t = { ...ip, visits: [] }; cur.patients.push(t); byId.set(ip.id, t); addedPatients++; }
+    const have = new Set((t.visits || []).map(v => v.id));
+    for (const iv of (ip.visits || [])) {
+      const vid = iv.id || uid();
+      if (have.has(vid)) continue;
+      t.visits = t.visits || []; t.visits.push({ ...iv, id: vid }); have.add(vid); addedVisits++;
+    }
+    (t.visits || []).sort((a, b) => (a.date || 0) - (b.date || 0));
+  }
+  return { db: cur, added: { patients: addedPatients, visits: addedVisits } };
+}
+__e.blankDB = blankDB; __e.loadDB = loadDB; __e.saveDB = saveDB; __e.uid = uid; __e.nextPatientCode = nextPatientCode; __e.patientByRef = patientByRef; __e.exportDB = exportDB; __e.mergeImport = mergeImport;
+
+// ── PILOT / RESEARCH EXPORT ──────────────────────────────────────────────────
+// De-identified, schema-driven CSV: one row per visit, one column per item +
+// every driver + the derived scores. This is the artifact the TRIM_PLAN method
+// runs on (corrected item-total correlations, inter-item redundancy, weight
+// tuning). Scores are RECOMPUTED from raw answers/extras here so the export
+// always reflects the CURRENT scoring model, never a stale stored value.
+//   - No patient name/id is emitted; patients are anonymised to P1, P2, … with a
+//     stable per-export index so repeated visits stay linkable for the analysis.
+//   - Raw item value per cell: number (0–N), 'na' (not applicable), or '' (blank).
+function pilotExportCSV(db) {
+  const { SECTIONS, QUESTIONS } = __req('schema.js');
+  const { computeScores } = __req('scoring.js');
+  const { pss4Score, psychLoadScore, dietBurden, sleepBurden, dysbiosisLens, surgicalFlags } = __req('scales.js');
+  const { PATTERNS, detectPatterns } = __req('patterns.js');
+  const { classifyRomeIV } = __req('romeiv.js');
+  const d = normalise(db);
+
+  const cell = (v) => (v == null ? '' : String(v));            // number | 'na' | ''
+  const num  = (n) => (n == null ? '' : (Math.round(n * 1000) / 1000)); // normalised 0–1
+  const bool = (b, present) => (present ? (b ? 1 : 0) : '');
+  const csv  = (s) => /[",\n]/.test(String(s)) ? `"${String(s).replace(/"/g, '""')}"` : String(s);
+
+  const CLUSTERS = ['Reflux', 'Pain', 'Indigestion', 'Diarrhoea', 'Constipation'];
+  const header = [
+    'patient', 'visit', 'date_iso', 'completeness', 'index', 'band', 'capped',
+    ...SECTIONS.map(s => 'norm_' + s.id),
+    ...CLUSTERS.map(c => 'cluster_' + c.toLowerCase()),
+    ...QUESTIONS.map(q => 'q_' + q.id),
+    'ex_pss4_1', 'ex_pss4_2', 'ex_pss4_3', 'ex_pss4_4', 'ex_pss4Score', 'ex_psychLoad',
+    'ex_bristol', 'ex_bristolSignal', 'ex_nrsPain', 'ex_painRegion',
+    'ex_med_abx', 'ex_med_ppi', 'ex_med_nsaid',
+    'ex_dietFibre', 'ex_dietProcessed', 'ex_dietBurden', 'ex_alcohol', 'ex_activity',
+    'ex_sleep_1', 'ex_sleep_2', 'ex_sleep_3', 'ex_sleep_4', 'ex_sleepBurden',
+    'ex_abxCourses', 'ex_dys_stoolVar', 'ex_dys_postInfectious', 'ex_dys_gasFoul', 'ex_dys_fibreParadox', 'ex_dys_foodTriggers', 'ex_dysLensCount',
+    'ex_surgeryCount', 'ex_surgeryOther',
+    'ex_rome_painFreq', 'ex_rome_onset', 'ex_rome_assoc_defecation', 'ex_rome_assoc_freqchange', 'ex_rome_assoc_formchange',
+    'ex_romeCriteriaMet', 'ex_romeSubtype',
+    ...PATTERNS.map(p => 'pat_' + p.id),
+  ];
+  const rows = [header];
+
+  d.patients.forEach((p, pi) => {
+    (p.visits || []).forEach(v => {
+      const a = v.answers || {}, ex = v.extras || {}, meds = ex.meds || null, pss = ex.pss4 || [];
+      const score = computeScores(a, { bristol: ex.bristol });
+      const ps = pss4Score(pss);
+      const drv = { pss4Score: ps, bgAnxiety: a.bg_anxiety, bgMood: a.bg_mood, dietFibre: ex.dietFibre, dietProcessed: ex.dietProcessed,
+                    bristol: ex.bristol, meds, alcohol: ex.alcohol, activity: ex.activity, abxCourses: ex.abxCourses, dys: ex.dys, rome: ex.rome };
+      const fired = new Set(detectPatterns(score, drv, a).map(p => p.id));
+      const rm = ex.rome || {};
+      const romeResult = classifyRomeIV(rm, score.clusterNorm);
+      rows.push([
+        'P' + (pi + 1), cell(v.id), v.date ? new Date(v.date).toISOString().slice(0, 10) : '',
+        score.completeness, score.index, score.severity.label, score.severity.capped ? 1 : 0,
+        ...SECTIONS.map(s => num(score.secNorm[s.id])),
+        ...CLUSTERS.map(c => num(score.clusterNorm && score.clusterNorm[c])),
+        ...QUESTIONS.map(q => cell(a[q.id])),
+        cell(pss[0]), cell(pss[1]), cell(pss[2]), cell(pss[3]), cell(ps), cell(psychLoadScore(drv)),
+        cell(ex.bristol), num(score.bristolSignal), cell(ex.nrsPain), cell(ex.painRegion),
+        bool(meds && meds.abx, !!meds), bool(meds && meds.ppi, !!meds), bool(meds && meds.nsaid, !!meds),
+        cell(ex.dietFibre), cell(ex.dietProcessed), num(dietBurden(drv)), cell(ex.alcohol), cell(ex.activity),
+        cell((ex.sleep || [])[0]), cell((ex.sleep || [])[1]), cell((ex.sleep || [])[2]), cell((ex.sleep || [])[3]), num(sleepBurden(ex.sleep)),
+        cell(ex.abxCourses), cell((ex.dys || {}).stoolVar), cell((ex.dys || {}).postInfectious), cell((ex.dys || {}).gasFoul), cell((ex.dys || {}).fibreParadox), cell(((ex.dys || {}).foodTriggers || []).length), cell(dysbiosisLens(ex).count),
+        cell(surgicalFlags(ex).count), cell(ex.surgeryOther || ''),
+        cell(rm.painFreq), cell(rm.onset), bool(rm.rm_assoc_defecation, true), bool(rm.rm_assoc_freqchange, true), bool(rm.rm_assoc_formchange, true),
+        romeResult.criteriaMet ? 1 : 0, cell(romeResult.subtype),
+        ...PATTERNS.map(p => fired.has(p.id) ? 1 : 0),
+      ]);
+    });
+  });
+  return rows.map(r => r.map(csv).join(',')).join('\n');
+}
+__e.pilotExportCSV = pilotExportCSV;
+return __e;
+};
+
+/* ============================================================================
+   ui-patient.js — questionnaire + results, rendered straight from the schema.
+   Empty schema renders an explicit "no domains yet" placeholder so the scaffold
+   runs before any domain is co-designed.
+   ========================================================================== */
+__modules['ui-patient.js'] = function(__e){
+const { SECTIONS, QUESTIONS, questionsOf, sectionMax, itemMax } = __req('schema.js');
+const { scaleFor, RECALL_NOTE, PSS4_ITEMS, PSS4_ANCHORS, pss4Score, BRISTOL_TYPES, PAIN_REGIONS, modifiableFactors,
+        DISRUPTORS, ALCOHOL_LEVELS, ACTIVITY_LEVELS, SLEEP_ITEMS, SLEEP_ANCHORS,
+        FOOD_TRIGGERS, ABX_COURSES, GAS_LEVELS, STOOLVAR_LEVELS, POSTINF_OPTS, PARADOX_OPTS, dysbiosisLens, gutHealthIndex,
+        SURGERIES, surgicalFlags } = __req('scales.js');
+const { computeScores, scoreConfidence } = __req('scoring.js');
+const { RED_FLAGS, anyRedFlag, firedRedFlags, RED_FLAG_BANNER } = __req('redflags.js');
+const { el, esc, toast, patientForm } = __req('util.js');
+const Store = __req('storage.js');
+const { detectPatterns } = __req('patterns.js');
+const { triage } = __req('triage.js');
+const { buildTrend } = __req('trend.js');
+const { classifyRomeIV } = __req('romeiv.js');
+
+let answers = {};      // id -> value (absent = unanswered)
+let redflags = {};     // rf_id -> bool
+let nav = {};          // { goRecords } — set by app.js so the banner can jump to records
+// Modifiable drivers — stored on the visit (extras), kept OUT of the Index.
+const blankExtras = () => ({
+  bristol: null, pss4: [null, null, null, null], nrsPain: null, painRegion: null,
+  meds: { abx: false, ppi: false, nsaid: false },
+  dietFibre: null, dietProcessed: null, alcohol: null, activity: null,
+  sleep: [null, null, null, null],   // relocated from a scored domain to a driver
+  abxCourses: null,                  // Dys-R: antibiotic dose /12mo
+  dys: { stoolVar: null, postInfectious: null, gasFoul: null, fibreParadox: null, foodTriggers: [] },
+  surgeries: [],                     // surgical history (id list) — VM/fascial + microbiome
+  surgeryOther: '',                  // free-text "Other" — stored, not scored
+  rome: { painFreq: null, onset: null, rm_assoc_defecation: false, rm_assoc_freqchange: false, rm_assoc_formchange: false },
+});
+let extras = blankExtras();
+// Session: the patient identity (name / age / gender + optional reference code)
+// and whether this is a follow-up. Identity persists across reset() so a
+// clinician can run baseline then follow-up in one sitting; the header chip's ✕
+// clears it. NOTE: with a name entered this record holds PII — it stays in this
+// browser's local storage only (never transmitted).
+let session = { name: '', age: '', gender: '', ref: '', followup: false, pregnant: '' };
+let lastCalc = null;       // cached result from the most recent calc(); used by print functions
+let clinicianView = false; // toggle between patient-friendly and clinician-detail results layout
+let loadedVisitId = null;  // set when a saved visit is loaded; saveVisit() updates it in-place
+
+function reset() { answers = {}; redflags = {}; extras = blankExtras(); session.followup = false; loadedVisitId = null; }
+
+// The patient's linking key: reference code if given, else name (so name-only
+// clinicians still get visit linking + trends).
+function findPatient(db) {
+  const ref = (session.ref || '').trim();
+  if (ref) return Store.patientByRef(db, ref);
+  const name = (session.name || '').trim().toLowerCase();
+  if (!name) return null;
+  return (db.patients || []).find(p => !p.ref && (p.name || '').trim().toLowerCase() === name) || null;
+}
+
+// Save the current visit to localStorage. If a patient reference is set, the
+// visit is appended to that patient (so follow-ups accumulate and the trend
+// view works); otherwise it's a standalone anonymous patient. The reference is a
+// de-identified clinician code, never a name. Returns the patient's full visit
+// list so the caller can render the trend immediately.
+// The in-progress visit as a storable record (fresh id/date each call).
+function currentVisit() {
+  return {
+    id: Store.uid(),
+    date: Date.now(),
+    followup: !!session.followup,
+    answers: { ...answers },                       // includes 'na' values as-is
+    extras: JSON.parse(JSON.stringify(extras)),    // deep-clone (pss4 array, meds object)
+    redflags: { ...redflags },
+  };
+}
+
+// Prior saved visits for the current patient (by ref or name; empty if none).
+function priorVisits() {
+  const p = findPatient(Store.loadDB());
+  return (p && p.visits) ? p.visits.slice() : [];
+}
+
+function saveVisit() {
+  const db = Store.loadDB();
+  const ref = (session.ref || '').trim();
+  const name = (session.name || '').trim();
+  let patient = findPatient(db);
+  let visit, isUpdate = false;
+
+  if (loadedVisitId) {
+    // Edit-in-place: find the existing visit record and overwrite its answers/extras/redflags.
+    // The visit id and original date are preserved; a revisedAt timestamp is added.
+    if (patient) {
+      const idx = (patient.visits || []).findIndex(v => v.id === loadedVisitId);
+      if (idx >= 0) {
+        const existing = patient.visits[idx];
+        patient.visits[idx] = Object.assign({}, existing, {
+          followup: !!session.followup,
+          answers: { ...answers },
+          extras: JSON.parse(JSON.stringify(extras)),
+          redflags: { ...redflags },
+          revisedAt: Date.now(),
+        });
+        visit = patient.visits[idx];
+        isUpdate = true;
+      }
+    }
+    if (!isUpdate) {
+      // The loaded visit's patient record no longer exists — fall through to append.
+      loadedVisitId = null;
+    }
+  }
+
+  if (!isUpdate) {
+    visit = currentVisit();
+    if (patient) {
+      patient.visits = patient.visits || [];
+      patient.visits.push(visit);
+    } else {
+      patient = { id: Store.uid(), code: Store.nextPatientCode(db), ref: ref || null, visits: [visit] };
+      db.patients.push(patient);
+    }
+  }
+
+  // Keep the identity fields current (latest entry wins).
+  patient.name = name || patient.name || '';
+  patient.age = (session.age || '').trim() || patient.age || '';
+  patient.gender = session.gender || patient.gender || '';
+  if (ref) patient.ref = ref;
+  const saved = Store.saveDB(db);
+  if (!saved) throw new Error('Storage write failed — response was not saved.');
+  // After a successful update the visit is no longer "dirty" — keep loadedVisitId
+  // so repeated saves still update the same record (don't null it here).
+  return { id: visit.id, visits: patient.visits.slice(), linked: !!(ref || name), isUpdate };
+}
+
+// Recall window narrows on follow-ups so the screen is sensitive to recent change.
+function recallNote() {
+  return session.followup
+    ? 'This is a follow-up — answer for how things have been SINCE YOUR LAST VISIT.'
+    : RECALL_NOTE;
+}
+
+// Header active-patient chip — reflects the current identity (name or reference).
+function identityLabel() { return (session.name || '').trim() || (session.ref || '').trim() || ''; }
+function updateIdentityChip() {
+  const chip = document.getElementById('activeChip');
+  if (!chip) return;
+  const lbl = identityLabel();
+  if (lbl) { chip.style.display = 'flex'; const n = document.getElementById('activeName'); if (n) n.textContent = lbl; }
+  else chip.style.display = 'none';
+}
+// Clear the patient identity and start a fresh (anonymous) questionnaire.
+function clearPatient() { session.name = session.ref = session.age = session.gender = session.pregnant = ''; session.followup = false; reset(); render(); }
+
+// Patient banner: a compact read-only header showing which patient this screen
+// is for. Identity is now captured/edited in the Patient Records tab (or via the
+// inline "Edit details" dialog); the questionnaire only reflects the selection.
+// The baseline/follow-up toggle stays here because it is visit-scoped (it drives
+// the recall window for this screen, not the patient's identity).
+function patientBanner() {
+  const lbl = (session.name || '').trim() || (session.ref || '').trim();
+  const card = el('div', { class: 'sec-card' });
+  const head = el('div', { class: 'sec-head', style: 'background:#3A4A5A' });
+  head.appendChild(el('span', {}, lbl ? '👤 ' + esc(lbl) : 'Anonymous screen'));
+  head.appendChild(el('span', { style: 'opacity:.85;font-weight:500' }, session.followup ? 'Follow-up' : 'Baseline'));
+  card.appendChild(head);
+
+  const body = el('div', { class: 'sec-body', style: 'padding-top:12px' });
+  if (lbl) {
+    const meta = [];
+    if (session.age) meta.push('Age ' + esc(String(session.age)));
+    if (session.gender) meta.push(esc(session.gender));
+    if (session.ref) meta.push('Ref: ' + esc(session.ref));
+    if (session.pregnant === 'yes') meta.push('Pregnant');
+    body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:0' },
+      meta.length ? meta.join(' · ') : 'No additional details recorded.'));
+  } else {
+    body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:0' },
+      'Not linked to a patient record. Add details to label this screen and track follow-ups over time.'));
+  }
+
+  const actions = el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center' });
+  const editBtn = el('button', { class: 'btn btn-gh', type: 'button' }, lbl ? '✎ Edit details' : '+ Add patient details');
+  editBtn.onclick = async () => {
+    const r = await patientForm(
+      { name: session.name, age: session.age, gender: session.gender, pregnant: session.pregnant, ref: session.ref },
+      { title: 'Patient details', okLabel: 'Save' });
+    if (!r) return;
+    session.name = r.name; session.age = r.age; session.gender = r.gender;
+    session.pregnant = r.pregnant; session.ref = r.ref;
+    updateIdentityChip(); render();
+  };
+  actions.appendChild(editBtn);
+
+  const recBtn = el('button', { class: 'btn btn-gh', type: 'button' }, 'Open patient records');
+  recBtn.onclick = () => { if (nav.goRecords) nav.goRecords(); };
+  actions.appendChild(recBtn);
+
+  // Baseline / follow-up toggle (visit-scoped).
+  const toggle = el('button', { class: `chip-opt${session.followup ? ' sel' : ''}`, type: 'button', style: 'margin-left:auto' },
+    session.followup ? 'Follow-up ✓' : 'Mark as follow-up');
+  toggle.onclick = () => { session.followup = !session.followup; render(); };
+  actions.appendChild(toggle);
+
+  body.appendChild(actions);
+  card.appendChild(body);
+  return card;
+}
+
+// Severity × microbiome-risk matrix (TRIM_PLAN §10). Combines the two
+// INDEPENDENT reads — GI Symptom Burden (severity) and the dysbiosis-correlate
+// lens (count) — at the interpretation layer, WITHOUT contaminating either
+// metric. Severity axis: Low = Minimal/Mild–Moderate, High = Significant/Severe.
+// Microbiome-risk axis: High = ≥2 correlate signals (the Tier-3 threshold).
+function riskMatrixCard(severity, lens) {
+  const sevHigh  = severity.label === 'Significant' || severity.label === 'Severe';
+  const riskHigh = lens.count >= 2;
+  const CELLS = {
+    LL: { t: 'Reassure & monitor',                    c: '#0F6E56' },
+    LH: { t: 'Early / post-disruptor — watch & support', c: '#BA7517' },
+    HL: { t: 'Symptom-led management',                c: '#C2622E' },
+    HH: { t: 'Strong microbiome-support candidate',   c: '#A32D2D' },
+  };
+  const activeKey = (sevHigh ? 'H' : 'L') + (riskHigh ? 'H' : 'L');
+  const ghi = gutHealthIndex(severity.index, lens.count);
+  const card = el('div', { class: 'card', style: 'border-left:6px solid #185FA5' });
+  card.appendChild(el('h2', {}, 'Gut Health Index'));
+  // Single blended number — shown WITH its two component reads.
+  card.appendChild(el('div', { class: 'hero', style: 'align-items:center' },
+    `<div><div class="big">${ghi != null ? ghi : '—'}</div><div class="sub">Gut Health Index</div></div>
+     <div style="flex:1;min-width:180px">
+       <div style="font-size:12px;color:var(--inks);line-height:1.5">A single blended score = <b>0.7 × severity + 0.3 × microbiome-risk</b> (higher = worse). The two components are shown below.</div>
+     </div>`));
+  card.appendChild(el('div', { class: 'row', style: 'gap:10px;flex-wrap:wrap;margin:4px 0 8px' },
+    `<span class="pill ${severity.cls}">Severity: ${severity.index}% · ${esc(severity.label)}</span>
+     <span class="pill" style="background:#185FA5;color:#fff">Microbiome-risk: ${lens.count}/6 · ${riskHigh ? 'High' : 'Low'}</span>`));
+
+  const grid = el('div', { style: 'display:grid;grid-template-columns:96px 1fr 1fr;gap:4px;font-size:12px;margin-top:4px' });
+  grid.appendChild(el('div', {}, ''));
+  grid.appendChild(el('div', { style: 'font-weight:600;text-align:center;color:var(--inks)' }, 'Low microbiome-risk'));
+  grid.appendChild(el('div', { style: 'font-weight:600;text-align:center;color:var(--inks)' }, 'High microbiome-risk'));
+  [['High severity', 'H'], ['Low severity', 'L']].forEach(([rlab, rs]) => {
+    grid.appendChild(el('div', { style: 'font-weight:600;display:flex;align-items:center;color:var(--inks)' }, rlab));
+    ['L', 'H'].forEach(cs => {
+      const k = rs + cs, cell = CELLS[k], active = k === activeKey;
+      grid.appendChild(el('div', { style:
+        `padding:8px;border-radius:6px;text-align:center;line-height:1.3;` +
+        `background:${active ? cell.c : '#F2F4F7'};color:${active ? '#fff' : '#8A93A0'};` +
+        `font-weight:${active ? '600' : '400'};border:${active ? '2px solid ' + cell.c : '1px solid #E1E5EB'}` },
+        esc(cell.t) + (active ? ' ◀ you' : '')));
+    });
+  });
+  card.appendChild(grid);
+
+  if (lens.count > 0) {
+    card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-weight:600' }, 'Microbiome-correlate signals:'));
+    card.appendChild(el('ul', { class: 'rf-list' }, lens.signals.map(s => `<li>${esc(s.label)}</li>`).join('')));
+  }
+  card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-style:italic;color:#999' },
+    'Two independent reads — symptom severity (GI score) and a microbiome-correlate count (NOT a dysbiosis diagnosis; validate against stool testing). For discussion, not prescription.'));
+  return card;
+}
+
+// Longitudinal trend card — burden + cluster trajectory across this patient's
+// visits, with visit-to-visit delta and pattern persistence. `markLastUnsaved`
+// labels the final point as the current in-progress (preview) visit.
+function trendCard(visits, markLastUnsaved) {
+  const { points, persistent, latest } = buildTrend(visits);
+  const card = el('div', { class: 'card', id: 'trend-card', style: 'border-left:6px solid #185FA5' });
+  card.appendChild(el('h2', {}, 'Progress over time'));
+  card.appendChild(el('div', { class: 'q-sub' },
+    `${points.length} visit${points.length > 1 ? 's' : ''}${session.ref ? ' · ' + esc((session.ref || '').trim()) : ''}. Lower GI Symptom Burden = improvement.`));
+
+  // Headline delta vs previous visit.
+  if (latest && latest.delta) {
+    const d = latest.delta;
+    card.appendChild(el('div', { class: 'row', style: 'align-items:center;gap:10px;margin:8px 0;flex-wrap:wrap' },
+      `<span class="pill" style="background:${d.color};color:#fff">${esc(d.label)}</span>
+       <span style="font-size:13px;color:var(--inks)">Burden ${d.delta > 0 ? '+' : ''}${d.delta} pts vs previous visit (${points[points.length - 2].index}% → ${latest.index}%)</span>`));
+  }
+
+  // Per-visit rows: date, index + band, delta.
+  const tbl = el('div', { style: 'margin-top:8px' });
+  points.forEach((p, i) => {
+    const isLast = i === points.length - 1;
+    const dateStr = p.date ? new Date(p.date).toISOString().slice(0, 10) : '—';
+    const tag = (isLast && markLastUnsaved) ? ' <span class="opt-tag">current · unsaved</span>'
+      : (p.followup ? ' <span class="opt-tag">follow-up</span>' : ' <span class="opt-tag">baseline</span>');
+    const deltaTxt = p.delta ? `<span style="color:${p.delta.color};font-weight:600">${esc(p.delta.label)}</span>` : '<span class="muted">—</span>';
+    tbl.appendChild(el('div', { class: 'bar-row', style: 'display:flex;justify-content:space-between;gap:10px;padding:4px 0' },
+      `<span>${esc(dateStr)}${tag}</span><span><b>${p.index}%</b> <span class="muted">${esc(p.band)}</span> · ${deltaTxt}</span>`));
+  });
+  card.appendChild(tbl);
+
+  // Cluster trajectory (first → latest), so symptom shape change is visible.
+  if (points.length >= 2) {
+    const first = points[0].clusterNorm || {}, last = latest.clusterNorm || {};
+    const order = ['Reflux', 'Pain', 'Indigestion', 'Diarrhoea', 'Constipation'];
+    const rows = order.filter(k => first[k] != null || last[k] != null).map(k => {
+      const f = first[k] == null ? '—' : Math.round(first[k] * 100) + '%';
+      const l = last[k] == null ? '—' : Math.round(last[k] * 100) + '%';
+      return `<div class="bar-row" style="display:flex;justify-content:space-between;padding:2px 0"><span class="muted">↳ ${esc(k)}</span><span class="muted">${f} → ${l}</span></div>`;
+    }).join('');
+    if (rows) {
+      card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-weight:600' }, 'GI clusters (first → latest)'));
+      card.appendChild(el('div', {}, rows));
+    }
+  }
+
+  // Pattern persistence — fired on the latest AND the prior visit.
+  if (persistent.length) {
+    card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px' },
+      `Persistent patterns (2+ consecutive visits): <b>${persistent.map(id => esc(id.replace(/_/g, ' '))).join(', ')}</b>`));
+  }
+  return card;
+}
+
+function render() {
+  const root = document.getElementById('mode-patient');
+  root.innerHTML = '';
+  root.appendChild(el('div', { class: 'intro' },
+    `<b>Gut Health Screen (v2).</b> A clean-slate screening instrument under co-design. ` +
+    `This is an educational screening tool, not a diagnosis.`));
+
+  root.appendChild(patientBanner());
+
+  if (RED_FLAGS.length) root.appendChild(redFlagCard());
+
+  if (!SECTIONS.length || !QUESTIONS.length) {
+    root.appendChild(el('div', { class: 'card' },
+      '<div class="empty-note">🌱<br>No domains locked yet.<br>' +
+      '<span class="muted">Domains and items appear here as they are co-designed and added to the schema.</span></div>'));
+    return;
+  }
+
+  SECTIONS.forEach(sec => {
+    const card = el('div', { class: 'sec-card' });
+    card.appendChild(el('div', { class: 'sec-head', style: `background:${sec.color || '#0F6E56'}` },
+      `${esc(sec.full || sec.label)} <span style="opacity:.8;font-weight:500">${questionsOf(sec.id).length} items</span>`));
+    const body = el('div', { class: 'sec-body' });
+    if (!sec.noRecall) body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, esc(recallNote())));
+    questionsOf(sec.id).forEach(q => body.appendChild(questionRow(q)));
+    card.appendChild(body);
+    root.appendChild(card);
+  });
+
+  // Modifiable drivers (not part of the Index; stored for patterns/strains).
+  root.appendChild(bristolCard());
+  root.appendChild(pss4Card());
+  root.appendChild(painCard());
+  root.appendChild(medsCard());
+  root.appendChild(lifestyleCard());
+  root.appendChild(sleepCard());
+  root.appendChild(surgicalCard());
+  root.appendChild(romeCard());
+  root.appendChild(dysCard());
+
+  const actions = el('div', { class: 'card row', style: 'justify-content:flex-end' });
+  actions.appendChild(el('button', { class: 'btn btn-g', onclick: calc }, 'See results →'));
+  root.appendChild(actions);
+  root.appendChild(el('div', { id: 'patient-results' }));
+  updateIdentityChip();
+}
+
+const PSS4_COLOR = ['s0', 's0', 's1', 's2', 's3']; // map 0–4 anchors to colour classes
+
+function bristolCard() {
+  const card = el('div', { class: 'sec-card' });
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:#6B4A2E' }, 'Stool type (Bristol scale)'));
+  const body = el('div', { class: 'sec-body' });
+  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, "Pick the type that best matches your usual stool. Tracked over time, and gently feeds your gut-core score (capped so it can't dominate)."));
+  const grid = el('div', { class: 'bristol-grid' });
+  BRISTOL_TYPES.forEach(t => {
+    const b = el('button', { class: `bristol-opt${extras.bristol === t.n ? ' sel' : ''}`, type: 'button' },
+      `<span class="bristol-n" style="background:${t.col}">${t.n}</span>
+       <span><b>${esc(t.label)}</b> · <span class="muted">${esc(t.sub)}</span><br><small style="color:${t.col}">${esc(t.tag)}</small></span>`);
+    b.onclick = () => { extras.bristol = t.n; grid.querySelectorAll('.bristol-opt').forEach(o => o.classList.remove('sel')); b.classList.add('sel'); };
+    grid.appendChild(b);
+  });
+  body.appendChild(grid); card.appendChild(body);
+  return card;
+}
+
+function pss4Card() {
+  const card = el('div', { class: 'sec-card' });
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:#5A6EA7' }, 'Stress (PSS-4)'));
+  const body = el('div', { class: 'sec-body' });
+  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, 'Over the last month. (Shown alongside your result, not part of the score.)'));
+  PSS4_ITEMS.forEach((q, qi) => {
+    const row = el('div', { class: 'q' });
+    row.appendChild(el('div', { class: 'q-txt', style: 'font-weight:500' }, esc(q)));
+    const opts = el('div', { class: 'opts', style: 'flex-wrap:nowrap;gap:4px' });
+    PSS4_ANCHORS.forEach((lab, v) => {
+      const col = PSS4_COLOR[v] || 's1';
+      const b = el('button', { class: `opt${extras.pss4[qi] === v ? ` sel ${col}` : ''}`, type: 'button', style: 'min-width:0;flex:1;font-size:11px;padding:6px 4px' },
+        `<span class="on">${v}</span>${esc(lab)}`);
+      b.onclick = () => { extras.pss4[qi] = v; opts.querySelectorAll('.opt').forEach(o => o.classList.remove('sel', ...PSS4_COLOR)); b.classList.add('sel', col); };
+      opts.appendChild(b);
+    });
+    row.appendChild(opts); body.appendChild(row);
+  });
+  card.appendChild(body);
+  return card;
+}
+
+function painCard() {
+  const card = el('div', { class: 'sec-card' });
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:#8B3A1A' }, 'Pain (optional)'));
+  const body = el('div', { class: 'sec-body' });
+  body.appendChild(el('div', { class: 'q-txt', style: 'font-weight:500;padding-top:6px' }, 'Current pain level (0 = none, 10 = worst)'));
+  const nrs = el('div', { class: 'nrs-row' });
+  const regWrap = el('div', { style: 'margin-top:10px' });
+  for (let v = 0; v <= 10; v++) {
+    const b = el('button', { class: `nrs-opt${extras.nrsPain === v ? ' sel' : ''}`, type: 'button' }, String(v));
+    b.onclick = () => {
+      extras.nrsPain = v;
+      nrs.querySelectorAll('.nrs-opt').forEach(o => o.classList.remove('sel'));
+      b.classList.add('sel');
+      regWrap.style.display = v > 0 ? 'block' : 'none';
+      // Pain=0 means "no pain": a region answer is meaningless — clear it so the
+      // pilot CSV doesn't pair a region with nrsPain=0 and confuse the analysis.
+      if (v === 0) { extras.painRegion = null; regWrap.querySelectorAll('.chip-opt').forEach(o => o.classList.remove('sel')); }
+    };
+    nrs.appendChild(b);
+  }
+  body.appendChild(nrs);
+  regWrap.style.display = extras.nrsPain > 0 ? 'block' : 'none';
+  regWrap.appendChild(el('div', { class: 'grp-label' }, 'Where?'));
+  const chips = el('div', { class: 'chips' });
+  PAIN_REGIONS.forEach(r => {
+    const b = el('button', { class: `chip-opt${extras.painRegion === r.id ? ' sel' : ''}`, type: 'button' }, esc(r.label));
+    b.onclick = () => { extras.painRegion = r.id; chips.querySelectorAll('.chip-opt').forEach(o => o.classList.remove('sel')); b.classList.add('sel'); };
+    chips.appendChild(b);
+  });
+  regWrap.appendChild(chips); body.appendChild(regWrap); card.appendChild(body);
+  return card;
+}
+
+// Recent gut disruptors — multi-select toggles. Strong modifiable microbiome
+// influences (and they explain regressions between visits). Not part of the score.
+function medsCard() {
+  const card = el('div', { class: 'sec-card' });
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:#7A6A1E' }, 'Recent medications (last 3 months)'));
+  const body = el('div', { class: 'sec-body' });
+  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, 'Tap any you have taken recently. Not part of the score.'));
+  const chips = el('div', { class: 'chips' });
+  DISRUPTORS.forEach(d => {
+    const b = el('button', { class: `chip-opt${extras.meds[d.id] ? ' sel' : ''}`, type: 'button' }, esc(d.label));
+    b.onclick = () => { extras.meds[d.id] = !extras.meds[d.id]; b.classList.toggle('sel'); };
+    chips.appendChild(b);
+  });
+  body.appendChild(chips); card.appendChild(body);
+  return card;
+}
+
+// Generic 0–3 segmented row used by the diet/lifestyle drivers.
+function segRow(label, levels, getter, setter) {
+  const row = el('div', { class: 'q' });
+  row.appendChild(el('div', { class: 'q-txt', style: 'font-weight:500' }, esc(label)));
+  const opts = el('div', { class: 'opts', style: 'flex-wrap:nowrap;gap:4px' });
+  levels.forEach((lab, v) => {
+    const b = el('button', { class: `opt${getter() === v ? ' sel' : ''}`, type: 'button', style: 'min-width:0;flex:1;font-size:11px;padding:6px 4px' }, esc(lab));
+    b.onclick = () => { setter(v); opts.querySelectorAll('.opt').forEach(o => o.classList.remove('sel')); b.classList.add('sel'); };
+    opts.appendChild(b);
+  });
+  row.appendChild(opts);
+  return row;
+}
+
+function lifestyleCard() {
+  const FREQ = ['Rarely', 'Some days', 'Most days', 'Daily'];
+  const card = el('div', { class: 'sec-card' });
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:#117A8B' }, 'Diet & lifestyle'));
+  const body = el('div', { class: 'sec-body' });
+  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, 'Modifiable habits we track over time — not part of the score.'));
+  body.appendChild(segRow('Plants, fibre & fermented foods',        FREQ,            () => extras.dietFibre,     v => extras.dietFibre = v));
+  body.appendChild(segRow('Ultra-processed or sugary foods/drinks', FREQ,            () => extras.dietProcessed, v => extras.dietProcessed = v));
+  body.appendChild(segRow('Alcohol',                                ALCOHOL_LEVELS,  () => extras.alcohol,       v => extras.alcohol = v));
+  body.appendChild(segRow('Physical activity',                      ACTIVITY_LEVELS, () => extras.activity,      v => extras.activity = v));
+  card.appendChild(body);
+  return card;
+}
+
+// Sleep — relocated from a scored domain to a driver (TRIM_PLAN §8.3). Context
+// only; tracked over time, kept OUT of the GI Symptom Burden score.
+function sleepCard() {
+  const card = el('div', { class: 'sec-card' });
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:#1A6B4A' }, 'Sleep'));
+  const body = el('div', { class: 'sec-body' });
+  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, 'How often, over the past 2 weeks? Tracked over time — not part of the score.'));
+  SLEEP_ITEMS.forEach((q, qi) => {
+    const row = el('div', { class: 'q' });
+    row.appendChild(el('div', { class: 'q-txt', style: 'font-weight:500' }, esc(q)));
+    const opts = el('div', { class: 'opts', style: 'flex-wrap:nowrap;gap:4px' });
+    SLEEP_ANCHORS.forEach((lab, v) => {
+      const b = el('button', { class: `opt${extras.sleep[qi] === v ? ' sel' : ''}`, type: 'button', style: 'min-width:0;flex:1;font-size:11px;padding:6px 4px' },
+        `<span class="on">${v}</span>${esc(lab)}`);
+      b.onclick = () => { extras.sleep[qi] = v; opts.querySelectorAll('.opt').forEach(o => o.classList.remove('sel')); b.classList.add('sel'); };
+      opts.appendChild(b);
+    });
+    row.appendChild(opts); body.appendChild(row);
+  });
+  card.appendChild(body);
+  return card;
+}
+
+// Dys-R — dysbiosis-correlate items (TRIM_PLAN §10). A separate lens, NOT part of
+// the GI Symptom Burden score. Mechanistically enriched for microbiome-altered
+// phenotypes; labelled "correlate", validated against stool sequencing at pilot.
+function dysCard() {
+  const card = el('div', { class: 'sec-card' });
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:#2E6B8A' }, 'Gut-microbiome signals'));
+  const body = el('div', { class: 'sec-body' });
+  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' },
+    'A few questions that point toward microbiome-related patterns. Reported separately — not part of the GI score, and not a diagnosis.'));
+
+  // Antibiotic courses /12mo (segmented 0–3)
+  body.appendChild(segRow('Antibiotic courses in the last 12 months', ABX_COURSES, () => extras.abxCourses, v => extras.abxCourses = v));
+  // Stool variability (segmented 0–2)
+  body.appendChild(segRow('Does your stool type change a lot day to day?', STOOLVAR_LEVELS, () => extras.dys.stoolVar, v => extras.dys.stoolVar = v));
+  // Foul / excessive gas (segmented 0–3)
+  body.appendChild(segRow('Excessive or foul / sulfur-smelling wind', GAS_LEVELS, () => extras.dys.gasFoul, v => extras.dys.gasFoul = v));
+
+  // Post-infectious onset (chips)
+  body.appendChild(chipRow('Did your gut symptoms first start after food poisoning, a stomach bug, or travel?',
+    POSTINF_OPTS, () => extras.dys.postInfectious, v => extras.dys.postInfectious = v));
+  // Fibre / probiotic paradox (chips)
+  body.appendChild(chipRow('Do fibre, prebiotics, or probiotics make your bloating or gas WORSE?',
+    PARADOX_OPTS, () => extras.dys.fibreParadox, v => extras.dys.fibreParadox = v));
+
+  // Food triggers (multi-select chips)
+  const ftRow = el('div', { class: 'q' });
+  ftRow.appendChild(el('div', { class: 'q-txt', style: 'font-weight:500' }, 'Symptoms reliably triggered by… (select all that apply)'));
+  const ftChips = el('div', { class: 'chips' });
+  FOOD_TRIGGERS.forEach(t => {
+    const on = extras.dys.foodTriggers.includes(t.id);
+    const b = el('button', { class: `chip-opt${on ? ' sel' : ''}`, type: 'button' }, esc(t.label));
+    b.onclick = () => {
+      const i = extras.dys.foodTriggers.indexOf(t.id);
+      if (i >= 0) extras.dys.foodTriggers.splice(i, 1); else extras.dys.foodTriggers.push(t.id);
+      b.classList.toggle('sel');
+    };
+    ftChips.appendChild(b);
+  });
+  ftRow.appendChild(ftChips);
+  body.appendChild(ftRow);
+  card.appendChild(body);
+  return card;
+}
+
+// Rome IV-informed bowel-pain pattern (frequency + chronicity + defecation-
+// association). Extras-only — never enters coreNorms/screenNorms.
+function romeCard() {
+  const { ROME_FREQ, ROME_ONSET, ROME_ASSOC } = __req('romeiv.js');
+  const card = el('div', { class: 'sec-card' });
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:#5A5A7A' }, 'Bowel-pain pattern (Rome IV-informed)'));
+  const body = el('div', { class: 'sec-body' });
+  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' },
+    'Optional — helps classify a constipation/diarrhoea/mixed pattern. Skip if unsure; not part of the GI score.'));
+  body.appendChild(chipRow('On average, how often do you get abdominal pain?', ROME_FREQ,
+    () => extras.rome.painFreq, v => extras.rome.painFreq = v));
+  body.appendChild(chipRow('When did this pattern first start?', ROME_ONSET,
+    () => extras.rome.onset, v => extras.rome.onset = v));
+  const aRow = el('div', { class: 'q' });
+  aRow.appendChild(el('div', { class: 'q-txt', style: 'font-weight:500' }, 'Does the pain relate to bowel movements? (select all that apply)'));
+  const aChips = el('div', { class: 'chips' });
+  ROME_ASSOC.forEach(a => {
+    const b = el('button', { class: `chip-opt${extras.rome[a.id] ? ' sel' : ''}`, type: 'button' }, esc(a.label));
+    b.onclick = () => { extras.rome[a.id] = !extras.rome[a.id]; b.classList.toggle('sel'); };
+    aChips.appendChild(b);
+  });
+  aRow.appendChild(aChips); body.appendChild(aRow);
+  card.appendChild(body);
+  return card;
+}
+
+// Generic single-select chip row (value = index). Used by Dys-R yes/no-style items.
+function chipRow(label, options, getter, setter) {
+  const row = el('div', { class: 'q' });
+  row.appendChild(el('div', { class: 'q-txt', style: 'font-weight:500' }, esc(label)));
+  const chips = el('div', { class: 'chips' });
+  options.forEach((lab, v) => {
+    const b = el('button', { class: `chip-opt${getter() === v ? ' sel' : ''}`, type: 'button' }, esc(lab));
+    b.onclick = () => { setter(v); chips.querySelectorAll('.chip-opt').forEach(o => o.classList.remove('sel')); b.classList.add('sel'); };
+    chips.appendChild(b);
+  });
+  row.appendChild(chips);
+  return row;
+}
+
+// Surgical history (multi-select) — asked routinely for visceral / fascial
+// manipulation. Adhesion-type surgeries feed manual-therapy candidacy (Tier 2);
+// microbiome-altering ones (gallbladder/resection/bariatric) feed the dys lens.
+function surgicalCard() {
+  const card = el('div', { class: 'sec-card' });
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:#4A5A6B' }, 'Surgical history'));
+  const body = el('div', { class: 'sec-body' });
+  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, 'Tap any past surgeries. Informs manual-therapy (adhesions) and microbiome reasoning — not part of the GI score.'));
+  const chips = el('div', { class: 'chips' });
+  SURGERIES.forEach(s => {
+    const on = extras.surgeries.includes(s.id);
+    const b = el('button', { class: `chip-opt${on ? ' sel' : ''}`, type: 'button' }, esc(s.label));
+    b.onclick = () => {
+      const i = extras.surgeries.indexOf(s.id);
+      if (i >= 0) extras.surgeries.splice(i, 1); else extras.surgeries.push(s.id);
+      b.classList.toggle('sel');
+    };
+    chips.appendChild(b);
+  });
+  body.appendChild(chips);
+  // Free-text "Other" — stored for context, not consumed by scoring logic.
+  const otherRow = el('div', { style: 'margin-top:10px;display:flex;align-items:center;gap:8px' });
+  otherRow.appendChild(el('span', { style: 'font-size:12px;color:var(--inks);white-space:nowrap' }, 'Other:'));
+  const otherIn = el('input', { type: 'text', value: extras.surgeryOther || '', placeholder: 'e.g. spinal fusion, hip replacement…',
+    style: 'flex:1;padding:6px 10px;border:1px solid var(--bdr);border-radius:6px;font-size:12px' });
+  otherIn.oninput = () => { extras.surgeryOther = otherIn.value; };
+  otherRow.appendChild(otherIn);
+  body.appendChild(otherRow);
+  card.appendChild(body);
+  return card;
+}
+
+function redFlagCard() {
+  const card = el('div', { class: 'sec-card' });
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:#A32D2D' },
+    `Important safety questions <span style="opacity:.8;font-weight:500">${RED_FLAGS.length} items</span>`));
+  const body = el('div', { class: 'sec-body' });
+  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' },
+    'These screen for symptoms that should be checked by a clinician directly. They are not part of your gut score.'));
+  RED_FLAGS.forEach(f => {
+    const row = el('div', { class: 'q' });
+    row.appendChild(el('div', { class: 'q-txt' }, esc(f.label)));
+    const opts = el('div', { class: 'chips' });
+    [['No', false], ['Yes', true]].forEach(([lab, val]) => {
+      const sel = redflags[f.id] === val ? ' sel' : '';
+      const b = el('button', { class: `chip-opt${sel}`, type: 'button' }, lab);
+      b.onclick = () => { redflags[f.id] = val; opts.querySelectorAll('.chip-opt').forEach(o => o.classList.remove('sel')); b.classList.add('sel'); };
+      opts.appendChild(b);
+    });
+    row.appendChild(opts); body.appendChild(row);
+  });
+  card.appendChild(body);
+  return card;
+}
+
+function questionRow(q) {
+  const labels = scaleFor(q.scale);
+  const row = el('div', { class: 'q' });
+  const tag = q.optional ? ` <span class="opt-tag">${esc(q.optionalLabel || 'optional')}</span>` : '';
+  row.appendChild(el('div', { class: 'q-txt' }, esc(q.patientText) + tag));
+  if (q.patientSub) row.appendChild(el('div', { class: 'q-sub' }, esc(q.patientSub)));
+  const opts = el('div', { class: 'opts' });
+  const naBtn = q.optional ? el('button', { class: `chip-opt na-opt${answers[q.id] === 'na' ? ' sel' : ''}`, type: 'button' }, 'Not applicable') : null;
+  labels.forEach((lab, v) => {
+    const sel = answers[q.id] === v ? ' sel' : '';
+    const b = el('button', { class: `opt s${v}${sel}`, type: 'button' }, `<span class="on">${v}</span>${esc(lab)}`);
+    b.onclick = () => {
+      answers[q.id] = v;
+      opts.querySelectorAll('.opt').forEach(o => o.classList.remove('sel'));
+      b.classList.add('sel');
+      if (naBtn) naBtn.classList.remove('sel');
+    };
+    opts.appendChild(b);
+  });
+  row.appendChild(opts);
+  if (naBtn) {
+    naBtn.onclick = () => {
+      answers[q.id] = 'na';
+      opts.querySelectorAll('.opt').forEach(o => o.classList.remove('sel'));
+      naBtn.classList.add('sel');
+    };
+    const naWrap = el('div', { class: 'na-wrap' });
+    naWrap.appendChild(naBtn);
+    row.appendChild(naWrap);
+  }
+  return row;
+}
+
+// Pure computation — no DOM. Used by calc() and printSummary() so print can
+// regenerate results without re-running the render pipeline.
+function computeAll() {
+  const answerArr = QUESTIONS.map(q => (answers[q.id] == null ? null : answers[q.id]));
+  const score = computeScores(answerArr, { bristol: extras.bristol });
+  const sv = score.severity;
+  const conf = scoreConfidence(score);
+  const ps = pss4Score(extras.pss4);
+  const driverExtras = {
+    pss4Score: ps, nrsPain: extras.nrsPain, bristol: extras.bristol,
+    bgAnxiety: answers.bg_anxiety, bgMood: answers.bg_mood,
+    meds: extras.meds, dietFibre: extras.dietFibre, dietProcessed: extras.dietProcessed,
+    alcohol: extras.alcohol, activity: extras.activity,
+    sleep: extras.sleep,                                  // sleep driver — feeds the modifiable-factors card
+    surgeries: extras.surgeries, surgeryOther: extras.surgeryOther,
+    abxCourses: extras.abxCourses, dys: extras.dys,
+    rome: extras.rome,
+  };
+  const patterns = detectPatterns(score, driverExtras, answers);
+  const fired = firedRedFlags(redflags);
+  const lens = dysbiosisLens(extras);
+  const rome = classifyRomeIV(extras.rome, score.clusterNorm);
+  const tri = triage(score, patterns, fired, lens, { adhesionSurgery: surgicalFlags(extras).adhesion, romeResult: rome });
+  return { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri };
+}
+
+function calc() {
+  const c = computeAll();
+  lastCalc = c;
+  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri } = c;
+
+  const out = document.getElementById('patient-results');
+  out.innerHTML = '';
+
+  const isPregnant = session.pregnant === 'yes';
+  const ageNum = parseInt(session.age, 10);
+  const isMinor = !isNaN(ageNum) && ageNum < 18;
+  if (isPregnant || isMinor) {
+    const note = isPregnant && isMinor
+      ? 'Patient is pregnant and under 18.'
+      : isPregnant ? 'Patient is pregnant.' : 'Patient is under 18.';
+    out.appendChild(el('div', { class: 'rf-banner', style: 'background:#FFF3CD;border-color:#FECB1F;color:#7B5900' },
+      `<div class="rf-ic" style="font-size:20px">ℹ️</div><div><div class="rf-title" style="color:#7B5900">Applicability note</div>
+       <div class="rf-body">${esc(note)} This screen was developed in a general adult population. Results and triage guidance should be interpreted with that context in mind — discuss with a clinician before acting.</div></div>`));
+  }
+
+  if (anyRedFlag(redflags)) {
+    const items = fired.map(f => `<li>${esc(f.label)}</li>`).join('');
+    out.appendChild(el('div', { class: 'rf-banner' },
+      `<div class="rf-ic">⚠️</div><div><div class="rf-title">Please speak with a clinician about these answers</div>
+       <div class="rf-body">${esc(RED_FLAG_BANNER)}</div><ul class="rf-list">${items}</ul></div>`));
+  }
+
+  if (score.completeness < 80) toast(`${score.completeness}% complete — result shown as provisional.`);
+
+  // Patient / Clinician view toggle
+  const togBar = el('div', { class: 'row', style: 'justify-content:flex-end;gap:6px;margin-bottom:8px' });
+  const ptBtn = el('button', { class: `btn ${clinicianView ? 'btn-gh' : 'btn-o'}`, type: 'button' }, 'Patient view');
+  const clBtn = el('button', { class: `btn ${clinicianView ? 'btn-g' : 'btn-gh'}`, type: 'button' }, 'Clinician view');
+  ptBtn.onclick = () => { clinicianView = false; calc(); };
+  clBtn.onclick = () => { clinicianView = true; calc(); };
+  togBar.appendChild(ptBtn); togBar.appendChild(clBtn);
+  out.appendChild(togBar);
+
+  const hero = el('div', { class: 'card' });
+  hero.appendChild(el('div', { class: 'hero' },
+    `<div><div class="big">${sv.index}%</div><div class="sub">GI Symptom Burden</div></div>
+     <div style="flex:1;min-width:160px"><span class="pill ${sv.cls}">${esc(sv.label)}</span>
+     <div style="font-size:12px;color:var(--inks);margin-top:8px;line-height:1.5">${esc(sv.desc)}</div>
+     <div class="conf-note">Confidence: <b>${esc(conf.level)}</b> · ${score.completeness}% complete</div></div>`));
+  if (score.completeness < 80) hero.appendChild(el('div', { class: 'prov-caveat' },
+    `Provisional result — ${score.completeness}% of scored items answered.`));
+  out.appendChild(hero);
+
+  // Triage — the headline next step (clinician guidance, not prescription).
+  out.appendChild(triageCard(tri, rome, clinicianView));
+
+  // Severity × microbiome-risk — the two independent reads combined at the
+  // interpretation layer (TRIM_PLAN §10). Kept as one card so the clinician sees
+  // both axes together; neither metric contaminates the other.
+  out.appendChild(riskMatrixCard(sv, lens));
+
+  // Live trend preview: if this patient reference has prior visits, show the
+  // trajectory now. For a freshly-completed questionnaire the current visit is
+  // appended as 'unsaved'; for a loaded saved visit it's already in the DB so
+  // we don't duplicate it — just show all saved visits (needs ≥2 to be useful).
+  const prior = priorVisits();
+  if (loadedVisitId) {
+    if (prior.length >= 2) out.appendChild(trendCard(prior, false));
+  } else {
+    if (prior.length >= 1) out.appendChild(trendCard(prior.concat([currentVisit()]), true));
+  }
+
+  const bars = el('div', { class: 'card' });
+  bars.appendChild(el('h2', {}, 'By domain'));
+  SECTIONS.forEach(s => {
+    const sc = score.secScores[s.id] || 0;
+    const max = score.secApplicableMax[s.id] || 0; // applicable max (excludes N/A items)
+    const p = max ? Math.round(sc / max * 100) : 0;
+    const maxLabel = max ? `${sc}/${max} · ${p}%` : 'n/a';
+    const roleTag = s.role === 'core' ? ' <span class="opt-tag">core</span>' : '';
+    bars.appendChild(el('div', { class: 'bar-row' },
+      `<div class="bar-label"><span>${esc(s.full || s.label)}${roleTag}</span><span class="muted">${maxLabel}</span></div>
+       <div class="bar-track"><div class="bar-fill" style="width:${p}%;background:${s.color || '#0F6E56'}"></div></div>`));
+    // Bristol dual-role transparency: the bar shows symptom items only; this note
+    // surfaces the bounded transit contribution that actually feeds the GI core.
+    if (s.id === 'GI' && score.bristolSignal != null && score.secNorm.GI != null) {
+      const addPts = Math.round((score.secNorm.GI - (max ? sc / max : 0)) * 100);
+      const bt = BRISTOL_TYPES.find(t => t.n === extras.bristol);
+      bars.appendChild(el('div', { class: 'q-sub', style: 'margin:-4px 0 12px;padding-left:2px;color:var(--inks)' },
+        `↳ Stool transit ${addPts > 0 ? `adds +${addPts} pts to` : 'adds nothing to'} gut-core${bt ? ` · Type ${bt.n} (${esc(bt.tag)})` : ''} — capped so it can't dominate.`));
+    }
+    // GSRS per-cluster sub-bars: the GI core breaks down into 5 validated
+    // syndromes (Reflux, Pain, Indigestion, Diarrhoea, Constipation). Showing
+    // them surfaces the symptom shape, not just the magnitude.
+    if (s.id === 'GI' && score.clusterAgg) {
+      const order = ['Reflux', 'Pain', 'Indigestion', 'Diarrhoea', 'Constipation'];
+      order.forEach(k => {
+        const c = score.clusterAgg[k]; if (!c || c.max === 0) return;
+        const cp = Math.round(c.sum / c.max * 100);
+        bars.appendChild(el('div', { class: 'bar-row', style: 'padding-left:18px' },
+          `<div class="bar-label"><span class="muted">↳ ${esc(k)}</span><span class="muted">${c.sum}/${c.max} · ${cp}%</span></div>
+           <div class="bar-track" style="height:6px"><div class="bar-fill" style="width:${cp}%;background:${s.color};opacity:.6"></div></div>`));
+      });
+    }
+  });
+  out.appendChild(bars);
+
+  // Modifiable drivers — context, not part of the Index (computed above with the
+  // triage inputs; rendered here).
+  const driv = el('div', { class: 'card' });
+  driv.appendChild(el('h2', {}, 'Modifiable drivers'));
+  driv.appendChild(el('div', { class: 'q-sub' }, 'Shown for context — not added to the GI Symptom Burden score. These feed the pattern & triage guidance.'));
+  const dg = el('div', { class: 'drivers' });
+  modifiableFactors(driverExtras).forEach(f => dg.appendChild(el('div', { class: 'driver' },
+    `<div class="dl" style="font-weight:600;margin-bottom:2px">${f.icon} ${esc(f.label)}</div>
+     <div class="dv" style="color:${f.color}">${esc(f.band)}</div>
+     ${f.score ? `<div class="dl">${esc(f.score)}</div>` : ''}`)));
+  driv.appendChild(dg);
+  out.appendChild(driv);
+
+  // Patterns — first-cut clinical-discussion patterns from drivers + clusters
+  // (computed above with the triage inputs). Conservatively framed; confidence
+  // reflects how much supporting data was answered.
+  if (patterns.length > 0) {
+    const pcard = el('div', { class: 'card' });
+    pcard.appendChild(el('h2', {}, 'Patterns to discuss with your clinician'));
+    pcard.appendChild(el('div', { class: 'q-sub' }, 'First-cut patterns from your answers and drivers. These are not diagnoses — they are starting points for a conversation with your clinician.'));
+    patterns.forEach(p => {
+      pcard.appendChild(el('div', { class: 'pat', style: 'padding:12px 14px;border:1px solid #E1E5EB;border-radius:8px;margin-top:10px;background:#F9FAFB' },
+        `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+           <div style="font-weight:600">${esc(p.label)}</div>
+           <span style="font-size:11px;padding:2px 8px;border-radius:999px;background:${p.confColor};color:#fff">${esc(p.confidence)} confidence</span>
+         </div>
+         <div class="q-sub" style="margin-top:6px;color:var(--inks);line-height:1.5">${esc(p.desc)}</div>`));
+    });
+    out.appendChild(pcard);
+  }
+
+  // Clinician detail card — item-level responses, Rome IV raw, pattern rationale,
+  // driver table, and investigation checklist.
+  if (clinicianView) out.appendChild(clinicianDetailCard(c));
+
+  // Save-a-visit + pilot-CSV download + print.
+  const actions = el('div', { class: 'card row', style: 'justify-content:flex-end;gap:8px;flex-wrap:wrap' });
+  const saveBtn = el('button', { class: 'btn btn-g', type: 'button' }, loadedVisitId ? 'Update this response' : 'Save this response');
+  saveBtn.onclick = () => {
+    try {
+      const r = saveVisit();
+      saveBtn.disabled = true; saveBtn.textContent = r.isUpdate ? 'Updated ✓' : 'Saved ✓';
+      if (r.isUpdate) {
+        toast(r.linked
+          ? `Visit updated for ${(session.ref || session.name || '').trim()}.`
+          : 'Visit updated.');
+      } else {
+        toast(r.linked
+          ? `Saved as visit ${r.visits.length} for ${(session.ref || '').trim()}.`
+          : 'Response saved (standalone — add a patient reference to track progress).');
+      }
+      // Re-point the trend card at the now-persisted series (drops the "unsaved" tag).
+      const existing = out.querySelector('#trend-card');
+      if (r.visits.length >= 2) { const fresh = trendCard(r.visits, false); existing ? existing.replaceWith(fresh) : out.appendChild(fresh); }
+    } catch (e) { toast('Could not save: ' + (e && e.message || 'storage error')); }
+  };
+  actions.appendChild(saveBtn);
+  const dlBtn = el('button', { class: 'btn', type: 'button' }, 'Download pilot CSV');
+  dlBtn.onclick = () => {
+    const csv = Store.pilotExportCSV(Store.loadDB());
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `gut-screen-pilot-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  actions.appendChild(dlBtn);
+  const ptPrintBtn = el('button', { class: 'btn btn-gh', type: 'button' }, '🖨 Patient summary');
+  ptPrintBtn.onclick = () => printSummary('patient');
+  actions.appendChild(ptPrintBtn);
+  const clPrintBtn = el('button', { class: 'btn btn-gh', type: 'button' }, '🖨 Clinician report');
+  clPrintBtn.onclick = () => printSummary('clinician');
+  actions.appendChild(clPrintBtn);
+  const newBtn = el('button', { class: 'btn', type: 'button' }, 'Start new');
+  newBtn.onclick = () => { clearPatient(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  actions.appendChild(newBtn);
+  out.appendChild(actions);
+
+  out.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+}
+
+// Suggested-next-step (triage) card. showInvestigations adds the pattern-matched
+// investigation/management list (clinician-facing). Shared by calc() and the
+// clinician tab so both render an identical plan block.
+function triageCard(tri, rome, showInvestigations) {
+  const tcard = el('div', { class: 'card', style: `border-left:6px solid ${tri.color}` });
+  tcard.appendChild(el('h2', {}, 'Suggested next step'));
+  tcard.appendChild(el('div', { class: 'row', style: 'align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px' },
+    `<span class="pill" style="background:${tri.color};color:#fff">Tier ${tri.level} · ${esc(tri.label)}</span>`));
+  tcard.appendChild(el('div', { style: 'font-size:13px;color:var(--inks);line-height:1.5;margin-top:6px' }, esc(tri.action)));
+  if (tri.reasons.length) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px' },
+    'Why: ' + tri.reasons.map(esc).join(' · ')));
+  if (tri.alsoConsider.length) {
+    tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-weight:600' }, 'Also worth noting:'));
+    tri.alsoConsider.forEach(a => tcard.appendChild(el('div', { class: 'q-sub', style: 'padding-left:4px' },
+      `• ${esc(a.label)} — ${a.reasons.map(esc).join('; ')}`)));
+  }
+  if (rome && rome.criteriaMet) {
+    tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-weight:600;color:#185FA5' },
+      `Meets Rome IV-informed criteria for ${esc(rome.subtype)} — single-visit estimate, not the prospective diary Rome IV was validated against. A pattern to discuss, not a diagnosis.`));
+  }
+  if (showInvestigations && tri.investigations && tri.investigations.length) {
+    tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-weight:600;color:#3A4A5A' }, 'Suggested investigations / management:'));
+    tcard.appendChild(el('ul', { class: 'rf-list', style: 'color:#3A4A5A;margin-top:2px' },
+      tri.investigations.map(i => `<li>${esc(i)}</li>`).join('')));
+    tcard.appendChild(el('div', { class: 'q-sub', style: 'color:#888;font-style:italic;margin-top:3px' }, 'Pattern-matched — apply clinical judgement. Not a protocol.'));
+  }
+  tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-style:italic;color:#999' },
+    'Clinical guidance for discussion — not a diagnosis or prescription.'));
+  return tcard;
+}
+
+// Clinician detail card: item-level responses, Rome IV criteria answers,
+// pattern confidence + rationale, driver raw values, and red flag detail.
+function clinicianDetailCard(c) {
+  const { score, conf, driverExtras, patterns, fired, lens, rome, tri } = c;
+  const card = el('div', { class: 'clin-detail' });
+  card.appendChild(el('h2', { style: 'margin-bottom:10px' }, 'Clinical detail <span class="clin-badge">Clinician view</span>'));
+
+  function chead(txt) { return el('div', { class: 'clin-h' }, txt); }
+  function tbl(thead, rows) {
+    const t = el('table', { class: 'clin-tbl' });
+    t.innerHTML = `<thead><tr>${thead.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody>`;
+    return t;
+  }
+
+  // Confidence & completeness
+  card.appendChild(chead('Score confidence'));
+  const secWithData = score.secAnswered
+    ? Object.values(score.secAnswered).filter(s => s.answered > 0).length + ' / ' + Object.keys(score.secAnswered).length
+    : '—';
+  card.appendChild(tbl(['Metric', 'Value'], `
+    <tr><td>Overall completeness</td><td>${score.completeness}%</td></tr>
+    <tr><td>Sections with data</td><td>${esc(String(secWithData))}</td></tr>
+    <tr><td>Confidence level</td><td>${esc(conf.level)}</td></tr>
+    <tr><td>GI core answered</td><td>${score.coreUnknown ? '<b style="color:#A32D2D">No — result provisional</b>' : 'Yes'}</td></tr>`));
+
+  // Item-level responses per scored section
+  card.appendChild(chead('Item-level responses'));
+  SECTIONS.forEach(sec => {
+    const qs = questionsOf(sec.id);
+    if (!qs.length) return;
+    const sc = score.secScores[sec.id] || 0;
+    const mx = score.secApplicableMax[sec.id] || 0;
+    const pct = mx ? Math.round(sc / mx * 100) : 0;
+    card.appendChild(el('div', { style: 'font-size:11px;font-weight:600;color:#3A4A5A;margin:8px 0 3px;padding:2px 0;border-bottom:1px solid #D8DDE3' },
+      `${esc(sec.full || sec.label)} — ${sc}/${mx} (${pct}%)`));
+    const rows = qs.map(q => {
+      const val = answers[q.id];
+      const labels = scaleFor(q.scale);
+      const disp = val === 'na' ? '<i>N/A</i>' : val == null ? '<span style="color:#999">—</span>' : `${val} — ${esc(labels[val] || '')}`;
+      return `<tr><td>${esc(q.patientText)}</td><td style="white-space:nowrap">${disp}</td></tr>`;
+    }).join('');
+    card.appendChild(tbl(['Question', 'Answer'], rows));
+  });
+
+  // Rome IV criteria detail
+  card.appendChild(chead('Rome IV-informed criteria'));
+  const { ROME_FREQ, ROME_ONSET, ROME_ASSOC } = __req('romeiv.js');
+  const r = extras.rome || {};
+  const rRows = [
+    ['Pain frequency', r.painFreq != null ? `${r.painFreq} — ${esc(ROME_FREQ[r.painFreq] || '')}` : '—'],
+    ['Onset', r.onset != null ? `${r.onset} — ${esc(ROME_ONSET[r.onset] || '')}` : '—'],
+    ...ROME_ASSOC.map(a => [esc(a.label), r[a.id] ? '<b>Yes</b>' : 'No']),
+    ['Result', rome.criteriaMet
+      ? `<b style="color:#185FA5">Criteria met — ${esc(rome.subtype || '')}</b>`
+      : rome.answered ? 'Criteria not met' : '<span style="color:#999">Not answered</span>'],
+  ].map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+  card.appendChild(tbl(['Item', 'Response'], rRows));
+
+  // Microbiome correlate signals
+  if (lens.signals && lens.signals.length) {
+    card.appendChild(chead(`Microbiome-correlate signals (${lens.count}/6)`));
+    card.appendChild(el('ul', { style: 'font-size:11.5px;padding-left:18px;margin:2px 0' },
+      lens.signals.map(s => `<li>${esc(s.label)}</li>`).join('')));
+  }
+
+  // Pattern detail
+  if (patterns.length) {
+    card.appendChild(chead('Pattern analysis'));
+    const ptRows = patterns.map(p =>
+      `<tr><td><b>${esc(p.label)}</b></td>
+       <td><span style="background:${p.confColor};color:#fff;border-radius:8px;padding:1px 6px;font-size:10px;white-space:nowrap">${esc(p.confidence)}</span></td>
+       <td>${esc(p.desc)}</td></tr>`
+    ).join('');
+    card.appendChild(tbl(['Pattern', 'Confidence', 'Rationale'], ptRows));
+  }
+
+  // Modifiable driver raw values
+  card.appendChild(chead('Modifiable driver raw values'));
+  const drRows = modifiableFactors(driverExtras).map(f =>
+    `<tr><td>${f.icon} ${esc(f.label)}</td><td style="color:${f.color}">${esc(f.band)}</td><td style="color:var(--inkt)">${esc(f.score || '')}</td></tr>`
+  ).join('');
+  card.appendChild(tbl(['Factor', 'Band', 'Score'], drRows));
+
+  // Red flag detail
+  if (fired.length) {
+    card.appendChild(chead(`Red flags — ${fired.length} answered Yes`));
+    card.appendChild(el('ul', { style: 'font-size:11.5px;padding-left:18px;color:#A32D2D;margin:2px 0' },
+      fired.map(f => `<li>${esc(f.label)}</li>`).join('')));
+  }
+
+  return card;
+}
+
+// Populate #print-area and call window.print(). Requires lastCalc to be set.
+function printSummary(mode) {
+  if (!lastCalc) { toast('Run the questionnaire first to generate a summary.'); return; }
+  const area = document.getElementById('print-area');
+  if (!area) return;
+  area.innerHTML = '';
+  area.appendChild(mode === 'clinician' ? buildClinicianPrint(lastCalc) : buildPatientPrint(lastCalc));
+  window.print();
+}
+
+function buildPatientPrint(c) {
+  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri } = c;
+  const dateStr = new Date().toLocaleDateString('en-AU', { year: 'numeric', month: 'long', day: 'numeric' });
+  const patName = (session.name || '').trim() || (session.ref || '').trim() || 'Anonymous';
+  const isPregnant = session.pregnant === 'yes';
+  const ageNum = parseInt(session.age, 10);
+  const isMinor = !isNaN(ageNum) && ageNum < 18;
+
+  const div = document.createElement('div');
+  let h = `<div class="pr-logo">Beyond Mechanics</div>
+    <div class="pr-title">Gut Health Screen</div>
+    <div class="pr-meta">Prepared for: <b>${esc(patName)}</b>${session.followup ? ' · Follow-up visit' : ' · Baseline screen'}<br>Date: ${esc(dateStr)}</div>
+    <hr class="pr-divider">`;
+
+  if (isPregnant || isMinor) {
+    const note = isPregnant && isMinor ? 'Pregnant and under 18' : isPregnant ? 'Pregnant' : 'Under 18';
+    h += `<div class="pr-info"><b>ℹ️ Note:</b> ${esc(note)}. This screen was developed in a general adult population — discuss results with your clinician before acting.</div>`;
+  }
+  if (fired.length) {
+    h += `<div class="pr-alert"><div class="pr-alert-t">⚠ Please speak with a clinician about the following</div>
+      <ul style="margin:4px 0 0 14px;font-size:10.5px">${fired.map(f => `<li>${esc(f.label)}</li>`).join('')}</ul></div>`;
+  }
+
+  const svCss = { Severe: '#FCEBEB', Significant: '#FAD7C2', 'Mild–Moderate': '#FAEEDA' }[sv.label] || '#E1F5EE';
+  h += `<div class="pr-hero">
+    <div><div class="big">${sv.index}%</div><div class="sub">GI Symptom Burden</div></div>
+    <div><span class="pr-pill" style="background:${svCss};color:#000">${esc(sv.label)}</span>
+    <div style="font-size:10.5px;color:#555;margin-top:4px;max-width:340px">${esc(sv.desc)}</div>
+    <div style="font-size:10px;color:#888;margin-top:4px">Confidence: ${esc(conf.level)} · ${score.completeness}% complete</div></div></div>`;
+
+  h += `<div class="pr-section"><div class="pr-sh">By area</div>`;
+  SECTIONS.forEach(s => {
+    const sc = score.secScores[s.id] || 0, mx = score.secApplicableMax[s.id] || 0;
+    if (!mx) return;
+    const p = Math.round(sc / mx * 100);
+    h += `<div class="pr-bar-row"><span style="min-width:140px;font-size:10.5px">${esc(s.full || s.label)}</span>
+      <div class="pr-bar-track"><div class="pr-bar-fill" style="width:${p}%;background:${s.color || '#0F6E56'}"></div></div>
+      <span style="min-width:36px;text-align:right">${p}%</span></div>`;
+  });
+  h += `</div>`;
+
+  const tierCls = ['', 't1', 't2', 't3', 't4'][tri.level] || 't4';
+  h += `<div class="pr-section"><div class="pr-sh">Suggested next step</div>
+    <div class="pr-triage ${tierCls}">
+      <div style="font-weight:700;font-size:12px">Tier ${tri.level} — ${esc(tri.label)}</div>
+      <div style="font-size:11px;margin-top:4px">${esc(tri.action)}</div>
+      ${tri.reasons.length ? `<div style="font-size:10.5px;color:#555;margin-top:4px">Why: ${tri.reasons.map(esc).join(' · ')}</div>` : ''}
+    </div></div>`;
+
+  const mf = modifiableFactors(driverExtras).filter(f => f.band && f.band !== 'Not answered');
+  if (mf.length) {
+    h += `<div class="pr-section"><div class="pr-sh">Lifestyle factors</div>
+      <table class="pr-tbl"><tbody>${mf.map(f => `<tr><td>${f.icon} ${esc(f.label)}</td><td style="color:${f.color}">${esc(f.band)}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+
+  h += `<div class="pr-footer">This is a screening tool — it is not a diagnosis. Please discuss your results with your clinician.<br>Beyond Mechanics · Gut Health Screen v2 · ${esc(dateStr)}</div>`;
+  div.innerHTML = h;
+  return div;
+}
+
+function buildClinicianPrint(c) {
+  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri } = c;
+  const dateStr = new Date().toLocaleDateString('en-AU', { year: 'numeric', month: 'long', day: 'numeric' });
+  const patName = (session.name || '').trim() || 'Not recorded';
+  const ghi = gutHealthIndex(sv.index, lens.count);
+  const priors = priorVisits();
+  const trendVisits = loadedVisitId ? priors : priors.concat([currentVisit()]);
+  const trend = trendVisits.length >= 2 ? buildTrend(trendVisits) : null;
+  const { ROME_FREQ, ROME_ONSET, ROME_ASSOC } = __req('romeiv.js');
+  const isPregnant = session.pregnant === 'yes';
+  const ageNum = parseInt(session.age, 10);
+  const isMinor = !isNaN(ageNum) && ageNum < 18;
+
+  const div = document.createElement('div');
+  let h = `<div class="pr-logo">Beyond Mechanics · Gut Health Screen v2</div>
+    <div class="pr-title">Clinical Summary</div>
+    <div class="pr-meta">
+      Patient: <b>${esc(patName)}</b>${session.ref ? ` · Ref: ${esc(session.ref)}` : ''}<br>
+      Age: ${esc(session.age || '—')} · Gender: ${esc(session.gender || '—')}${isPregnant ? ' · <b>Pregnant</b>' : ''}${isMinor ? ' · <b>Under 18</b>' : ''}<br>
+      Visit: ${session.followup ? 'Follow-up' : 'Baseline'} · Date: ${esc(dateStr)}
+    </div><hr class="pr-divider">`;
+
+  if (isPregnant || isMinor) {
+    const note = isPregnant && isMinor ? 'Pregnant and under 18' : isPregnant ? 'Pregnant' : 'Under 18';
+    h += `<div class="pr-info"><b>Applicability:</b> ${esc(note)}. Developed in a general adult population — interpret with clinical context.</div>`;
+  }
+
+  // Triage
+  const tierCls = ['', 't1', 't2', 't3', 't4'][tri.level] || 't4';
+  h += `<div class="pr-section"><div class="pr-sh">Triage</div>
+    <div class="pr-triage ${tierCls}">
+      <div style="font-weight:700">Tier ${tri.level} — ${esc(tri.label)}</div>
+      <div style="margin-top:3px;font-size:11px">${esc(tri.action)}</div>
+      ${tri.reasons.length ? `<div style="font-size:10.5px;margin-top:4px">Reasons: ${tri.reasons.map(esc).join(' · ')}</div>` : ''}
+      ${tri.alsoConsider.length ? `<div style="font-size:10.5px;margin-top:3px">Also consider: ${tri.alsoConsider.map(a => `${esc(a.label)} (${a.reasons.map(esc).join('; ')})`).join(' / ')}</div>` : ''}
+    </div>
+    ${tri.investigations && tri.investigations.length ? `
+      <div style="font-weight:600;font-size:11px;margin:6px 0 3px">Suggested investigations / management:</div>
+      <ul style="margin:0 0 4px 14px;font-size:10.5px;line-height:1.6">${tri.investigations.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+      <div style="font-size:9.5px;color:#888;font-style:italic">Pattern-matched — apply clinical judgement. Not a protocol.</div>
+    ` : ''}
+  </div>`;
+
+  // Scores
+  h += `<div class="pr-section"><div class="pr-sh">Scores</div>
+    <table class="pr-tbl"><tbody>
+      <tr><td>GI Symptom Burden</td><td><b>${sv.index}%</b> — ${esc(sv.label)}</td></tr>
+      <tr><td>Gut Health Index (blended)</td><td><b>${ghi != null ? ghi : '—'}</b></td></tr>
+      <tr><td>Microbiome-correlate signals</td><td>${lens.count}/6 · ${lens.count >= 2 ? 'High risk' : 'Low risk'}</td></tr>
+      <tr><td>Confidence</td><td>${esc(conf.level)} · ${score.completeness}% complete</td></tr>
+      ${score.coreUnknown ? '<tr><td colspan="2" style="color:#A32D2D;font-weight:600">⚠ Core GI section not answered — result provisional</td></tr>' : ''}
+    </tbody></table></div>`;
+
+  // Red flags
+  h += `<div class="pr-section"><div class="pr-sh">Red flags</div>`;
+  h += fired.length
+    ? `<div class="pr-alert"><div class="pr-alert-t">⚠ ${fired.length} item${fired.length > 1 ? 's' : ''} answered Yes</div>
+       <ul style="margin:4px 0 0 14px;font-size:10.5px">${fired.map(f => `<li>${esc(f.label)}</li>`).join('')}</ul></div>`
+    : `<div style="font-size:11px;color:#555">No red flags answered Yes.</div>`;
+  h += `</div>`;
+
+  // GSRS domain breakdown
+  h += `<div class="pr-section"><div class="pr-sh">Domain breakdown</div>
+    <table class="pr-tbl"><thead><tr><th>Domain</th><th>Score/Max</th><th>%</th></tr></thead><tbody>`;
+  SECTIONS.forEach(s => {
+    const sc = score.secScores[s.id] || 0, mx = score.secApplicableMax[s.id] || 0;
+    h += `<tr><td>${esc(s.full || s.label)}</td><td>${sc}/${mx}</td><td>${mx ? Math.round(sc / mx * 100) + '%' : 'n/a'}</td></tr>`;
+  });
+  if (score.clusterAgg) {
+    ['Reflux', 'Pain', 'Indigestion', 'Diarrhoea', 'Constipation'].forEach(k => {
+      const cl = score.clusterAgg[k]; if (!cl || cl.max === 0) return;
+      h += `<tr><td style="padding-left:14px;color:#666">↳ ${esc(k)}</td><td>${cl.sum}/${cl.max}</td><td>${Math.round(cl.sum / cl.max * 100)}%</td></tr>`;
+    });
+  }
+  h += `</tbody></table></div>`;
+
+  // Rome IV
+  const r = extras.rome || {};
+  h += `<div class="pr-section"><div class="pr-sh">Rome IV-informed bowel-pain pattern</div>
+    <table class="pr-tbl"><tbody>
+      <tr><td>Pain frequency</td><td>${r.painFreq != null ? `${r.painFreq} — ${esc(ROME_FREQ[r.painFreq] || '')}` : '—'}</td></tr>
+      <tr><td>Onset</td><td>${r.onset != null ? `${r.onset} — ${esc(ROME_ONSET[r.onset] || '')}` : '—'}</td></tr>
+      ${ROME_ASSOC.map(a => `<tr><td>${esc(a.label)}</td><td>${r[a.id] ? '<b>Yes</b>' : 'No'}</td></tr>`).join('')}
+      <tr><td><b>Result</b></td><td><b>${rome.criteriaMet ? `Criteria met — ${esc(rome.subtype)}` : rome.answered ? 'Criteria not met' : 'Not answered'}</b></td></tr>
+    </tbody></table>
+    <div style="font-size:9.5px;color:#888;margin-top:3px">Single-visit estimate — not the prospective diary Rome IV was validated against.</div>
+  </div>`;
+
+  // Patterns
+  if (patterns.length) {
+    h += `<div class="pr-section"><div class="pr-sh">Patterns</div>
+      <table class="pr-tbl"><thead><tr><th>Pattern</th><th>Confidence</th><th>Rationale</th></tr></thead><tbody>
+        ${patterns.map(p => `<tr><td><b>${esc(p.label)}</b></td><td>${esc(p.confidence)}</td><td>${esc(p.desc)}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  }
+
+  // Microbiome correlates
+  h += `<div class="pr-section"><div class="pr-sh">Microbiome-correlate signals (${lens.count}/6)</div>`;
+  h += lens.signals && lens.signals.length
+    ? `<ul style="margin:0 0 0 14px;font-size:10.5px">${lens.signals.map(s => `<li>${esc(s.label)}</li>`).join('')}</ul>`
+    : `<div style="font-size:11px;color:#555">No microbiome-correlate signals present.</div>`;
+  h += `</div>`;
+
+  // Modifiable drivers
+  h += `<div class="pr-section"><div class="pr-sh">Modifiable drivers</div>
+    <table class="pr-tbl"><thead><tr><th>Factor</th><th>Band</th><th>Score</th></tr></thead><tbody>
+      ${modifiableFactors(driverExtras).map(f => `<tr><td>${f.icon} ${esc(f.label)}</td><td style="color:${f.color}">${esc(f.band)}</td><td>${esc(f.score || '')}</td></tr>`).join('')}
+    </tbody></table></div>`;
+
+  // Item-level responses (page 2)
+  h += `<div class="pr-section pr-page-break"><div class="pr-sh">Item-level responses</div>`;
+  SECTIONS.forEach(s => {
+    const qs = questionsOf(s.id);
+    if (!qs.length) return;
+    const sc = score.secScores[s.id] || 0, mx = score.secApplicableMax[s.id] || 0;
+    h += `<div style="font-weight:600;font-size:11px;margin:8px 0 2px;color:#3A4A5A">${esc(s.full || s.label)} — ${sc}/${mx} (${mx ? Math.round(sc / mx * 100) + '%' : 'n/a'})</div>
+      <table class="pr-tbl"><tbody>${qs.map(q => {
+        const val = answers[q.id];
+        const labels = scaleFor(q.scale);
+        const disp = val === 'na' ? 'N/A' : val == null ? '—' : `${val} — ${esc(labels[val] || '')}`;
+        return `<tr><td>${esc(q.patientText)}</td><td style="white-space:nowrap">${disp}</td></tr>`;
+      }).join('')}</tbody></table>`;
+  });
+  h += `</div>`;
+
+  // Longitudinal trend (if applicable)
+  if (trend && trend.points.length >= 2) {
+    h += `<div class="pr-section"><div class="pr-sh">Longitudinal progression (${trend.points.length} visits)</div>
+      <table class="pr-tbl"><thead><tr><th>#</th><th>Date</th><th>Type</th><th>Index</th><th>Band</th><th>Δ</th></tr></thead><tbody>
+        ${trend.points.map((p, i) => {
+          const d = p.date ? new Date(p.date).toISOString().slice(0, 10) : '—';
+          const dTxt = p.delta ? `${p.delta.delta > 0 ? '+' : ''}${p.delta.delta} (${esc(p.delta.label)})` : '—';
+          return `<tr><td>${i + 1}</td><td>${esc(d)}</td><td>${p.followup ? 'Follow-up' : 'Baseline'}</td><td>${p.index}%</td><td>${esc(p.band)}</td><td>${dTxt}</td></tr>`;
+        }).join('')}
+      </tbody></table>
+      ${trend.persistent.length ? `<div style="font-size:10.5px;margin-top:4px">Persistent patterns: <b>${trend.persistent.map(id => esc(id.replace(/_/g, ' '))).join(', ')}</b></div>` : ''}
+    </div>`;
+  }
+
+  h += `<div class="pr-footer">Clinical summary — Gut Health Screen v2 · Beyond Mechanics · ${esc(dateStr)}<br>Screening tool only — not a diagnosis or prescription. Apply clinical judgement.</div>`;
+  div.innerHTML = h;
+  return div;
+}
+
+// Start a fresh questionnaire, optionally pre-bound to a patient identity (and
+// flagged as a follow-up). Used by the Patient-records tab's New-questionnaire /
+// New-follow-up actions. identity = { name, age, gender, ref } (all optional).
+function newVisitFor(identity, followup) {
+  reset();
+  const id = identity || {};
+  session.name = id.name || '';
+  session.age = id.age || '';
+  session.gender = id.gender || '';
+  session.ref = id.ref || '';
+  session.pregnant = id.pregnant || ''; // clear on each new patient; not stored in patient record
+  session.followup = !!followup;
+  render();
+}
+
+// Load a SAVED visit back into the live questionnaire state (answers, drivers,
+// red flags) and bind the patient identity. Used by the Patient-records tab to
+// re-open a past session. showResults=true also runs calc() so the results
+// render immediately (and lastCalc is populated for the Clinician tab).
+function loadVisit(identity, visit, showResults) {
+  const id = identity || {}, v = visit || {};
+  answers = { ...(v.answers || {}) };
+  redflags = { ...(v.redflags || {}) };
+  // Re-hydrate extras onto a fresh blank so visits saved on an older schema
+  // (missing newer nested keys) still render every driver.
+  const saved = v.extras ? JSON.parse(JSON.stringify(v.extras)) : {};
+  extras = Object.assign(blankExtras(), saved);
+  extras.meds  = Object.assign(blankExtras().meds, saved.meds || {});
+  extras.dys   = Object.assign(blankExtras().dys,  saved.dys  || {});
+  extras.rome  = Object.assign(blankExtras().rome, saved.rome || {});
+  session.name = id.name || '';
+  session.age = id.age || '';
+  session.gender = id.gender || '';
+  session.ref = id.ref || '';
+  session.pregnant = '';
+  session.followup = !!v.followup;
+  loadedVisitId = v.id || null;  // save → update this record in-place
+  render();
+  if (showResults) calc();
+}
+
+// Clinician tab — detailed results + management plan for the current screen
+// (lastCalc), with a dedicated clinician print. Populated by running a
+// questionnaire or opening a saved visit (Patient records → View results).
+function renderClinician() {
+  const root = document.getElementById('mode-clinician');
+  if (!root) return;
+  root.innerHTML = '';
+  root.appendChild(el('div', { class: 'intro' },
+    '<b>Clinician workspace.</b> Detailed results and management plan for the current screen. ' +
+    'Run a questionnaire, or open a saved visit from Patient records (“View results”), to populate this view.'));
+
+  if (!lastCalc) {
+    root.appendChild(el('div', { class: 'card' },
+      '<div class="empty-note">🩺<br>No screen loaded yet.<br>' +
+      '<span class="muted">Complete a questionnaire or open a saved visit to see the clinician view and plan.</span></div>'));
+    return;
+  }
+  const c = lastCalc;
+  const { score, sv, conf, lens, rome, tri } = c;
+
+  // Identity + print header
+  const who = (session.name || '').trim() || (session.ref || '').trim() || 'Anonymous screen';
+  const meta = [];
+  if (session.age) meta.push('Age ' + esc(String(session.age)));
+  if (session.gender) meta.push(esc(session.gender));
+  if (session.ref) meta.push('Ref: ' + esc(session.ref));
+  if (session.pregnant === 'yes') meta.push('Pregnant');
+  meta.push(session.followup ? 'Follow-up' : 'Baseline');
+  const head = el('div', { class: 'card row', style: 'justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap' });
+  head.appendChild(el('div', {},
+    `<div style="font-weight:700;font-size:16px">👤 ${esc(who)}</div>
+     <div class="q-sub" style="margin:2px 0 0">${meta.join(' · ')}</div>`));
+  const printBtn = el('button', { class: 'btn btn-g', type: 'button' }, '🖨 Print clinician report');
+  printBtn.onclick = () => printSummary('clinician');
+  head.appendChild(printBtn);
+  root.appendChild(head);
+
+  // Hero score
+  const hero = el('div', { class: 'card' });
+  hero.appendChild(el('div', { class: 'hero' },
+    `<div><div class="big">${sv.index}%</div><div class="sub">GI Symptom Burden</div></div>
+     <div style="flex:1;min-width:160px"><span class="pill ${sv.cls}">${esc(sv.label)}</span>
+     <div style="font-size:12px;color:var(--inks);margin-top:8px;line-height:1.5">${esc(sv.desc)}</div>
+     <div class="conf-note">Confidence: <b>${esc(conf.level)}</b> · ${score.completeness}% complete</div></div>`));
+  root.appendChild(hero);
+
+  // Plan (triage + investigations always shown here) + risk matrix + full detail
+  root.appendChild(triageCard(tri, rome, true));
+  root.appendChild(riskMatrixCard(sv, lens));
+  root.appendChild(clinicianDetailCard(c));
+
+  // Longitudinal context if this patient has prior saved visits.
+  // If a saved visit is loaded, it's already in the DB — don't duplicate it.
+  const prior = priorVisits();
+  if (loadedVisitId) {
+    if (prior.length >= 2) root.appendChild(trendCard(prior, false));
+  } else {
+    if (prior.length >= 1) root.appendChild(trendCard(prior.concat([currentVisit()]), true));
+  }
+}
+
+function init(c) { nav = c || {}; }
+__e.init = init; __e.reset = reset; __e.render = render; __e.newVisitFor = newVisitFor;
+__e.loadVisit = loadVisit; __e.renderClinician = renderClinician; __e.hasResult = () => !!lastCalc;
+__e.clearPatient = clearPatient;
+return __e;
+};
+
+/* ============================================================================
+   ui-record.js — Patient Records tab. De-identified registry keyed on the
+   patient REFERENCE code (no names/PII). Per-patient visit history with a
+   recomputed progression (scores are always recomputed from raw answers via
+   trend.js, so the registry tracks the CURRENT model). Hosts Export backup /
+   Import-merge (the local-storage sync path). Clinician surface deferred.
+   ========================================================================== */
+__modules['ui-record.js'] = function(__e){
+const { buildTrend } = __req('trend.js');
+const { dysbiosisLens, modifiableFactors } = __req('scales.js');
+const { el, esc, fmtDate, toast, dialogConfirm, patientForm } = __req('util.js');
+const Store = __req('storage.js');
+
+let ctx;                                   // { goQuestionnaire(ref, followup) }
+let view = { mode: 'list', patientId: null };
+let q = '';                                // search query
+
+function init(appCtx) { ctx = appCtx; }
+function show() { render(); }              // called when the tab is opened
+function patientLabel(p) { return (p.name && String(p.name).trim()) || (p.ref && String(p.ref).trim()) || p.code || 'Anonymous'; }
+function patientMeta(p) {
+  const bits = [];
+  if (p.code) bits.push(esc(p.code));
+  if (p.age) bits.push('Age ' + esc(String(p.age)));
+  if (p.gender) bits.push(esc(p.gender));
+  if (p.ref) bits.push('Ref: ' + esc(p.ref));
+  return bits.join(' · ');
+}
+
+function render() {
+  const root = document.getElementById('mode-record');
+  if (!root) return;
+  root.innerHTML = '';
+  const db = Store.loadDB();
+  if (view.mode === 'detail') return renderDetail(root, db);
+  renderList(root, db);
+}
+
+function renderList(root, db) {
+  const bar = el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center' });
+  const search = el('input', { class: 'db-search', type: 'text', placeholder: 'Search by reference…', value: q });
+  search.oninput = () => { q = search.value; paint(db); };
+  bar.appendChild(search);
+  bar.appendChild(el('button', { class: 'btn btn-g', type: 'button', onclick: newPatient }, '+ New patient'));
+  bar.appendChild(el('button', { class: 'btn btn-gh', type: 'button', onclick: () => ctx.goQuestionnaire() }, 'Anonymous screen'));
+  bar.appendChild(el('button', { class: 'btn btn-gh', type: 'button', onclick: exportBackup }, 'Export backup'));
+  const imp = el('button', { class: 'btn btn-gh', type: 'button', onclick: () => fileInput.click() }, 'Import / merge');
+  const fileInput = el('input', { type: 'file', accept: 'application/json,.json', style: 'display:none' });
+  fileInput.onchange = () => importMerge(fileInput.files[0]);
+  bar.appendChild(imp); bar.appendChild(fileInput);
+  root.appendChild(bar);
+
+  root.appendChild(el('div', { class: 'db-grid', id: 'dbGrid' }));
+  paint(db);
+}
+
+// Capture a new patient's details, then start their (baseline) questionnaire.
+async function newPatient() {
+  const r = await patientForm({}, { title: 'New patient', okLabel: 'Start screening →' });
+  if (!r) return;
+  ctx.goQuestionnaire(r, false);
+}
+
+function paint(db) {
+  const grid = document.getElementById('dbGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const needle = q.trim().toLowerCase();
+  const list = (db.patients || []).filter(p => !needle ||
+    patientLabel(p).toLowerCase().includes(needle) ||
+    (p.code && p.code.toLowerCase().includes(needle)) ||
+    (p.ref && String(p.ref).toLowerCase().includes(needle)));
+  if (!list.length) {
+    grid.appendChild(el('div', { class: 'db-empty', style: 'grid-column:1/-1' },
+      (db.patients || []).length ? 'No patients match that search.' : '🌱<br>No saved responses yet.<br><span class="muted">Complete a questionnaire and Save to build a record.</span>'));
+    return;
+  }
+  list.forEach(p => {
+    const t = buildTrend(p.visits || []);
+    const latest = t.latest;
+    const delta = latest && latest.delta;
+    const deltaHtml = delta
+      ? `<span class="${delta.dir === 'improved' ? 'delta-down' : delta.dir === 'worsened' ? 'delta-up' : 'delta-flat'}" style="font-weight:700;font-size:12px">${delta.dir === 'improved' ? '▼' : delta.dir === 'worsened' ? '▲' : '='} ${Math.abs(delta.delta)}</span>`
+      : 'Severity';
+    const card = el('div', { class: 'pt-card' });
+    card.appendChild(el('button', { class: 'pt-del', type: 'button', title: 'Delete', onclick: e => { e.stopPropagation(); deletePatient(p); } }, '✕'));
+    card.appendChild(el('div', { class: 'pt-top' },
+      `<div class="pt-av">${esc(patientLabel(p).slice(0, 1).toUpperCase())}</div>
+       <div><div class="pt-name">${esc(patientLabel(p))}</div>
+       <div class="pt-meta">${patientMeta(p) || ((p.visits || []).length + ' visit' + ((p.visits || []).length === 1 ? '' : 's'))}</div></div>`));
+    card.appendChild(el('div', { class: 'pt-stats' },
+      `<div class="pt-stat"><div class="v">${latest ? latest.index + '%' : '—'}</div><div class="l">Latest index</div></div>
+       <div class="pt-stat"><div class="v" style="font-size:12px">${latest ? esc(latest.band) : '—'}</div><div class="l">${deltaHtml}</div></div>`));
+    card.onclick = () => { view = { mode: 'detail', patientId: p.id }; render(); };
+    grid.appendChild(card);
+  });
+}
+
+function renderDetail(root, db) {
+  const p = (db.patients || []).find(x => x.id === view.patientId);
+  if (!p) { view = { mode: 'list', patientId: null }; return render(); }
+
+  const head = el('div', { class: 'row', style: 'align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px' });
+  head.appendChild(el('button', { class: 'back-btn', type: 'button', onclick: () => { view = { mode: 'list', patientId: null }; render(); } }, '← All records'));
+  const meta = patientMeta(p);
+  head.appendChild(el('div', { style: 'flex:1' },
+    `<h2 style="margin:0">${esc(patientLabel(p))}</h2>${meta ? `<div class="muted" style="font-size:12px">${meta}</div>` : ''}`));
+  const identity = { name: p.name, age: p.age, gender: p.gender, ref: p.ref };
+  head.appendChild(el('button', { class: 'btn btn-gh', type: 'button', onclick: () => editPatient(p) }, '✎ Edit'));
+  head.appendChild(el('button', { class: 'btn btn-o', type: 'button', onclick: () => ctx.goQuestionnaire(identity, true) }, '+ New follow-up'));
+  root.appendChild(head);
+
+  const visits = (p.visits || []).slice().sort((a, b) => (a.date || 0) - (b.date || 0));
+  if (!visits.length) { root.appendChild(el('div', { class: 'db-empty' }, 'No visits for this record.')); return; }
+
+  root.appendChild(progressionCard(visits));
+
+  const t = buildTrend(visits);
+  // newest first
+  t.points.slice().reverse().forEach((pt, i) => {
+    const realIdx = t.points.length - i;
+    const sevCls = bandCls(pt.band);
+    const lens = dysbiosisLens((visits.find(v => v.id === pt.id) || {}).extras || {});
+    const card = el('div', { class: `visit-card${i === 0 ? ' latest' : ''}` });
+    card.appendChild(el('div', { class: 'visit-num' }, String(realIdx)));
+    card.appendChild(el('div', { class: 'visit-info' },
+      `<div class="visit-date">${esc(fmtDate(pt.date))}${pt.followup ? ' <span class="opt-tag">follow-up</span>' : ' <span class="opt-tag">baseline</span>'}</div>
+       <div class="visit-sub">${pt.completeness}% complete${lens.count ? ' · ' + lens.count + ' microbiome signal' + (lens.count === 1 ? '' : 's') : ''}</div>`));
+    card.appendChild(el('div', { class: 'visit-score' }, `<div class="v">${pt.index}%</div><div class="l">index</div>`));
+    card.appendChild(el('span', { class: 'pill ' + sevCls }, esc(pt.band)));
+    if (pt.delta) card.appendChild(el('div', { style: `font-weight:700;color:${pt.delta.color}` }, esc(pt.delta.label)));
+    const vrec = visits.find(v => v.id === pt.id);
+    const identity = { name: p.name, age: p.age, gender: p.gender, ref: p.ref };
+    const acts = el('div', { class: 'row', style: 'gap:6px;flex-wrap:wrap' });
+    acts.appendChild(el('button', { class: 'btn btn-o', type: 'button', title: 'Load answers + show results',
+      onclick: () => ctx.openVisit(identity, vrec, true) }, '📊 View results'));
+    acts.appendChild(el('button', { class: 'btn btn-gh', type: 'button', title: 'Load answers into the questionnaire to review or edit',
+      onclick: () => ctx.openVisit(identity, vrec, false) }, '📋 Load'));
+    acts.appendChild(el('button', { class: 'btn btn-gh', type: 'button', style: 'color:var(--re)', onclick: () => deleteVisit(p, vrec) }, 'Delete'));
+    card.appendChild(acts);
+    root.appendChild(card);
+  });
+}
+
+// Index-over-visits sparkline + first→latest delta (lower index = improvement).
+function progressionCard(visits) {
+  const t = buildTrend(visits);
+  const pts = t.points;
+  const card = el('div', { class: 'card' });
+  card.appendChild(el('h2', {}, 'Progression'));
+  card.appendChild(el('div', { class: 'q-sub' }, 'GI Symptom Burden across visits (lower is better).'));
+  if (pts.length >= 2) {
+    const first = pts[0].index, last = pts[pts.length - 1].index, d = last - first;
+    const dir = d < 0 ? 'improved' : d > 0 ? 'worsened' : 'stable';
+    card.appendChild(el('div', { class: 'row', style: 'gap:10px;margin:6px 0' },
+      `<span class="pill" style="background:${d < 0 ? '#0F6E56' : d > 0 ? '#A32D2D' : '#999'};color:#fff">${dir === 'stable' ? 'No net change' : (d < 0 ? '▼' : '▲') + ' ' + Math.abs(d) + ' pts'}</span>
+       <span style="font-size:13px;color:var(--inks)">${first}% → ${last}% across ${pts.length} visits</span>`));
+  }
+  // SVG sparkline
+  const W = 600, H = 120, pad = 24, n = pts.length;
+  const x = (i) => pad + (n === 1 ? (W - 2 * pad) / 2 : i * (W - 2 * pad) / (n - 1));
+  const y = (v) => H - pad - (v / 100) * (H - 2 * pad);
+  const line = pts.map((p, i) => `${x(i).toFixed(1)},${y(p.index).toFixed(1)}`).join(' ');
+  const dots = pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.index).toFixed(1)}" r="3.5" fill="#0F6E56"/><text x="${x(i).toFixed(1)}" y="${(y(p.index) - 8).toFixed(1)}" font-size="10" fill="#444" text-anchor="middle">${p.index}</text>`).join('');
+  card.appendChild(el('div', { style: 'overflow-x:auto' },
+    `<svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:320px;height:auto">
+       <line x1="${pad}" y1="${H - pad}" x2="${W - pad}" y2="${H - pad}" stroke="#E1E5EB"/>
+       ${n >= 2 ? `<polyline points="${line}" fill="none" stroke="#0F6E56" stroke-width="2"/>` : ''}
+       ${dots}
+     </svg>`));
+  return card;
+}
+
+function bandCls(label) {
+  return label === 'Severe' ? 'sev-sev' : label === 'Significant' ? 'sev-sig' : label === 'Mild–Moderate' ? 'sev-mod' : 'sev-min';
+}
+
+async function deleteVisit(p, v) {
+  if (!v) return;
+  if (!(await dialogConfirm(`Delete the visit from ${fmtDate(v.date)}? This cannot be undone.`, { title: 'Delete visit', okLabel: 'Delete', danger: true }))) return;
+  const db = Store.loadDB();
+  const pat = db.patients.find(x => x.id === p.id);
+  if (pat) pat.visits = (pat.visits || []).filter(x => x.id !== v.id);
+  if (pat && !pat.visits.length) db.patients = db.patients.filter(x => x.id !== p.id), view = { mode: 'list', patientId: null };
+  Store.saveDB(db); toast('Visit deleted'); render();
+}
+
+async function deletePatient(p) {
+  if (!(await dialogConfirm(`Delete record "${patientLabel(p)}" and all its visits? This cannot be undone.`, { title: 'Delete record', okLabel: 'Delete', danger: true }))) return;
+  const db = Store.loadDB();
+  db.patients = (db.patients || []).filter(x => x.id !== p.id);
+  Store.saveDB(db); toast('Record deleted'); render();
+}
+
+// Edit a stored patient's identity in place (name/age/gender/ref). Pregnancy is
+// a per-visit applicability flag, not a stored patient attribute, so it's omitted.
+async function editPatient(p) {
+  const r = await patientForm({ name: p.name, age: p.age, gender: p.gender, ref: p.ref },
+    { title: 'Edit patient details', okLabel: 'Save' });
+  if (!r) return;
+  const db = Store.loadDB();
+  const tgt = (db.patients || []).find(x => x.id === p.id);
+  if (!tgt) return;
+  tgt.name = r.name; tgt.age = r.age; tgt.gender = r.gender; tgt.ref = r.ref || tgt.ref;
+  Store.saveDB(db); toast('Details updated'); render();
+}
+
+function exportBackup() {
+  const json = Store.exportDB(Store.loadDB(), 'gut-screen');
+  const blob = new Blob([json], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `gut-screen-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('Backup exported');
+}
+
+function importMerge(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let res;
+    try { res = Store.mergeImport(Store.loadDB(), reader.result); }
+    catch (e) { toast('Import failed — not a valid backup file'); return; }
+    Store.saveDB(res.db);
+    toast(`Merged: +${res.added.patients} record(s), +${res.added.visits} visit(s)`);
+    render();
+  };
+  reader.readAsText(file);
+}
+
+__e.init = init; __e.show = show;
+return __e;
+};
+
+/* ============================================================================
+   app.js — controller. Two surfaces: the patient questionnaire and the
+   Patient-records registry. Clinician surface deferred to a later phase.
+   ========================================================================== */
+__modules['app.js'] = function(__e){
+const Patient = __req('ui-patient.js');
+const Record = __req('ui-record.js');
+const Store = __req('storage.js');
+const { $, $$ } = __req('util.js');
+
+function setMode(name) {
+  $$('.mode').forEach(s => s.classList.toggle('show', s.id === 'mode-' + name));
+  $$('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === name));
+  if (name === 'record') Record.show();
+  if (name === 'clinician') Patient.renderClinician();
+}
+
+function boot() {
+  Record.init({
+    // Switch to the questionnaire, optionally pre-bound to a patient identity + follow-up.
+    goQuestionnaire: (identity, followup) => { Patient.newVisitFor(identity, followup); setMode('patient'); window.scrollTo({ top: 0 }); },
+    // Re-open a SAVED visit. showResults=true runs the results (and lands on the
+    // questionnaire with results below); false just loads the answers for review.
+    openVisit: (identity, visit, showResults) => { Patient.loadVisit(identity, visit, showResults); setMode('patient'); window.scrollTo({ top: 0 }); },
+  });
+  // Let the questionnaire banner jump to the records tab (to pick/manage patients).
+  Patient.init({ goRecords: () => setMode('record') });
+  Patient.reset(); Patient.render();
+  const sw = document.getElementById('modeSwitch');
+  if (sw) sw.addEventListener('click', e => { const b = e.target.closest('.mode-btn'); if (b) setMode(b.dataset.mode); });
+  const clr = document.getElementById('activeClear');
+  if (clr) clr.addEventListener('click', () => { Patient.clearPatient(); setMode('patient'); });
+}
+boot();
+// Pilot-data hook: until the clinician/database surface lands, a researcher can
+// pull the de-identified item-level CSV from the console via __gutPilotCSV().
+if (typeof window !== 'undefined') window.__gutPilotCSV = () => Store.pilotExportCSV(Store.loadDB());
+return __e;
+};
+
+__req('app.js'); // boot
+</script>
+</body>
+</html>
