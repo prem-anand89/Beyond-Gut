@@ -383,6 +383,14 @@ const SECTIONS = [
   // New Impact axis (§7d) — functional / quality-of-life, modeled on Rome IV's own
   // impact category. Standalone; also drives an independent Tier-2 escalation.
   { id: 'IMP', label: 'IMP', full: 'Functional / quality-of-life impact', role: 'standalone', axis: 'impact',      color: '#6B7280', bg: '#F1F2F4' },
+  // ── Targeted symptom sections (adaptive reveal) ──────────────────────────────
+  // conditional:true → hidden by default, revealed by targetedReveal() when the
+  // GSRS core points that way (or via the manual clinician toggle). All items are
+  // optional, so they never enter the Index/mandatory-count/progress. Feed
+  // patterns + triage + the clinician Domain breakdown only.
+  { id: 'AR', label: 'AR', full: 'Bowel control & evacuation', role: 'standalone', axis: 'pelvic',    color: '#7A4A8C', bg: '#F3ECF7', conditional: true },
+  { id: 'UG', label: 'UG', full: 'Upper-GI / dyspepsia',       role: 'standalone', axis: 'symptom',   color: '#0F6E56', bg: '#E1F5EE', conditional: true },
+  { id: 'SY', label: 'SY', full: 'Systemic / autonomic',       role: 'standalone', axis: 'autonomic', color: '#117A8B', bg: '#E2F2F4', conditional: true },
 ];
 
 // ── QUESTIONS — co-design output. ───────────────────────────────────────────
@@ -489,7 +497,39 @@ const QUESTIONS = [
   { id: 'imp_food',   section: 'IMP', patientText: 'Avoiding or restricting foods because of your symptoms',
     patientSub: 'Cutting out foods or eating less than you would like to' },
   { id: 'imp_global', section: 'IMP', patientText: 'Overall effect on your day-to-day quality of life' },
+
+  // ── AR — Bowel control & evacuation (pelvic floor / anorectal) — adaptive ──
+  // All optional: revealed only when the GSRS constipation/urgency picture warrants
+  // it. Drive the pelvic_floor pattern → Tier-2 pelvic-floor physiotherapy candidacy.
+  { id: 'ar_incontinence', section: 'AR', optional: true, patientText: 'Leakage of stool, or trouble controlling wind or stool' },
+  { id: 'ar_straining',    section: 'AR', optional: true, patientText: 'Straining to pass stool' },
+  { id: 'ar_blockage',     section: 'AR', optional: true, patientText: 'A sensation of blockage at the back passage' },
+  { id: 'ar_maneuvers',    section: 'AR', optional: true, patientText: 'Needing to press around or below the back passage to empty',
+    patientSub: 'Using a finger or pressing to help pass stool' },
+
+  // ── UG — Upper-GI / dyspepsia — adaptive ──
+  { id: 'ug_earlysat', section: 'UG', optional: true, patientText: 'Feeling full very quickly when eating' },
+  { id: 'ug_fullness', section: 'UG', optional: true, patientText: 'Uncomfortable fullness after normal-sized meals' },
+
+  // ── SY — Systemic / autonomic — adaptive ──
+  { id: 'sy_orthostatic', section: 'SY', optional: true, patientText: 'Light-headed or dizzy when standing up' },
+  { id: 'sy_palpitations', section: 'SY', optional: true, patientText: 'Heart racing or palpitations' },
+  { id: 'gy_cyclical',     section: 'SY', optional: true, femaleOnly: true,
+    patientText: 'Gut symptoms that flare with your menstrual cycle' },
 ];
+
+// Adaptive reveal — pure predicate: which conditional symptom sections to show,
+// based on the GSRS core answers. Kept here (data/logic) so it is unit-testable
+// and the UI just toggles visibility from it.
+function targetedReveal(answers) {
+  const a = answers || {};
+  const hi = (id) => typeof a[id] === 'number' && a[id] >= 2;
+  return {
+    AR: hi('gsrs_constip') || hi('gsrs_hard') || hi('gsrs_incomplete') || hi('gsrs_urgency'),
+    UG: hi('gsrs_heartburn') || hi('gsrs_regurg') || hi('gsrs_bloating') || hi('gsrs_burping'),
+    SY: hi('bg_fatigue') || hi('bg_brainfog'),
+  };
+}
 
 // ── Derived index — the ONLY question index in the app. ─────────────────────
 const QID = Object.freeze(QUESTIONS.reduce((m, q, i) => { m[q.id] = i; return m; }, {}));
@@ -506,6 +546,7 @@ function questionsOf(sectionId) { return QUESTIONS.filter(q => q.section === sec
 
 __e.SCHEMA_VERSION = SCHEMA_VERSION; __e.SECTIONS = SECTIONS; __e.QUESTIONS = QUESTIONS;
 __e.QID = QID; __e.QTOTAL = QTOTAL; __e.itemMax = itemMax; __e.sectionMax = sectionMax; __e.questionsOf = questionsOf;
+__e.targetedReveal = targetedReveal;
 return __e;
 };
 
@@ -673,16 +714,57 @@ function surgicalFlags(extras) {
 const KNOWN_CONDITIONS = [
   { id: 'celiac',     label: 'Coeliac disease',                refer: true },
   { id: 'ibd',        label: 'IBD (Crohn’s or ulcerative colitis)', refer: true },
+  { id: 'ibs',        label: 'IBS' },
+  { id: 'gord',       label: 'GORD / reflux disease' },
+  { id: 'sibo',       label: 'SIBO' },
+  { id: 'divert',     label: 'Diverticular disease' },
+  { id: 'gallstones', label: 'Gallstones' },
+  { id: 'pancreas',   label: 'Pancreatitis / pancreatic insufficiency' },
+  { id: 'liver',      label: 'Liver disease / fatty liver' },
+  { id: 'hpylori',    label: 'H. pylori' },
   { id: 'thyroid',    label: 'Thyroid disorder' },
   { id: 'diabetes',   label: 'Diabetes' },
+  { id: 'pcos',       label: 'PCOS' },
   { id: 'endo',       label: 'Endometriosis' },
   { id: 'lactose',    label: 'Lactose intolerance' },
+  { id: 'foodallergy',label: 'Food allergy / intolerance' },
+  { id: 'mood',       label: 'Diagnosed anxiety or depression' },
 ];
 function knownConditions(extras) {
   const ids = new Set(((extras || {}).conditions) || []);
   const list = [], referList = [];
   KNOWN_CONDITIONS.forEach(c => { if (ids.has(c.id)) { list.push(c.label); if (c.refer) referList.push(c.label); } });
   return { list, referList, count: list.length };
+}
+
+// Medication CONFOUNDERS — drugs that commonly cause/aggravate GI symptoms and so
+// confound interpretation. Kept SEPARATE from DISRUPTORS (the microbiome set that
+// feeds Disruption Load): these are symptom-cause context, not microbiome signals.
+const MED_CONFOUNDERS = [
+  { id: 'glp1',    label: 'GLP-1 agonist (e.g. Ozempic)', effect: 'nausea, fullness, constipation, slowed emptying' },
+  { id: 'opioid',  label: 'Opioid painkiller',            effect: 'constipation' },
+  { id: 'ssri',    label: 'SSRI / SNRI antidepressant',   effect: 'altered motility / nausea' },
+  { id: 'metformin', label: 'Metformin',                  effect: 'diarrhoea, cramping' },
+  { id: 'laxative', label: 'Regular laxative',            effect: 'loose stool / dependence' },
+  { id: 'iron',    label: 'Iron supplement',              effect: 'constipation, dark stool' },
+  { id: 'ocp',     label: 'Oral contraceptive / HRT',     effect: 'bloating' },
+];
+function medConfounders(extras) {
+  const ids = new Set(((extras || {}).medsConfounders) || []);
+  const list = MED_CONFOUNDERS.filter(m => ids.has(m.id));
+  return { list, count: list.length };
+}
+
+// Family history — first-degree relative. Quick chip set, surfaced to the clinician.
+const FAMILY_HISTORY = [
+  { id: 'fh_celiac', label: 'Coeliac disease' },
+  { id: 'fh_ibd',    label: 'IBD' },
+  { id: 'fh_cancer', label: 'Bowel cancer' },
+];
+function familyHistory(extras) {
+  const ids = new Set(((extras || {}).familyHistory) || []);
+  const list = FAMILY_HISTORY.filter(f => ids.has(f.id)).map(f => f.label);
+  return { list, count: list.length };
 }
 
 // Returns the count of dysbiosis-correlate signals present + their labels.
@@ -787,6 +869,8 @@ __e.FOOD_TRIGGERS = FOOD_TRIGGERS; __e.ABX_COURSES = ABX_COURSES; __e.GAS_LEVELS
 __e.POSTINF_OPTS = POSTINF_OPTS; __e.PARADOX_OPTS = PARADOX_OPTS; __e.dysbiosisLens = dysbiosisLens;
 __e.SURGERIES = SURGERIES; __e.surgicalFlags = surgicalFlags;
 __e.KNOWN_CONDITIONS = KNOWN_CONDITIONS; __e.knownConditions = knownConditions;
+__e.MED_CONFOUNDERS = MED_CONFOUNDERS; __e.medConfounders = medConfounders;
+__e.FAMILY_HISTORY = FAMILY_HISTORY; __e.familyHistory = familyHistory;
 __e.gutHealthIndex = gutHealthIndex; __e.GHI_WEIGHTS = GHI_WEIGHTS;
 __e.TRIM_PLAN = TRIM_PLAN;
 __e.BRISTOL_TYPES = BRISTOL_TYPES; __e.PAIN_REGIONS = PAIN_REGIONS; __e.painBand = painBand; __e.modifiableFactors = modifiableFactors;
@@ -1283,6 +1367,32 @@ const PATTERNS = [
     },
   },
   {
+    id: 'pelvic_floor', axis: 'pelvic',
+    label: 'Pelvic-floor / anorectal pattern',
+    desc: 'Trouble with stool control or evacuation — leakage, straining, a blockage sensation, or needing to assist manually. Pelvic-floor physiotherapy assessment is often the right next step.',
+    eval: (s, ex, a) => {
+      const incont   = ge(av(a, 'ar_incontinence'), 2);
+      const strain   = ge(av(a, 'ar_straining'), 2);
+      const blockage = ge(av(a, 'ar_blockage'), 2);
+      const maneuv   = ge(av(a, 'ar_maneuvers'), 1);
+      const signals = [incont, strain, blockage, maneuv];
+      return { fires: incont.t || (strain.t && (blockage.t || maneuv.t)), signals };
+    },
+  },
+  {
+    id: 'functional_dyspepsia', axis: 'symptom',
+    label: 'Functional dyspepsia pattern',
+    desc: 'Early fullness and uncomfortable post-meal fullness (a postprandial-distress picture), often with reflux or indigestion. Meal patterns, an H. pylori test, and a trial of acid suppression are worth discussing with your clinician.',
+    eval: (s, ex, a) => {
+      const earlysat = ge(av(a, 'ug_earlysat'), 2);
+      const fullness = ge(av(a, 'ug_fullness'), 2);
+      const reflux   = ge(clu(s, 'Reflux'), 0.3);      // coverage context
+      const indig    = ge(clu(s, 'Indigestion'), 0.3); // coverage context
+      const signals = [earlysat, fullness, reflux, indig];
+      return { fires: earlysat.t || fullness.t, signals };
+    },
+  },
+  {
     id: 'lifestyle_modifiable', axis: 'lifestyle', // action-lever, not a clinical axis
     label: 'Lifestyle-driven modifiable pattern',
     desc: 'Several modifiable factors (diet quality, alcohol, activity) point to high-yield behaviour changes worth focusing on first.',
@@ -1389,6 +1499,9 @@ function triage(score, patterns, firedFlags, dys, opts) {
   if (pain != null && pain >= 0.5) add(2, 'Prominent abdominal-pain cluster', 'symptom');
   if (o.adhesionSurgery) add(2, 'Prior abdominal/pelvic surgery (adhesions — visceral / fascial manual-therapy candidacy)', 'symptom');
   if (o.romeResult && o.romeResult.criteriaMet) add(2, `Meets Rome IV-informed criteria for ${o.romeResult.subtype}`, 'symptom');
+  // Targeted-symptom patterns (adaptive reveal):
+  if (has('pelvic_floor')) add(2, 'Pelvic-floor / anorectal dysfunction — pelvic-floor physiotherapy candidacy', 'pelvic');
+  if (has('functional_dyspepsia')) add(2, 'Functional dyspepsia pattern (early satiety / post-meal fullness)', 'symptom');
   // Orphan pattern, now wired: gut-brain is a psychosocial-axis finding where
   // gut-directed / clinician-led therapy is the appropriate lever.
   if (has('gut_brain')) add(2, 'Gut-brain pattern (psychosocial axis) — gut-directed therapy may help', 'psychosocial');
@@ -1429,6 +1542,14 @@ function triage(score, patterns, firedFlags, dys, opts) {
   result.conditionNote = (o.knownConditions && o.knownConditions.referList && o.knownConditions.referList.length)
     ? `Reported condition(s) to factor into interpretation: ${o.knownConditions.referList.join(', ')}.`
     : null;
+  // Medication confounders — drugs that can cause/aggravate the reported symptoms.
+  result.medNote = (o.medConfounders && o.medConfounders.length)
+    ? `Medication(s) that can cause/aggravate GI symptoms — interpret with this in mind: ${o.medConfounders.map(m => m.label).join(', ')}.`
+    : null;
+  // Autonomic overlap (orthostatic / palpitations alongside a gut-brain picture).
+  result.autonomicNote = o.autonomicFlag
+    ? 'Autonomic symptoms reported (light-headedness on standing / palpitations) — consider gut-brain / autonomic overlap.'
+    : null;
   // Low data confidence — the core GI section wasn't answered.
   result.coreUnknown = !!(score && score.coreUnknown);
   if (result.coreUnknown) result.reasons.push({ text: 'Note: the core GI section was not completed, so this triage is provisional.', axis: 'data' });
@@ -1444,6 +1565,8 @@ function triage(score, patterns, firedFlags, dys, opts) {
     mixed_bowel: ['Low-FODMAP dietitian referral', 'Visceral/pelvic manual therapy assessment', 'Gut-brain axis psychological assessment'],
     gut_brain: ['Consider PHQ-9 / GAD-7 if PSS-4 ≥ 10', 'Gut-directed hypnotherapy or CBT referral', 'Mind-body approach to symptom management'],
     inflammatory_immune: ['Coeliac serology (anti-tTG IgA + total IgA) if not done', 'Clinician-guided structured elimination trial', 'Low-histamine / DAO discussion if a histamine pattern fits'],
+    pelvic_floor: ['Anorectal / pelvic-floor examination', 'Pelvic-floor physiotherapy referral', 'Bowel / defecation diary'],
+    functional_dyspepsia: ['H. pylori test (stool antigen or urea breath test)', 'Trial of acid suppression (4–8 weeks)', 'Review meal pattern, caffeine, alcohol, NSAID use'],
   };
   const RI = {
     'IBS-C': ['Low-FODMAP trial with dietitian', 'Pelvic floor physiotherapy assessment', 'Soluble fibre (ispaghula husk)'],
@@ -1683,11 +1806,12 @@ return __e;
    runs before any domain is co-designed.
    ========================================================================== */
 __modules['ui-patient.js'] = function(__e){
-const { SECTIONS, QUESTIONS, questionsOf, sectionMax, itemMax } = __req('schema.js');
+const { SECTIONS, QUESTIONS, questionsOf, sectionMax, itemMax, targetedReveal } = __req('schema.js');
 const { scaleFor, RECALL_NOTE, PSS4_ITEMS, PSS4_ANCHORS, PSS4_REVERSED, pss4Score, BRISTOL_TYPES, PAIN_REGIONS, modifiableFactors,
         DISRUPTORS, ALCOHOL_LEVELS, ACTIVITY_LEVELS, SLEEP_ITEMS, SLEEP_ANCHORS,
         FOOD_TRIGGERS, ABX_COURSES, GAS_LEVELS, STOOLVAR_LEVELS, POSTINF_OPTS, PARADOX_OPTS, dysbiosisLens,
-        SURGERIES, surgicalFlags, KNOWN_CONDITIONS, knownConditions } = __req('scales.js');
+        SURGERIES, surgicalFlags, KNOWN_CONDITIONS, knownConditions,
+        MED_CONFOUNDERS, medConfounders, FAMILY_HISTORY, familyHistory } = __req('scales.js');
 const { computeScores, scoreConfidence, axisProfile, headlineOutputs } = __req('scoring.js');
 const { RED_FLAGS, anyRedFlag, firedRedFlags, RED_FLAG_BANNER } = __req('redflags.js');
 const { el, esc, toast, patientForm } = __req('util.js');
@@ -1711,6 +1835,8 @@ const blankExtras = () => ({
   surgeries: [],                     // surgical history (id list) — VM/fascial + microbiome
   surgeryOther: '',                  // free-text "Other" — stored, not scored
   conditions: [],                    // §7a known diagnosed/suspected conditions (id list) — context, not scored
+  medsConfounders: [],               // medication confounders (id list) — symptom-cause context, not scored
+  familyHistory: [],                 // first-degree family history (id list) — context, not scored
   medsOther: '',                     // §7c other medications free-text — stored, not scored
   rome: { painFreq: null, onset: null, rm_assoc_defecation: false, rm_assoc_freqchange: false, rm_assoc_formchange: false },
 });
@@ -2081,8 +2207,10 @@ function render() {
   // diagnosed/suspected conditions, surgical history, and current medications.
   root.appendChild(el('div', { class: 'grp-label', style: 'margin:6px 2px 2px' }, 'History'));
   root.appendChild(conditionsCard());
+  root.appendChild(familyHistoryCard());
   root.appendChild(surgicalCard());
   root.appendChild(medsCard());
+  root.appendChild(medConfoundersCard());
 
   if (!SECTIONS.length || !QUESTIONS.length) {
     root.appendChild(el('div', { class: 'card' },
@@ -2091,16 +2219,12 @@ function render() {
     return;
   }
 
-  SECTIONS.forEach(sec => {
-    const card = el('div', { class: 'sec-card' });
-    card.appendChild(el('div', { class: 'sec-head', style: `background:${sec.color || '#0F6E56'}` },
-      `${esc(sec.full || sec.label)} <span style="opacity:.8;font-weight:500">${questionsOf(sec.id).length} items</span>`));
-    const body = el('div', { class: 'sec-body' });
-    if (!sec.noRecall) body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, esc(recallNote())));
-    questionsOf(sec.id).forEach(q => body.appendChild(questionRow(q)));
-    card.appendChild(body);
-    root.appendChild(card);
-  });
+  // Always-on symptom domains (conditional ones are revealed adaptively below).
+  SECTIONS.filter(sec => !sec.conditional).forEach(sec => root.appendChild(sectionCard(sec)));
+
+  // Targeted symptoms — hidden until the GI core warrants them (targetedReveal),
+  // or via the manual clinician toggle. Placed right after the symptom domains.
+  root.appendChild(targetedSymptomsArea());
 
   // Modifiable drivers (not part of the Index; stored for patterns/strains).
   // (Conditions / surgeries / medications moved up to the History block above.)
@@ -2119,6 +2243,57 @@ function render() {
   root.appendChild(el('div', { id: 'patient-results' }));
   updateIdentityChip();
   updateProgress();
+  updateAdaptive();
+}
+
+// One section card (head + items). `femaleOnly` items are shown only when the
+// recorded gender is Female. Reused by the main loop and the adaptive area.
+function sectionCard(sec) {
+  const card = el('div', { class: 'sec-card' });
+  const items = questionsOf(sec.id).filter(q => !q.femaleOnly || session.gender === 'Female');
+  card.appendChild(el('div', { class: 'sec-head', style: `background:${sec.color || '#0F6E56'}` },
+    `${esc(sec.full || sec.label)} <span style="opacity:.8;font-weight:500">${items.length} items</span>`));
+  const body = el('div', { class: 'sec-body' });
+  if (!sec.noRecall) body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, esc(recallNote())));
+  items.forEach(q => body.appendChild(questionRow(q)));
+  card.appendChild(body);
+  return card;
+}
+
+// Adaptive targeted-symptom area: a manual toggle + one hidden holder per
+// conditional section. updateAdaptive() decides which holders are visible.
+function targetedSymptomsArea() {
+  const wrap = el('div', { id: 'targeted-wrap' });
+  wrap.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Targeted symptoms (shown when relevant)'));
+  const toggle = el('button', { class: 'btn btn-gh', type: 'button', id: 'targetedToggle', style: 'margin:0 0 8px' },
+    '+ Show all targeted symptom questions');
+  toggle.onclick = () => {
+    const on = wrap.dataset.manual === '1';
+    wrap.dataset.manual = on ? '' : '1';
+    toggle.textContent = on ? '+ Show all targeted symptom questions' : '− Hide targeted symptom questions';
+    updateAdaptive();
+  };
+  wrap.appendChild(toggle);
+  SECTIONS.filter(s => s.conditional).forEach(sec => {
+    const holder = el('div', { id: 'reveal-' + sec.id, style: 'display:none' });
+    holder.appendChild(sectionCard(sec));
+    wrap.appendChild(holder);
+  });
+  return wrap;
+}
+
+// Show a conditional section when its targetedReveal trigger fires OR the manual
+// toggle is on. Hidden sections keep any answers already given (they still feed
+// patterns/triage), but don't clutter the form.
+function updateAdaptive() {
+  const wrap = document.getElementById('targeted-wrap');
+  if (!wrap) return;
+  const manual = wrap.dataset.manual === '1';
+  const rev = targetedReveal(answers);
+  SECTIONS.filter(s => s.conditional).forEach(sec => {
+    const holder = document.getElementById('reveal-' + sec.id);
+    if (holder) holder.style.display = (manual || rev[sec.id]) ? 'block' : 'none';
+  });
 }
 
 // Live completion progress over the MANDATORY questions only (optional items
@@ -2265,6 +2440,35 @@ function conditionsCard() {
   chips.appendChild(noneBtn);
   body.appendChild(chips); card.appendChild(body);
   return card;
+}
+
+// Generic multi-select chip card (no "none" toggle), backed by extras[listKey].
+// Used for family history and medication confounders.
+function chipMultiCard(title, sub, bg, items, listKey) {
+  const card = el('div', { class: 'sec-card' });
+  card.appendChild(el('div', { class: 'sec-head', style: `background:${bg}` }, esc(title)));
+  const body = el('div', { class: 'sec-body' });
+  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, esc(sub)));
+  const chips = el('div', { class: 'chips' });
+  const list = () => extras[listKey] || (extras[listKey] = []);
+  items.forEach(it => {
+    const b = el('button', { class: `chip-opt${list().includes(it.id) ? ' sel' : ''}`, type: 'button',
+      title: it.effect ? `Can cause: ${it.effect}` : '' }, esc(it.label));
+    b.onclick = () => {
+      const arr = list(); const i = arr.indexOf(it.id);
+      if (i >= 0) arr.splice(i, 1); else arr.push(it.id);
+      b.classList.toggle('sel');
+    };
+    chips.appendChild(b);
+  });
+  body.appendChild(chips); card.appendChild(body);
+  return card;
+}
+function familyHistoryCard() {
+  return chipMultiCard('Family history', 'A first-degree relative with any of these (optional).', '#185FA5', FAMILY_HISTORY, 'familyHistory');
+}
+function medConfoundersCard() {
+  return chipMultiCard('Medications that can affect the gut', 'Current medications known to cause or worsen gut symptoms (optional, not scored).', '#7A6A1E', MED_CONFOUNDERS, 'medsConfounders');
 }
 
 // Generic 0–3 segmented row used by the diet/lifestyle drivers.
@@ -2474,6 +2678,7 @@ function questionRow(q) {
       b.classList.add('sel');
       if (naBtn) naBtn.classList.remove('sel');
       updateProgress();
+      updateAdaptive();
     };
     opts.appendChild(b);
   });
@@ -2518,6 +2723,10 @@ function computeAll() {
   const profile = axisProfile(score, driverExtras, lens);
   const heads = headlineOutputs(score, driverExtras, lens);
   const conditions = knownConditions(extras);
+  const meds = medConfounders(extras);
+  const famhx = familyHistory(extras);
+  const autonomicFlag = (typeof answers.sy_orthostatic === 'number' && answers.sy_orthostatic >= 2)
+    || (typeof answers.sy_palpitations === 'number' && answers.sy_palpitations >= 2);
   // The Dysbiosis Correlate Load (inferred signals only) — the count triage and
   // the Symptom×Microbiome matrix should read, NOT the old merged lens (which
   // also folded in objective exposure history like antibiotics / surgery).
@@ -2530,8 +2739,10 @@ function computeAll() {
     romeResult: rome,
     impactBand: profile.impact.band,
     knownConditions: conditions,
+    medConfounders: meds.list,
+    autonomicFlag,
   });
-  return { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, correlateLoad };
+  return { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, correlateLoad, meds, famhx };
 }
 
 // Per-domain bar card, shared by the patient results and the Clinician tab.
@@ -2544,8 +2755,9 @@ function domainBarsCard(score, withClusters) {
   SECTIONS.forEach(s => {
     const sc = score.secScores[s.id] || 0;
     const max = score.secApplicableMax[s.id] || 0; // applicable max (excludes N/A items)
-    const p = max ? Math.round(sc / max * 100) : 0;
-    const detail = withClusters && max ? `${sc}/${max} · ${p}%` : (max ? p + '%' : 'n/a');
+    if (!max) return; // skip sections with nothing answered (e.g. un-revealed targeted sections)
+    const p = Math.round(sc / max * 100);
+    const detail = withClusters ? `${sc}/${max} · ${p}%` : p + '%';
     card.appendChild(el('div', { class: 'bar-row' },
       `<div class="bar-label"><span>${esc(s.full || s.label)}</span><span class="muted">${detail}</span></div>
        <div class="bar-track"><div class="bar-fill" style="width:${p}%;background:${s.color || '#0F6E56'}"></div></div>`));
@@ -2740,6 +2952,10 @@ function triageCard(tri, rome, showInvestigations) {
     'Why: ' + tri.reasons.map(r => esc(r.text)).join(' · ')));
   if (tri.conditionNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
     'ℹ️ ' + esc(tri.conditionNote)));
+  if (tri.medNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
+    '💊 ' + esc(tri.medNote)));
+  if (tri.autonomicNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
+    '🫀 ' + esc(tri.autonomicNote)));
   if (tri.alsoConsider.length) {
     tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-weight:600' }, 'Also worth noting:'));
     tri.alsoConsider.forEach(a => tcard.appendChild(el('div', { class: 'q-sub', style: 'padding-left:4px' },
@@ -2926,7 +3142,7 @@ function buildPatientPrint(c) {
 }
 
 function buildClinicianPrint(c) {
-  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions } = c;
+  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, meds, famhx } = c;
   const dateStr = new Date().toLocaleDateString('en-AU', { year: 'numeric', month: 'long', day: 'numeric' });
   const patName = (session.name || '').trim() || 'Not recorded';
   const priors = priorVisits();
@@ -2984,6 +3200,14 @@ function buildClinicianPrint(c) {
   if (conditions && conditions.list && conditions.list.length) {
     h += `<div class="pr-section"><div class="pr-sh">Known conditions reported</div>
       <div style="font-size:10.5px">${esc(conditions.list.join(', '))}</div></div>`;
+  }
+  if (famhx && famhx.list && famhx.list.length) {
+    h += `<div class="pr-section"><div class="pr-sh">Family history</div>
+      <div style="font-size:10.5px">${esc(famhx.list.join(', '))}</div></div>`;
+  }
+  if (meds && meds.list && meds.list.length) {
+    h += `<div class="pr-section"><div class="pr-sh">Medication confounders</div>
+      <div style="font-size:10.5px">${esc(meds.list.map(m => m.label + (m.effect ? ` (${m.effect})` : '')).join('; '))}</div></div>`;
   }
 
   // Red flags

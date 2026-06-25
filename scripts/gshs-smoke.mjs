@@ -25,6 +25,7 @@ try {
   process.exit(1);
 }
 
+const schema = req('schema.js');
 const scales = req('scales.js');
 const scoring = req('scoring.js');
 const patterns = req('patterns.js');
@@ -113,6 +114,34 @@ ok(rD.rr.subtype === 'IBS-D' && rD.pat.some(p => p.id === 'diarrhoea_dominant'),
 const rGB = run(2, {}, { pss4Score: 16 });
 ok(rGB.pat.some(p => p.id === 'gut_brain'), 'gut_brain pattern fires');
 ok((rGB.tri.investigations || []).some(i => /PHQ-9/.test(i)), 'gut_brain investigations now appear in triage output');
+
+// 13. Adaptive reveal predicate: constipation triggers AR, reflux triggers UG,
+// fatigue triggers SY; a blank form reveals nothing.
+ok(schema.targetedReveal({ gsrs_constip: 3 }).AR === true, 'constipation reveals pelvic-floor (AR)');
+ok(schema.targetedReveal({ gsrs_heartburn: 2 }).UG === true, 'reflux reveals upper-GI (UG)');
+ok(schema.targetedReveal({ bg_fatigue: 2 }).SY === true, 'fatigue reveals systemic/autonomic (SY)');
+const revNone = schema.targetedReveal({});
+ok(!revNone.AR && !revNone.UG && !revNone.SY, 'blank form reveals no targeted sections');
+
+// 14. Conditional sections never enter the validated Index.
+const aPelvic = {}; GI_IDS.forEach(id => (aPelvic[id] = 0));
+aPelvic.ar_incontinence = 3; aPelvic.ar_straining = 3; aPelvic.ar_blockage = 3;
+ok(scoring.computeScores(aPelvic, {}).index === 0, 'answered targeted (AR) items do not move the GSRS Index');
+
+// 15. pelvic_floor pattern fires and reaches Tier 2 (physio candidacy).
+const rPF = run(2, { ar_incontinence: 3, ar_straining: 3, ar_blockage: 3 });
+ok(rPF.pat.some(p => p.id === 'pelvic_floor' && p.axis === 'pelvic'), 'pelvic_floor pattern fires (axis pelvic)');
+ok(reasons(rPF.tri).some(r => /pelvic-floor physiotherapy/i.test(r.text)), 'pelvic_floor reaches a triage tier (physio candidacy)');
+
+// 16. functional_dyspepsia fires on early satiety / fullness.
+const rFD = run(2, { ug_earlysat: 3, ug_fullness: 3 });
+ok(rFD.pat.some(p => p.id === 'functional_dyspepsia'), 'functional_dyspepsia pattern fires');
+
+// 17. Expanded chip lists + helpers.
+ok(scales.KNOWN_CONDITIONS.length >= 15 && scales.KNOWN_CONDITIONS.some(c => c.id === 'sibo'), 'KNOWN_CONDITIONS expanded (incl. SIBO)');
+ok(scales.MED_CONFOUNDERS.some(m => m.id === 'glp1'), 'MED_CONFOUNDERS includes GLP-1 agonist');
+ok(scales.FAMILY_HISTORY.length === 3, 'FAMILY_HISTORY chip set present');
+ok(scales.medConfounders({ medsConfounders: ['glp1', 'opioid'] }).count === 2, 'medConfounders() counts selected meds');
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);
