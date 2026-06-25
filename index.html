@@ -2654,10 +2654,10 @@ function calc() {
   // ── Ordered render (score-then-story) ──────────────────────────────────────
   out.appendChild(bars);                              // by-domain breakdown (under the headline + symptom detail)
   out.appendChild(axisProfileCard(profile, heads));   // secondary axes
+  out.appendChild(driv);                              // modifiable drivers (below the secondary axes)
   if (patternsEl) out.appendChild(patternsEl);        // patterns to discuss
   out.appendChild(riskMatrixCard(sv, lens));          // symptom × microbiome
   out.appendChild(triageCard(tri, rome, false));      // suggested next step
-  out.appendChild(driv);                              // modifiable drivers
   if (trendEl) out.appendChild(trendEl);              // progress over time
 
   // Clinician detail (item-level responses, Rome IV raw, investigations) lives in
