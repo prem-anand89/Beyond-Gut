@@ -384,13 +384,16 @@ const SECTIONS = [
   // impact category. Standalone; also drives an independent Tier-2 escalation.
   { id: 'IMP', label: 'IMP', full: 'Functional / quality-of-life impact', role: 'standalone', axis: 'impact',      color: '#6B7280', bg: '#F1F2F4' },
   // ── Targeted symptom sections (adaptive reveal) ──────────────────────────────
-  // conditional:true → hidden by default, revealed by targetedReveal() when the
+  // conditional:true → hidden by default, revealed by revealIf/refreshReveals when the
   // GSRS core points that way (or via the manual clinician toggle). All items are
   // optional, so they never enter the Index/mandatory-count/progress. Feed
   // patterns + triage + the clinician Domain breakdown only.
-  { id: 'AR', label: 'AR', full: 'Bowel control & evacuation', role: 'standalone', axis: 'pelvic',    color: '#7A4A8C', bg: '#F3ECF7', conditional: true },
-  { id: 'UG', label: 'UG', full: 'Upper-GI / dyspepsia',       role: 'standalone', axis: 'symptom',   color: '#0F6E56', bg: '#E1F5EE', conditional: true },
-  { id: 'SY', label: 'SY', full: 'Systemic / autonomic',       role: 'standalone', axis: 'autonomic', color: '#117A8B', bg: '#E2F2F4', conditional: true },
+  { id: 'AR', label: 'AR', full: 'Bowel control & evacuation', role: 'standalone', axis: 'pelvic',    color: '#7A4A8C', bg: '#F3ECF7', conditional: true,
+    revealIf: { any: [ { type: 'cluster', cluster: 'Constipation', min: 0.4 }, { type: 'item', id: 'gsrs_urgency', min: 2 } ] } },
+  { id: 'UG', label: 'UG', full: 'Upper-GI / dyspepsia',       role: 'standalone', axis: 'symptom',   color: '#0F6E56', bg: '#E1F5EE', conditional: true,
+    revealIf: { any: [ { type: 'cluster', cluster: 'Reflux', min: 0.3 }, { type: 'cluster', cluster: 'Indigestion', min: 0.3 } ] } },
+  { id: 'SY', label: 'SY', full: 'Systemic / autonomic',       role: 'standalone', axis: 'autonomic', color: '#117A8B', bg: '#E2F2F4', conditional: true,
+    revealIf: { any: [ { type: 'item', id: 'bg_fatigue', min: 2 }, { type: 'item', id: 'bg_brainfog', min: 2 } ] } },
 ];
 
 // ── QUESTIONS — co-design output. ───────────────────────────────────────────
@@ -449,6 +452,11 @@ const QUESTIONS = [
     patientSub: 'Without a clear injury or mechanical cause' },
   { id: 'im_histamine', section: 'IM', patientText: 'Flushing, hives, or headache after fermented foods, wine, or aged cheese',
     patientSub: 'A possible histamine-intolerance signal' },
+  // Reveal-on-positive follow-up: capture the specific triggers for the elimination
+  // trial the triage already recommends. Free-text, optional, never scored.
+  { id: 'im_histamine_foods', section: 'IM', optional: true, freeText: true,
+    revealIf: { type: 'item', id: 'im_histamine', min: 2 },
+    patientText: 'Which foods or drinks seem to trigger this?' },
   // Gut–skin axis: the one retained skin item (atopic/inflammatory readout), folded
   // into the immune domain (TRIM_PLAN §6.1). Feeds the inflammatory_immune pattern.
   { id: 'sk_skin', section: 'IM', patientText: 'Acne, eczema, or unexplained skin rashes' },
@@ -458,6 +466,9 @@ const QUESTIONS = [
   { id: 'im_known_dx', section: 'IM', optional: true, optionalLabel: 'if diagnosed',
     patientText: 'Diagnosed autoimmune or inflammatory condition',
     patientSub: 'e.g. rheumatoid arthritis, psoriasis, lupus, or thyroid disease' },
+  { id: 'im_known_dx_which', section: 'IM', optional: true, freeText: true,
+    revealIf: { type: 'item', id: 'im_known_dx', min: 1 },
+    patientText: 'Which condition?' },
 
   // ── BG — Brain-gut & mood (DRAFT) ──
   { id: 'bg_brainfog', section: 'BG', patientText: 'Brain fog or poor concentration',
@@ -481,6 +492,9 @@ const QUESTIONS = [
   // ── NU — Nutrient & absorption (DRAFT) ──
   { id: 'nu_known_def', section: 'NU', optional: true, optionalLabel: 'if tested',
     patientText: 'Known low B12, iron, vitamin D, or magnesium', patientSub: 'Found on past blood work' },
+  { id: 'nu_known_def_which', section: 'NU', optional: true, freeText: true,
+    revealIf: { type: 'item', id: 'nu_known_def', min: 1 },
+    patientText: 'Which ones? (B12 / iron / vitamin D / magnesium)' },
   { id: 'nu_hair', section: 'NU', patientText: 'Hair thinning or hair loss' },
   { id: 'nu_iron', section: 'NU', patientText: 'Pallor, breathlessness, or restless legs',
     patientSub: 'Possible iron-deficiency signs' },
@@ -518,17 +532,21 @@ const QUESTIONS = [
     patientText: 'Gut symptoms that flare with your menstrual cycle' },
 ];
 
-// Adaptive reveal — pure predicate: which conditional symptom sections to show,
-// based on the GSRS core answers. Kept here (data/logic) so it is unit-testable
-// and the UI just toggles visibility from it.
-function targetedReveal(answers) {
-  const a = answers || {};
-  const hi = (id) => typeof a[id] === 'number' && a[id] >= 2;
-  return {
-    AR: hi('gsrs_constip') || hi('gsrs_hard') || hi('gsrs_incomplete') || hi('gsrs_urgency'),
-    UG: hi('gsrs_heartburn') || hi('gsrs_regurg') || hi('gsrs_bloating') || hi('gsrs_burping'),
-    SY: hi('bg_fatigue') || hi('bg_brainfog'),
-  };
+// Adaptive reveal — ONE declarative predicate, used for conditional sections,
+// gated cards (pain/Rome), and reveal-on-positive follow-up items. Pure + unit-
+// testable; the UI computes `clusterNorm` once (via computeScores) and passes it
+// in `ctx` so cluster gating never recomputes per element. NEVER used to gate a
+// validated GSRS core item or a red flag — only optional context / follow-ups.
+//   cond: { type:'item', id, min } | { type:'cluster', cluster, min }
+//       | { any:[cond,...] } | { all:[cond,...] }  (falsy cond ⇒ always shown)
+function revealMet(cond, ctx) {
+  if (!cond) return true;
+  if (cond.any) return cond.any.some(c => revealMet(c, ctx));
+  if (cond.all) return cond.all.every(c => revealMet(c, ctx));
+  const a = (ctx && ctx.answers) || {};
+  if (cond.type === 'item') { const v = a[cond.id]; return typeof v === 'number' && v >= cond.min; }
+  if (cond.type === 'cluster') { const cn = (ctx && ctx.clusterNorm) || {}; const v = cn[cond.cluster]; return v != null && v >= cond.min; }
+  return true;
 }
 
 // ── Derived index — the ONLY question index in the app. ─────────────────────
@@ -546,7 +564,7 @@ function questionsOf(sectionId) { return QUESTIONS.filter(q => q.section === sec
 
 __e.SCHEMA_VERSION = SCHEMA_VERSION; __e.SECTIONS = SECTIONS; __e.QUESTIONS = QUESTIONS;
 __e.QID = QID; __e.QTOTAL = QTOTAL; __e.itemMax = itemMax; __e.sectionMax = sectionMax; __e.questionsOf = questionsOf;
-__e.targetedReveal = targetedReveal;
+__e.revealMet = revealMet;
 return __e;
 };
 
@@ -1806,7 +1824,7 @@ return __e;
    runs before any domain is co-designed.
    ========================================================================== */
 __modules['ui-patient.js'] = function(__e){
-const { SECTIONS, QUESTIONS, questionsOf, sectionMax, itemMax, targetedReveal } = __req('schema.js');
+const { SECTIONS, QUESTIONS, questionsOf, sectionMax, itemMax, revealMet } = __req('schema.js');
 const { scaleFor, RECALL_NOTE, PSS4_ITEMS, PSS4_ANCHORS, PSS4_REVERSED, pss4Score, BRISTOL_TYPES, PAIN_REGIONS, modifiableFactors,
         DISRUPTORS, ALCOHOL_LEVELS, ACTIVITY_LEVELS, SLEEP_ITEMS, SLEEP_ANCHORS,
         FOOD_TRIGGERS, ABX_COURSES, GAS_LEVELS, STOOLVAR_LEVELS, POSTINF_OPTS, PARADOX_OPTS, dysbiosisLens,
@@ -2222,7 +2240,7 @@ function render() {
   // Always-on symptom domains (conditional ones are revealed adaptively below).
   SECTIONS.filter(sec => !sec.conditional).forEach(sec => root.appendChild(sectionCard(sec)));
 
-  // Targeted symptoms — hidden until the GI core warrants them (targetedReveal),
+  // Targeted symptoms — hidden until the GI core warrants them (revealIf),
   // or via the manual clinician toggle. Placed right after the symptom domains.
   root.appendChild(targetedSymptomsArea());
 
@@ -2231,10 +2249,12 @@ function render() {
   root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Drivers & context'));
   root.appendChild(bristolCard());
   root.appendChild(pss4Card());
-  root.appendChild(painCard());
+  // Pain + Rome IV are gated on reported abdominal pain (gsrs_pain ≥ 1) — Rome IV
+  // requires recurrent pain, so this spares pain-free patients the burden.
+  root.appendChild(wrapHidden('reveal-card-pain', painCard()));
   root.appendChild(lifestyleCard());
   root.appendChild(sleepCard());
-  root.appendChild(romeCard());
+  root.appendChild(wrapHidden('reveal-card-rome', romeCard()));
   root.appendChild(dysCard());
 
   const actions = el('div', { class: 'card row', style: 'justify-content:flex-end' });
@@ -2243,7 +2263,14 @@ function render() {
   root.appendChild(el('div', { id: 'patient-results' }));
   updateIdentityChip();
   updateProgress();
-  updateAdaptive();
+  refreshReveals();
+}
+
+// Wrap a node in a hidden, id-tagged holder that refreshReveals() toggles.
+function wrapHidden(id, node) {
+  const holder = el('div', { id, style: 'display:none' });
+  holder.appendChild(node);
+  return holder;
 }
 
 // One section card (head + items). `femaleOnly` items are shown only when the
@@ -2255,13 +2282,22 @@ function sectionCard(sec) {
     `${esc(sec.full || sec.label)} <span style="opacity:.8;font-weight:500">${items.length} items</span>`));
   const body = el('div', { class: 'sec-body' });
   if (!sec.noRecall) body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, esc(recallNote())));
-  items.forEach(q => body.appendChild(questionRow(q)));
+  items.forEach(q => {
+    if (q.revealIf) {
+      // reveal-on-positive follow-up item: hidden until refreshReveals() shows it.
+      const holder = el('div', { id: 'reveal-item-' + q.id, style: 'display:none' });
+      holder.appendChild(questionRow(q));
+      body.appendChild(holder);
+    } else {
+      body.appendChild(questionRow(q));
+    }
+  });
   card.appendChild(body);
   return card;
 }
 
 // Adaptive targeted-symptom area: a manual toggle + one hidden holder per
-// conditional section. updateAdaptive() decides which holders are visible.
+// conditional section. refreshReveals() decides which holders are visible.
 function targetedSymptomsArea() {
   const wrap = el('div', { id: 'targeted-wrap' });
   wrap.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Targeted symptoms (shown when relevant)'));
@@ -2271,7 +2307,7 @@ function targetedSymptomsArea() {
     const on = wrap.dataset.manual === '1';
     wrap.dataset.manual = on ? '' : '1';
     toggle.textContent = on ? '+ Show all targeted symptom questions' : '− Hide targeted symptom questions';
-    updateAdaptive();
+    refreshReveals();
   };
   wrap.appendChild(toggle);
   SECTIONS.filter(s => s.conditional).forEach(sec => {
@@ -2282,17 +2318,37 @@ function targetedSymptomsArea() {
   return wrap;
 }
 
-// Show a conditional section when its targetedReveal trigger fires OR the manual
-// toggle is on. Hidden sections keep any answers already given (they still feed
-// patterns/triage), but don't clutter the form.
-function updateAdaptive() {
+// Card-level reveal gates (the only cards behind revealIf): pain + Rome both need
+// recurrent abdominal pain to be worth asking. Keyed by holder id.
+const CARD_REVEAL = {
+  'reveal-card-pain': { type: 'item', id: 'gsrs_pain', min: 1 },
+  'reveal-card-rome': { type: 'item', id: 'gsrs_pain', min: 1 },
+};
+
+// ONE reveal pass for sections, cards and items — all off the same revealMet()
+// predicate. clusterNorm is computed once here (pure) and shared via ctx. Hidden
+// elements keep any answers already given (they still feed scoring/patterns), they
+// just don't clutter the form. The manual toggle forces everything visible.
+function refreshReveals() {
+  const live = computeScores(QUESTIONS.map(q => (answers[q.id] == null ? null : answers[q.id])), { bristol: extras.bristol });
+  const ctx = { answers, clusterNorm: live.clusterNorm };
   const wrap = document.getElementById('targeted-wrap');
-  if (!wrap) return;
-  const manual = wrap.dataset.manual === '1';
-  const rev = targetedReveal(answers);
+  const manual = !!(wrap && wrap.dataset.manual === '1');
+  // Conditional sections
   SECTIONS.filter(s => s.conditional).forEach(sec => {
     const holder = document.getElementById('reveal-' + sec.id);
-    if (holder) holder.style.display = (manual || rev[sec.id]) ? 'block' : 'none';
+    if (holder) holder.style.display = (manual || revealMet(sec.revealIf, ctx)) ? 'block' : 'none';
+  });
+  // Gated cards (pain / Rome)
+  Object.keys(CARD_REVEAL).forEach(id => {
+    const h = document.getElementById(id);
+    if (h) h.style.display = (manual || revealMet(CARD_REVEAL[id], ctx)) ? '' : 'none';
+  });
+  // Reveal-on-positive follow-up items
+  QUESTIONS.forEach(q => {
+    if (!q.revealIf) return;
+    const h = document.getElementById('reveal-item-' + q.id);
+    if (h) h.style.display = (manual || revealMet(q.revealIf, ctx)) ? '' : 'none';
   });
 }
 
@@ -2662,11 +2718,20 @@ function redFlagCard() {
 }
 
 function questionRow(q) {
-  const labels = scaleFor(q.scale);
   const row = el('div', { class: 'q' });
   const tag = q.optional ? ` <span class="opt-tag">${esc(q.optionalLabel || 'optional')}</span>` : '';
   row.appendChild(el('div', { class: 'q-txt' }, esc(q.patientText) + tag));
   if (q.patientSub) row.appendChild(el('div', { class: 'q-sub' }, esc(q.patientSub)));
+  // Free-text follow-up (reveal-on-positive detail). Stored as a string, so it is
+  // never numeric → never affects scoring, patterns, progress or completeness.
+  if (q.freeText) {
+    const input = el('input', { type: 'text', value: typeof answers[q.id] === 'string' ? answers[q.id] : '',
+      placeholder: 'Type here…', style: 'width:100%;padding:9px 12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;margin-top:4px' });
+    input.oninput = () => { answers[q.id] = input.value; };
+    row.appendChild(input);
+    return row;
+  }
+  const labels = scaleFor(q.scale);
   const opts = el('div', { class: 'opts' });
   const naBtn = q.optional ? el('button', { class: `chip-opt na-opt${answers[q.id] === 'na' ? ' sel' : ''}`, type: 'button' }, 'Not applicable') : null;
   labels.forEach((lab, v) => {
@@ -2678,7 +2743,7 @@ function questionRow(q) {
       b.classList.add('sel');
       if (naBtn) naBtn.classList.remove('sel');
       updateProgress();
-      updateAdaptive();
+      refreshReveals();
     };
     opts.appendChild(b);
   });
@@ -3014,8 +3079,10 @@ function clinicianDetailCard(c) {
     const rows = qs.map(q => {
       const val = answers[q.id];
       const labels = scaleFor(q.scale);
-      const disp = val === 'na' ? '<i>N/A</i>' : val == null ? '<span style="color:#999">—</span>' : `${val} — ${esc(labels[val] || '')}`;
-      return `<tr><td>${esc(q.patientText)}</td><td style="white-space:nowrap">${disp}</td></tr>`;
+      const disp = q.freeText
+        ? (typeof val === 'string' && val.trim() ? esc(val) : '<span style="color:#999">—</span>')
+        : val === 'na' ? '<i>N/A</i>' : val == null ? '<span style="color:#999">—</span>' : `${val} — ${esc(labels[val] || '')}`;
+      return `<tr><td>${esc(q.patientText)}</td><td>${disp}</td></tr>`;
     }).join('');
     card.appendChild(tbl(['Question', 'Answer'], rows));
   });

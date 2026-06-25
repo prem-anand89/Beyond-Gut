@@ -115,13 +115,25 @@ const rGB = run(2, {}, { pss4Score: 16 });
 ok(rGB.pat.some(p => p.id === 'gut_brain'), 'gut_brain pattern fires');
 ok((rGB.tri.investigations || []).some(i => /PHQ-9/.test(i)), 'gut_brain investigations now appear in triage output');
 
-// 13. Adaptive reveal predicate: constipation triggers AR, reflux triggers UG,
-// fatigue triggers SY; a blank form reveals nothing.
-ok(schema.targetedReveal({ gsrs_constip: 3 }).AR === true, 'constipation reveals pelvic-floor (AR)');
-ok(schema.targetedReveal({ gsrs_heartburn: 2 }).UG === true, 'reflux reveals upper-GI (UG)');
-ok(schema.targetedReveal({ bg_fatigue: 2 }).SY === true, 'fatigue reveals systemic/autonomic (SY)');
-const revNone = schema.targetedReveal({});
-ok(!revNone.AR && !revNone.UG && !revNone.SY, 'blank form reveals no targeted sections');
+// 13. Unified revealMet predicate (item + cluster + any) drives the section reveal.
+const cn = (a) => scoring.computeScores(a, {}).clusterNorm;
+const sec = (id) => schema.SECTIONS.find(s => s.id === id).revealIf;
+const aCon = { gsrs_constip: 3, gsrs_hard: 3, gsrs_incomplete: 3 };
+ok(schema.revealMet(sec('AR'), { answers: aCon, clusterNorm: cn(aCon) }) === true, 'constipation cluster reveals pelvic-floor (AR)');
+const aRef = { gsrs_heartburn: 3, gsrs_regurg: 3 };
+ok(schema.revealMet(sec('UG'), { answers: aRef, clusterNorm: cn(aRef) }) === true, 'reflux cluster reveals upper-GI (UG)');
+ok(schema.revealMet(sec('SY'), { answers: { bg_fatigue: 2 }, clusterNorm: {} }) === true, 'fatigue reveals systemic/autonomic (SY)');
+const ctx0 = { answers: {}, clusterNorm: {} };
+ok(!schema.revealMet(sec('AR'), ctx0) && !schema.revealMet(sec('UG'), ctx0) && !schema.revealMet(sec('SY'), ctx0), 'blank form reveals no targeted sections');
+ok(schema.revealMet(undefined, ctx0) === true, 'no revealIf → always shown (core/red-flags never gated)');
+
+// 13b. Item-level follow-up + card gates.
+ok(schema.revealMet({ type: 'item', id: 'im_histamine', min: 2 }, { answers: { im_histamine: 2 } }) === true, 'histamine follow-up reveals at ≥2');
+ok(schema.revealMet({ type: 'item', id: 'im_histamine', min: 2 }, { answers: { im_histamine: 1 } }) === false, 'histamine follow-up hidden below threshold');
+ok(schema.revealMet({ type: 'item', id: 'gsrs_pain', min: 1 }, { answers: { gsrs_pain: 0 } }) === false, 'pain/Rome cards hidden when gsrs_pain == 0');
+ok(schema.revealMet({ type: 'item', id: 'gsrs_pain', min: 1 }, { answers: { gsrs_pain: 1 } }) === true, 'pain/Rome cards shown when gsrs_pain ≥ 1');
+// free-text follow-up items exist and carry revealIf
+ok(schema.QUESTIONS.some(q => q.id === 'nu_known_def_which' && q.freeText && q.revealIf), 'nu_known_def_which is a gated free-text follow-up');
 
 // 14. Conditional sections never enter the validated Index.
 const aPelvic = {}; GI_IDS.forEach(id => (aPelvic[id] = 0));
