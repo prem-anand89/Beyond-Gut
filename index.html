@@ -2061,13 +2061,10 @@ function render() {
   // How long this takes — counts only the mandatory questions (optional items
   // and the supplementary driver/history cards are excluded from the count).
   const mainQ = QUESTIONS.filter(q => !q.optional).length;
-  const optQ = QUESTIONS.filter(q => q.optional).length;
   const tLo = Math.max(3, Math.round(mainQ * 8 / 60));
   const tHi = Math.max(tLo + 1, Math.round(mainQ * 12 / 60));
-  const optMin = Math.max(1, Math.round(optQ * 12 / 60));
-  const optNote = optQ ? ` <span class="muted">(plus ${optQ} optional, ~${optMin} min extra)</span>` : '';
   root.appendChild(el('div', { class: 'form-meta' },
-    `<span>📋 <b>${mainQ} questions</b> · about <b>${tLo}–${tHi} minutes</b>${optNote}</span>
+    `<span>📋 <b>${mainQ} questions</b> · about <b>${tLo}–${tHi} minutes</b> <span class="muted">(plus optional history &amp; lifestyle sections, ~2–3 min)</span></span>
      <span id="progressText" class="muted"></span>`));
 
   root.appendChild(patientBanner());
@@ -2524,6 +2521,42 @@ function computeAll() {
   return { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions };
 }
 
+// Per-domain bar card, shared by the patient results and the Clinician tab.
+// withClusters=true adds the GSRS symptom-shape sub-bars + Bristol-transit note
+// (clinician view); the patient view keeps it simple (domain bars only).
+function domainBarsCard(score, withClusters) {
+  const card = el('div', { class: 'card' });
+  card.appendChild(el('h2', {}, 'Domain'));
+  card.appendChild(el('div', { class: 'q-sub', style: 'margin-bottom:6px' }, 'How much each area contributes (higher = more symptoms).'));
+  SECTIONS.forEach(s => {
+    const sc = score.secScores[s.id] || 0;
+    const max = score.secApplicableMax[s.id] || 0; // applicable max (excludes N/A items)
+    const p = max ? Math.round(sc / max * 100) : 0;
+    const detail = withClusters && max ? `${sc}/${max} · ${p}%` : (max ? p + '%' : 'n/a');
+    card.appendChild(el('div', { class: 'bar-row' },
+      `<div class="bar-label"><span>${esc(s.full || s.label)}</span><span class="muted">${detail}</span></div>
+       <div class="bar-track"><div class="bar-fill" style="width:${p}%;background:${s.color || '#0F6E56'}"></div></div>`));
+    if (!withClusters || s.id !== 'GI') return;
+    // Bristol transit transparency + GSRS per-cluster symptom shape (clinician view).
+    if (score.bristolSignal != null && score.secNorm.GI != null) {
+      const addPts = Math.round((score.secNorm.GI - (max ? sc / max : 0)) * 100);
+      const bt = BRISTOL_TYPES.find(t => t.n === extras.bristol);
+      card.appendChild(el('div', { class: 'q-sub', style: 'margin:-4px 0 12px;padding-left:2px;color:var(--inks)' },
+        `↳ Stool transit ${addPts > 0 ? `adds +${addPts} pts to` : 'adds nothing to'} gut-core${bt ? ` · Type ${bt.n} (${esc(bt.tag)})` : ''} — capped so it can't dominate.`));
+    }
+    if (score.clusterAgg) {
+      ['Reflux', 'Pain', 'Indigestion', 'Diarrhoea', 'Constipation'].forEach(k => {
+        const c = score.clusterAgg[k]; if (!c || c.max === 0) return;
+        const cp = Math.round(c.sum / c.max * 100);
+        card.appendChild(el('div', { class: 'bar-row', style: 'padding-left:18px' },
+          `<div class="bar-label"><span class="muted">↳ ${esc(k)}</span><span class="muted">${c.sum}/${c.max} · ${cp}%</span></div>
+           <div class="bar-track" style="height:6px"><div class="bar-fill" style="width:${cp}%;background:${s.color};opacity:.6"></div></div>`));
+      });
+    }
+  });
+  return card;
+}
+
 function calc() {
   const c = computeAll();
   lastCalc = c;
@@ -2589,17 +2622,7 @@ function calc() {
     if (prior.length >= 1) trendEl = trendCard(prior.concat([currentVisit()]), true);
   }
 
-  const bars = el('div', { class: 'card' });
-  bars.appendChild(el('h2', {}, 'By domain'));
-  bars.appendChild(el('div', { class: 'q-sub', style: 'margin-bottom:6px' }, 'How much each area contributes (higher = more symptoms).'));
-  SECTIONS.forEach(s => {
-    const sc = score.secScores[s.id] || 0;
-    const max = score.secApplicableMax[s.id] || 0; // applicable max (excludes N/A items)
-    const p = max ? Math.round(sc / max * 100) : 0;
-    bars.appendChild(el('div', { class: 'bar-row' },
-      `<div class="bar-label"><span>${esc(s.full || s.label)}</span><span class="muted">${max ? p + '%' : 'n/a'}</span></div>
-       <div class="bar-track"><div class="bar-fill" style="width:${p}%;background:${s.color || '#0F6E56'}"></div></div>`));
-  });
+  const bars = domainBarsCard(score, false);
 
   // Modifiable drivers — context, not part of the Index (computed above with the
   // triage inputs; rendered here).
@@ -3133,9 +3156,10 @@ function renderClinician() {
      <div class="conf-note">Confidence: <b>${esc(conf.level)}</b> · ${score.completeness}% complete</div></div>`));
   root.appendChild(hero);
 
-  // Plan (triage + investigations always shown here) + secondary axes + risk matrix + full detail
+  // Plan (triage + investigations always shown here) + secondary axes + domain + risk matrix + full detail
   root.appendChild(triageCard(tri, rome, true));
   root.appendChild(axisProfileCard(profile, heads));
+  root.appendChild(domainBarsCard(score, true));   // full domain breakdown incl. GSRS cluster shape
   root.appendChild(riskMatrixCard(sv, lens));
   root.appendChild(clinicianDetailCard(c));
 
