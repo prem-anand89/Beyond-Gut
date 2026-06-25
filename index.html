@@ -1155,7 +1155,7 @@ const PATTERNS = [
     desc: 'Bowel-movement burden weighted toward slow transit. Fibre, hydration, and movement are usually the first lever; rule out other causes with your clinician.',
     eval: (s, ex) => {
       const sub = bowelSubtype(s.clusterNorm);             // shared source of truth (also drives Rome IV)
-      const constipCluster = ge(clu(s, 'Constipation'), 0.4);
+      const constipCluster = ge(clu(s, 'Constipation'), 0.3); // matches bowelSubtype's threshold, so coverage is honest
       const slowStool      = le(ex.bristol, 2);
       const diarrCluster   = ge(clu(s, 'Diarrhoea'), 0.3); // confidence coverage only
       const romeIBSC       = romeSignal(ex, s, 'IBS-C');
@@ -1169,12 +1169,16 @@ const PATTERNS = [
     label: 'Loose-stool / urgency pattern',
     desc: 'Bowel-movement burden weighted toward urgency or loose stools. Worth screening with your clinician for triggers and infection.',
     eval: (s, ex) => {
-      const diarrCluster   = ge(clu(s, 'Diarrhoea'), 0.4);
+      const sub = bowelSubtype(s.clusterNorm);             // shared source of truth (also drives Rome IV)
+      const diarrCluster   = ge(clu(s, 'Diarrhoea'), 0.3); // matches bowelSubtype's threshold
       const fastStool      = ge(ex.bristol, 6);
-      const constipCluster = ge(clu(s, 'Constipation'), 0.3);
+      const constipCluster = ge(clu(s, 'Constipation'), 0.3); // confidence coverage only
       const romeIBSD        = romeSignal(ex, s, 'IBS-D');
       const signals = [diarrCluster, fastStool, constipCluster, romeIBSD];
-      return { fires: (diarrCluster.t || fastStool.t) && !constipCluster.t, signals };
+      // Mirror constipation_dominant: fire on a clear IBS-D subtype, or a fast
+      // stool when clusters are silent. Same shared threshold, so it can't
+      // disagree with the Rome IV subtype shown alongside it.
+      return { fires: sub === 'IBS-D' || (fastStool.t && sub === 'IBS-U'), signals };
     },
   },
   {
@@ -1404,7 +1408,7 @@ function triage(score, patterns, firedFlags, dys, opts) {
   if (has('post_disruptor')) add(3, 'Recent gut-disruptor exposure (strongest probiotic-trial rationale)', 'microbiome');
   if (has('bloating_fermentation')) add(3, 'Bloating / fermentation pattern', 'symptom');
   if (has('diarrhoea_dominant')) add(3, 'Loose-stool / urgency pattern', 'symptom');
-  if (dysCount >= 2) add(3, dysCount + ' dysbiosis-correlate signals (see lens)', 'microbiome');
+  if (dysCount >= 2) add(3, dysCount + ' dysbiosis-correlate signals (see Dysbiosis Correlate Load)', 'microbiome');
 
   // Tier 4 — self-management / monitor
   if (has('lifestyle_modifiable')) add(4, 'Modifiable lifestyle factors are the main lever', 'lifestyle');
@@ -1438,7 +1442,8 @@ function triage(score, patterns, firedFlags, dys, opts) {
     diarrhoea_dominant: ['Stool calprotectin + stool PCR', 'Coeliac screen (anti-tTG IgA, total IgA)', 'Consider bile acid malabsorption (empirical trial or SeHCAT)'],
     constipation_dominant: ['Dietary fibre and fluid intake assessment', 'Pelvic floor physiotherapy referral', 'Exclude hypothyroidism (TSH), hypercalcaemia'],
     mixed_bowel: ['Low-FODMAP dietitian referral', 'Visceral/pelvic manual therapy assessment', 'Gut-brain axis psychological assessment'],
-    psych_gut_load: ['Consider PHQ-9 / GAD-7 if PSS-4 ≥ 10', 'Gut-directed hypnotherapy or CBT referral', 'Mind-body approach to symptom management'],
+    gut_brain: ['Consider PHQ-9 / GAD-7 if PSS-4 ≥ 10', 'Gut-directed hypnotherapy or CBT referral', 'Mind-body approach to symptom management'],
+    inflammatory_immune: ['Coeliac serology (anti-tTG IgA + total IgA) if not done', 'Clinician-guided structured elimination trial', 'Low-histamine / DAO discussion if a histamine pattern fits'],
   };
   const RI = {
     'IBS-C': ['Low-FODMAP trial with dietitian', 'Pelvic floor physiotherapy assessment', 'Soluble fibre (ispaghula husk)'],
@@ -1942,7 +1947,7 @@ function axisProfileCard(profile, heads) {
   const card = el('div', { class: 'card' });
   card.appendChild(el('h2', {}, 'Secondary axes'));
   card.appendChild(el('div', { class: 'q-sub' }, 'Shown one tier below the headline — still scored and banded, never blended into the gut number.'));
-  const rows = heads.secondaryList.concat([profile.microbiome]);
+  const rows = heads.secondaryList; // microbiome is covered by the headline split + the matrix
   rows.forEach(a => {
     const isCount = a.max != null;
     const val = a.value == null ? '—' : (isCount ? `${a.value}/${a.max}` : a.value + '%');
@@ -1953,9 +1958,9 @@ function axisProfileCard(profile, heads) {
   return card;
 }
 
-function riskMatrixCard(severity, lens) {
+function riskMatrixCard(severity, micro) {
   const sevHigh  = severity.label === 'Significant' || severity.label === 'Severe';
-  const riskHigh = lens.count >= 2;
+  const riskHigh = micro.count >= 2;
   const CELLS = {
     LL: { t: 'Reassure & monitor',                    c: '#0F6E56' },
     LH: { t: 'Early / post-disruptor — watch & support', c: '#BA7517' },
@@ -1964,17 +1969,18 @@ function riskMatrixCard(severity, lens) {
   };
   const activeKey = (sevHigh ? 'H' : 'L') + (riskHigh ? 'H' : 'L');
   const card = el('div', { class: 'card', style: 'border-left:6px solid #185FA5' });
-  card.appendChild(el('h2', {}, 'Symptom × Microbiome read'));
-  // Two independent axes — symptom severity vs a microbiome-correlate count. No
-  // blended number (that composite was removed); the quadrant reads both directly.
+  card.appendChild(el('h2', {}, 'Symptom × Dysbiosis-correlate read'));
+  // Two independent axes — symptom severity vs the Dysbiosis Correlate Load
+  // (the same inferred-correlate count shown in the headline; objective exposure
+  // history is the separate Disruption Load and is not mixed in here).
   card.appendChild(el('div', { class: 'row', style: 'gap:10px;flex-wrap:wrap;margin:4px 0 8px' },
     `<span class="pill ${severity.cls || bandPillClass(severity.label)}">Symptom: ${severity.index == null ? '—' : severity.index + '%'} · ${esc(severity.label || '—')}</span>
-     <span class="pill" style="background:#185FA5;color:#fff">Microbiome-correlate: ${lens.count}/7 · ${riskHigh ? 'Elevated' : 'Low'}</span>`));
+     <span class="pill" style="background:#185FA5;color:#fff">Dysbiosis-correlate: ${micro.count} · ${riskHigh ? 'Elevated' : 'Low'}</span>`));
 
   const grid = el('div', { style: 'display:grid;grid-template-columns:96px 1fr 1fr;gap:4px;font-size:12px;margin-top:4px' });
   grid.appendChild(el('div', {}, ''));
-  grid.appendChild(el('div', { style: 'font-weight:600;text-align:center;color:var(--inks)' }, 'Low microbiome-risk'));
-  grid.appendChild(el('div', { style: 'font-weight:600;text-align:center;color:var(--inks)' }, 'High microbiome-risk'));
+  grid.appendChild(el('div', { style: 'font-weight:600;text-align:center;color:var(--inks)' }, 'Low correlate'));
+  grid.appendChild(el('div', { style: 'font-weight:600;text-align:center;color:var(--inks)' }, 'High correlate'));
   [['High severity', 'H'], ['Low severity', 'L']].forEach(([rlab, rs]) => {
     grid.appendChild(el('div', { style: 'font-weight:600;display:flex;align-items:center;color:var(--inks)' }, rlab));
     ['L', 'H'].forEach(cs => {
@@ -1988,12 +1994,12 @@ function riskMatrixCard(severity, lens) {
   });
   card.appendChild(grid);
 
-  if (lens.count > 0) {
-    card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-weight:600' }, 'Microbiome-correlate signals:'));
-    card.appendChild(el('ul', { class: 'rf-list' }, lens.signals.map(s => `<li>${esc(s.label)}</li>`).join('')));
+  if (micro.count > 0) {
+    card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-weight:600' }, 'Dysbiosis-correlate signals:'));
+    card.appendChild(el('ul', { class: 'rf-list' }, micro.signals.map(s => `<li>${esc(s.label)}</li>`).join('')));
   }
   card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-style:italic;color:#999' },
-    'Two independent reads — symptom severity (GI score) and a microbiome-correlate count (NOT a dysbiosis diagnosis; validate against stool testing). For discussion, not prescription.'));
+    'Two independent reads — symptom severity (GI score) and an inferred dysbiosis-correlate count (NOT a dysbiosis diagnosis; validate against stool testing). For discussion, not prescription.'));
   return card;
 }
 
@@ -2512,13 +2518,20 @@ function computeAll() {
   const profile = axisProfile(score, driverExtras, lens);
   const heads = headlineOutputs(score, driverExtras, lens);
   const conditions = knownConditions(extras);
-  const tri = triage(score, patterns, fired, lens, {
+  // The Dysbiosis Correlate Load (inferred signals only) — the count triage and
+  // the Symptom×Microbiome matrix should read, NOT the old merged lens (which
+  // also folded in objective exposure history like antibiotics / surgery).
+  const correlateLoad = {
+    count: heads.primary.correlate.value,
+    signals: (heads.primary.correlate.signals || []).map(label => ({ label })),
+  };
+  const tri = triage(score, patterns, fired, correlateLoad, {
     adhesionSurgery: surgicalFlags(extras).adhesion,
     romeResult: rome,
     impactBand: profile.impact.band,
     knownConditions: conditions,
   });
-  return { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions };
+  return { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, correlateLoad };
 }
 
 // Per-domain bar card, shared by the patient results and the Clinician tab.
@@ -2560,7 +2573,7 @@ function domainBarsCard(score, withClusters) {
 function calc() {
   const c = computeAll();
   lastCalc = c;
-  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions } = c;
+  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, correlateLoad } = c;
 
   const out = document.getElementById('patient-results');
   out.innerHTML = '';
@@ -2660,7 +2673,7 @@ function calc() {
   out.appendChild(bars);                              // by-domain breakdown (between secondary axes and drivers)
   out.appendChild(driv);                              // modifiable drivers
   if (patternsEl) out.appendChild(patternsEl);        // patterns to discuss
-  out.appendChild(riskMatrixCard(sv, lens));          // symptom × microbiome
+  out.appendChild(riskMatrixCard(sv, correlateLoad)); // symptom × dysbiosis-correlate
   out.appendChild(triageCard(tri, rome, false));      // suggested next step
   if (trendEl) out.appendChild(trendEl);              // progress over time
 
@@ -2966,7 +2979,7 @@ function buildClinicianPrint(c) {
     </tbody></table></div>`;
   h += `<div class="pr-section"><div class="pr-sh">Scores — secondary axes</div>
     <table class="pr-tbl"><tbody>
-      ${heads.secondaryList.concat([profile.microbiome]).map(headRow).join('')}
+      ${heads.secondaryList.map(headRow).join('')}
     </tbody></table></div>`;
   if (conditions && conditions.list && conditions.list.length) {
     h += `<div class="pr-section"><div class="pr-sh">Known conditions reported</div>
@@ -3127,7 +3140,7 @@ function renderClinician() {
     return;
   }
   const c = lastCalc;
-  const { score, sv, conf, lens, rome, tri, profile, heads } = c;
+  const { score, sv, conf, lens, rome, tri, profile, heads, correlateLoad } = c;
 
   // Identity + print header
   const who = (session.name || '').trim() || (session.ref || '').trim() || 'Anonymous screen';
@@ -3160,7 +3173,7 @@ function renderClinician() {
   root.appendChild(triageCard(tri, rome, true));
   root.appendChild(axisProfileCard(profile, heads));
   root.appendChild(domainBarsCard(score, true));   // full domain breakdown incl. GSRS cluster shape
-  root.appendChild(riskMatrixCard(sv, lens));
+  root.appendChild(riskMatrixCard(sv, correlateLoad));
   root.appendChild(clinicianDetailCard(c));
 
   // Longitudinal context if this patient has prior saved visits.

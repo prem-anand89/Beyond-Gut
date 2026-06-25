@@ -48,8 +48,10 @@ function run(gi, sys = {}, extra = {}, romeIn = {}) {
   const heads = scoring.headlineOutputs(score, ex, dys);
   const pat = patterns.detectPatterns(score, ex, a);
   const rr = rome.classifyRomeIV(ex.rome, score.clusterNorm);
-  const tri = triage(score, pat, [], dys, { impactBand: prof.impact.band, romeResult: rr, adhesionSurgery: false, knownConditions: scales.knownConditions(ex) });
-  return { score, prof, heads, pat, rr, tri };
+  // Mirror computeAll(): triage reads the correlate-only split, not the merged lens.
+  const correlateLoad = { count: heads.primary.correlate.value, signals: (heads.primary.correlate.signals || []).map(l => ({ label: l })) };
+  const tri = triage(score, pat, [], correlateLoad, { impactBand: prof.impact.band, romeResult: rr, adhesionSurgery: false, knownConditions: scales.knownConditions(ex) });
+  return { score, prof, heads, pat, rr, tri, correlateLoad };
 }
 const reasons = (tri) => [tri.reasons, ...tri.alsoConsider.map(x => x.reasons)].flat();
 
@@ -94,6 +96,23 @@ ok(storage.nextPatientCode(dbSite).startsWith('CLINA-'), 'site code prefixes pat
 
 // 9. PSS-4 reverse-scoring metadata present (drives the colour fix).
 ok(Array.isArray(scales.PSS4_REVERSED) && scales.PSS4_REVERSED.length === 4 && scales.PSS4_REVERSED[1] === true && scales.PSS4_REVERSED[2] === true, 'PSS-4 reverse-scored items flagged (2 & 3)');
+
+// 10. Triage reads the correlate split, not the merged lens: exposure-only
+// history (antibiotics + microbiome surgery, no inferred correlates) must NOT
+// produce a "dysbiosis-correlate signals" triage reason.
+const rExp = run(2, {}, { meds: { abx: true }, abxCourses: 2, surgeries: ['gallbladder'], dys: {} });
+ok(rExp.heads.primary.disruption.value >= 2, 'exposure history raises Disruption Load');
+ok(rExp.correlateLoad.count === 0, 'no inferred correlates → Dysbiosis Correlate Load = 0');
+ok(!reasons(rExp.tri).some(r => /dysbiosis-correlate/i.test(r.text)), 'exposure-only does NOT trigger a dysbiosis-correlate triage reason');
+
+// 11. diarrhoea_dominant now uses the shared bowelSubtype (agrees with Rome IV).
+const rD = run(0, { gsrs_diarrhoea: 3, gsrs_loose: 3, gsrs_urgency: 3 }, {}, { painFreq: 3, onset: 3, rm_assoc_defecation: true, rm_assoc_freqchange: true });
+ok(rD.rr.subtype === 'IBS-D' && rD.pat.some(p => p.id === 'diarrhoea_dominant'), 'Rome IV IBS-D agrees with diarrhoea_dominant firing');
+
+// 12. gut_brain investigations are reachable (PI key was psych_gut_load before).
+const rGB = run(2, {}, { pss4Score: 16 });
+ok(rGB.pat.some(p => p.id === 'gut_brain'), 'gut_brain pattern fires');
+ok((rGB.tri.investigations || []).some(i => /PHQ-9/.test(i)), 'gut_brain investigations now appear in triage output');
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);
