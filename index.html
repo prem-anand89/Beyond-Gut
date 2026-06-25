@@ -2061,10 +2061,13 @@ function render() {
   // How long this takes — counts only the mandatory questions (optional items
   // and the supplementary driver/history cards are excluded from the count).
   const mainQ = QUESTIONS.filter(q => !q.optional).length;
+  const optQ = QUESTIONS.filter(q => q.optional).length;
   const tLo = Math.max(3, Math.round(mainQ * 8 / 60));
   const tHi = Math.max(tLo + 1, Math.round(mainQ * 12 / 60));
+  const optMin = Math.max(1, Math.round(optQ * 12 / 60));
+  const optNote = optQ ? ` <span class="muted">(plus ${optQ} optional, ~${optMin} min extra)</span>` : '';
   root.appendChild(el('div', { class: 'form-meta' },
-    `<span>📋 <b>${mainQ} questions</b> · about <b>${tLo}–${tHi} minutes</b>. <span class="muted">A few optional history/lifestyle questions can be skipped.</span></span>
+    `<span>📋 <b>${mainQ} questions</b> · about <b>${tLo}–${tHi} minutes</b>${optNote}</span>
      <span id="progressText" class="muted"></span>`));
 
   root.appendChild(patientBanner());
@@ -2588,36 +2591,14 @@ function calc() {
 
   const bars = el('div', { class: 'card' });
   bars.appendChild(el('h2', {}, 'By domain'));
+  bars.appendChild(el('div', { class: 'q-sub', style: 'margin-bottom:6px' }, 'How much each area contributes (higher = more symptoms).'));
   SECTIONS.forEach(s => {
     const sc = score.secScores[s.id] || 0;
     const max = score.secApplicableMax[s.id] || 0; // applicable max (excludes N/A items)
     const p = max ? Math.round(sc / max * 100) : 0;
-    const maxLabel = max ? `${sc}/${max} · ${p}%` : 'n/a';
-    const roleTag = s.role === 'core' ? ' <span class="opt-tag">core</span>' : '';
     bars.appendChild(el('div', { class: 'bar-row' },
-      `<div class="bar-label"><span>${esc(s.full || s.label)}${roleTag}</span><span class="muted">${maxLabel}</span></div>
+      `<div class="bar-label"><span>${esc(s.full || s.label)}</span><span class="muted">${max ? p + '%' : 'n/a'}</span></div>
        <div class="bar-track"><div class="bar-fill" style="width:${p}%;background:${s.color || '#0F6E56'}"></div></div>`));
-    // Bristol dual-role transparency: the bar shows symptom items only; this note
-    // surfaces the bounded transit contribution that actually feeds the GI core.
-    if (s.id === 'GI' && score.bristolSignal != null && score.secNorm.GI != null) {
-      const addPts = Math.round((score.secNorm.GI - (max ? sc / max : 0)) * 100);
-      const bt = BRISTOL_TYPES.find(t => t.n === extras.bristol);
-      bars.appendChild(el('div', { class: 'q-sub', style: 'margin:-4px 0 12px;padding-left:2px;color:var(--inks)' },
-        `↳ Stool transit ${addPts > 0 ? `adds +${addPts} pts to` : 'adds nothing to'} gut-core${bt ? ` · Type ${bt.n} (${esc(bt.tag)})` : ''} — capped so it can't dominate.`));
-    }
-    // GSRS per-cluster sub-bars: the GI core breaks down into 5 validated
-    // syndromes (Reflux, Pain, Indigestion, Diarrhoea, Constipation). Showing
-    // them surfaces the symptom shape, not just the magnitude.
-    if (s.id === 'GI' && score.clusterAgg) {
-      const order = ['Reflux', 'Pain', 'Indigestion', 'Diarrhoea', 'Constipation'];
-      order.forEach(k => {
-        const c = score.clusterAgg[k]; if (!c || c.max === 0) return;
-        const cp = Math.round(c.sum / c.max * 100);
-        bars.appendChild(el('div', { class: 'bar-row', style: 'padding-left:18px' },
-          `<div class="bar-label"><span class="muted">↳ ${esc(k)}</span><span class="muted">${c.sum}/${c.max} · ${cp}%</span></div>
-           <div class="bar-track" style="height:6px"><div class="bar-fill" style="width:${cp}%;background:${s.color};opacity:.6"></div></div>`));
-      });
-    }
   });
 
   // Modifiable drivers — context, not part of the Index (computed above with the
@@ -2652,9 +2633,9 @@ function calc() {
   }
 
   // ── Ordered render (score-then-story) ──────────────────────────────────────
-  out.appendChild(bars);                              // by-domain breakdown (under the headline + symptom detail)
   out.appendChild(axisProfileCard(profile, heads));   // secondary axes
-  out.appendChild(driv);                              // modifiable drivers (below the secondary axes)
+  out.appendChild(bars);                              // by-domain breakdown (between secondary axes and drivers)
+  out.appendChild(driv);                              // modifiable drivers
   if (patternsEl) out.appendChild(patternsEl);        // patterns to discuss
   out.appendChild(riskMatrixCard(sv, lens));          // symptom × microbiome
   out.appendChild(triageCard(tri, rome, false));      // suggested next step
@@ -2881,9 +2862,9 @@ function buildPatientPrint(c) {
     const sc = score.secScores[s.id] || 0, mx = score.secApplicableMax[s.id] || 0;
     if (!mx) return;
     const p = Math.round(sc / mx * 100);
-    h += `<div class="pr-bar-row"><span style="min-width:140px;font-size:10.5px">${esc(s.full || s.label)}</span>
+    h += `<div class="pr-bar-row"><span style="width:150px;flex:none;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.full || s.label)}</span>
       <div class="pr-bar-track"><div class="pr-bar-fill" style="width:${p}%;background:${s.color || '#0F6E56'}"></div></div>
-      <span style="min-width:36px;text-align:right">${p}%</span></div>`;
+      <span style="width:34px;flex:none;text-align:right">${p}%</span></div>`;
   });
   h += `</div>`;
 
@@ -2897,8 +2878,10 @@ function buildPatientPrint(c) {
 
   const mf = modifiableFactors(driverExtras).filter(f => f.band && f.band !== 'Not answered');
   if (mf.length) {
+    // Band shown as a colour swatch + dark, bold text so it stays legible in
+    // print (coloured text alone was low-contrast for the lighter bands).
     h += `<div class="pr-section"><div class="pr-sh">Lifestyle factors</div>
-      <table class="pr-tbl"><tbody>${mf.map(f => `<tr><td>${f.icon} ${esc(f.label)}</td><td style="color:${f.color}">${esc(f.band)}</td></tr>`).join('')}</tbody></table></div>`;
+      <table class="pr-tbl"><tbody>${mf.map(f => `<tr><td style="color:#000">${f.icon} ${esc(f.label)}</td><td style="color:#000"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${f.color};margin-right:6px;vertical-align:middle"></span><b>${esc(f.band)}</b>${f.score ? ` <span style="color:#555">· ${esc(f.score)}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
   h += `<div class="pr-footer">This is a screening tool — it is not a diagnosis. Please discuss your results with your clinician.<br>Beyond Mechanics · Gut & Systemic Health Screen (GSHS) · ${esc(dateStr)}</div>`;
