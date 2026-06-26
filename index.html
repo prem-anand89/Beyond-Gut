@@ -168,6 +168,9 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 @media print{
   header,.toast,.ov,.mode{display:none!important}
   #print-area{display:block!important;font-size:11.5px;line-height:1.5;color:#000;background:#fff;padding:10mm}
+  /* Force background colours to render in print/PDF — browsers strip them by
+     default, which blanked the By-area bar fills, hero, triage and pill swatches. */
+  #print-area,#print-area *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   .pr-logo{font-size:14px;font-weight:700;color:#0F6E56}
   .pr-title{font-size:20px;font-weight:800;margin:3px 0 2px}
   .pr-meta{font-size:10.5px;color:#555;margin-bottom:10px;line-height:1.7}
