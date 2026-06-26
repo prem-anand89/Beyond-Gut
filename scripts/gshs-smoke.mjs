@@ -55,11 +55,12 @@ function run(gi, sys = {}, extra = {}, romeIn = {}) {
   const famhx = scales.familyHistory(ex);
   const obstetric = scales.obstetricHistory(ex);
   const gynOverlap = (typeof a.gy_cyclical === 'number' && a.gy_cyclical >= 2) && (typeof a.gsrs_pain === 'number' && a.gsrs_pain >= 2);
+  const anthro = scales.anthropometrics(ex, {});
   const tri = triage(score, pat, [], correlateLoad, {
     impactBand: prof.impact.band, romeResult: rr, adhesionSurgery: false,
-    knownConditions: conditions, conditionNotes: conditions.notes, family: famhx, gynOverlap, obstetric,
+    knownConditions: conditions, conditionNotes: conditions.notes, family: famhx, gynOverlap, obstetric, anthro,
   });
-  return { score, prof, heads, pat, rr, tri, correlateLoad, obstetric };
+  return { score, prof, heads, pat, rr, tri, correlateLoad, obstetric, anthro };
 }
 const reasons = (tri) => [tri.reasons, ...tri.alsoConsider.map(x => x.reasons)].flat();
 
@@ -215,6 +216,38 @@ ok(schema.revealMet(arRevealIf, { answers: {}, clusterNorm: {}, flags: { pelvicR
 const rOb = run(1, {}, { obstetric: ['ob_instrumental'] });
 ok(rOb.tri.pelvicNote && /pelvic-floor/i.test(rOb.tri.pelvicNote) && /higher risk/i.test(rOb.tri.pelvicNote),
    'obstetric high-risk history → pelvic-floor interpretation note');
+
+// 25. Anthropometrics — BMI / WHtR math, band boundaries, notes, minor caveat.
+const A = (ex, session = {}) => scales.anthropometrics(ex, session);
+ok(A({ heightCm: 170, weightKg: 68 }).bmi === 23.5, 'BMI computed (170cm/68kg → 23.5)');
+ok(A({ heightCm: 170, waistCm: 84 }).whtr === 0.49, 'WHtR computed (84/170 → 0.49)');
+ok(A({ heightCm: 170 }).bmi === null && A({ weightKg: 68 }).bmi === null, 'BMI null when an input missing');
+ok(A({ heightCm: 170 }).whtr === null, 'WHtR null when waist missing');
+// BMI band boundaries (height 100cm makes BMI == weight).
+ok(A({ heightCm: 100, weightKg: 18.4 }).bmiBand === 'Underweight', 'BMI 18.4 → Underweight');
+ok(A({ heightCm: 100, weightKg: 18.5 }).bmiBand === 'Normal', 'BMI 18.5 → Normal');
+ok(A({ heightCm: 100, weightKg: 25 }).bmiBand === 'Overweight', 'BMI 25 → Overweight');
+ok(A({ heightCm: 100, weightKg: 30 }).bmiBand === 'Obese', 'BMI 30 → Obese');
+// WHtR band boundaries (height 100cm makes WHtR == waist/100).
+ok(A({ heightCm: 100, waistCm: 49 }).whtrBand === 'Healthy', 'WHtR 0.49 → Healthy');
+ok(A({ heightCm: 100, waistCm: 50 }).whtrBand === 'Increased', 'WHtR 0.50 → Increased');
+ok(A({ heightCm: 100, waistCm: 60 }).whtrBand === 'High', 'WHtR 0.60 → High');
+// Notes.
+ok(A({ heightCm: 100, weightKg: 17 }).notes.some(n => /malabsorption/i.test(n)), 'low BMI → malabsorption note');
+ok(A({ heightCm: 100, waistCm: 55 }).notes.some(n => /cardiometabolic/i.test(n)), 'WHtR ≥0.5 → cardiometabolic note');
+ok(A({ heightCm: 170, weightKg: 68, waistCm: 80 }).notes.length === 0, 'normal anthropometrics → no notes');
+ok(A({}).notes.length === 0 && A({}).bmi === null, 'empty anthropometrics → no notes, null values');
+// Minor caveat — adult BMI bands suppressed for under-18s.
+const minor = A({ heightCm: 100, weightKg: 17 }, { age: '12' });
+ok(minor.bmi === 17 && minor.bmiBand === null && /Under 18/i.test(minor.caveat || ''), 'under-18 → BMI value shown, band suppressed, caveat set');
+// Triage note wiring (notes-only — never changes the Tier).
+const rAnthro = run(0, {}, { heightCm: 100, weightKg: 17 });
+ok(rAnthro.tri.anthroNote && /malabsorption/i.test(rAnthro.tri.anthroNote), 'low BMI surfaces as triage anthroNote');
+ok(rAnthro.tri.level === run(0).tri.level, 'anthropometrics does not change the triage Tier');
+
+// 26. Reorg invariants — sections unchanged, de-blend still holds.
+ok(['GI','IM','BG','NU','IMP','AR','UG','SY'].every(id => schema.SECTIONS.some(s => s.id === id)), 'all sections still present after reorg');
+ok(run(0, { im_food_react: 3, im_histamine: 3, sk_skin: 3 }, { heightCm: 100, weightKg: 30, waistCm: 70 }).heads.primary.symptom.value === 0, 'GSRS Index unchanged by anthropometrics / systemic answers');
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

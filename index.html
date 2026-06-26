@@ -840,6 +840,53 @@ function obstetricHistory(extras) {
   return { list: sel.map(o => o.label), risk: sel.length > 0, highRisk, count: sel.length };
 }
 
+// Anthropometrics — BMI (kg/m²) and Waist-to-Height ratio (WHtR) from optional
+// height/weight/waist inputs. PURE + exported (smoke-tested). NOTES ONLY: feeds
+// clinician interpretation, never the Index or the triage Tier. Bands use adult
+// thresholds (WHO for BMI, NICE 2022 / Ashwell for WHtR); for under-18s the adult
+// BMI bands don't apply, so a caveat is set and the band is suppressed.
+function anthropometrics(extras, session) {
+  const ex = extras || {};
+  const h = Number(ex.heightCm), w = Number(ex.weightKg), waist = Number(ex.waistCm);
+  const hOk = isFinite(h) && h > 0, wOk = isFinite(w) && w > 0, waistOk = isFinite(waist) && waist > 0;
+  const ageNum = parseInt((session || {}).age, 10);
+  const isMinor = !isNaN(ageNum) && ageNum < 18;
+
+  let bmi = null, bmiBand = null;
+  if (hOk && wOk) {
+    bmi = Math.round((w / Math.pow(h / 100, 2)) * 10) / 10;
+    if (!isMinor) {
+      bmiBand = bmi < 18.5 ? 'Underweight'
+        : bmi < 25 ? 'Normal'
+        : bmi < 30 ? 'Overweight'
+        : 'Obese';
+    }
+  }
+
+  let whtr = null, whtrBand = null;
+  if (hOk && waistOk) {
+    whtr = Math.round((waist / h) * 100) / 100;
+    whtrBand = whtr < 0.4 ? 'Low'
+      : whtr < 0.5 ? 'Healthy'
+      : whtr < 0.6 ? 'Increased'
+      : 'High';
+  }
+
+  const notes = [];
+  // Low BMI sharpens the malabsorption read (only when adult bands apply).
+  if (bmi != null && !isMinor && bmi < 18.5)
+    notes.push(`Low BMI (${bmi}) — factor into the nutrient / malabsorption interpretation.`);
+  // WHtR ≥ 0.5 is the NICE "keep your waist to less than half your height" threshold.
+  if (whtr != null && whtr >= 0.5)
+    notes.push(`Waist-to-height ratio ${whtr} (≥0.5) — increased central adiposity / cardiometabolic risk; consider lifestyle review.`);
+
+  const caveat = (isMinor && bmi != null)
+    ? 'Under 18 — adult BMI categories do not apply; interpret against age/sex percentiles.'
+    : null;
+
+  return { bmi, bmiBand, whtr, whtrBand, notes, caveat };
+}
+
 // Returns the count of dysbiosis-correlate signals present + their labels.
 function dysbiosisLens(extras) {
   const ex = extras || {}, d = ex.dys || {};
@@ -945,6 +992,7 @@ __e.KNOWN_CONDITIONS = KNOWN_CONDITIONS; __e.knownConditions = knownConditions;
 __e.MED_CONFOUNDERS = MED_CONFOUNDERS; __e.medConfounders = medConfounders;
 __e.FAMILY_HISTORY = FAMILY_HISTORY; __e.familyHistory = familyHistory;
 __e.OBSTETRIC_HISTORY = OBSTETRIC_HISTORY; __e.obstetricHistory = obstetricHistory;
+__e.anthropometrics = anthropometrics;
 __e.gutHealthIndex = gutHealthIndex; __e.GHI_WEIGHTS = GHI_WEIGHTS;
 __e.TRIM_PLAN = TRIM_PLAN;
 __e.BRISTOL_TYPES = BRISTOL_TYPES; __e.PAIN_REGIONS = PAIN_REGIONS; __e.painBand = painBand; __e.modifiableFactors = modifiableFactors;
@@ -1648,6 +1696,12 @@ function triage(score, patterns, firedFlags, dys, opts) {
   result.pelvicNote = (o.obstetric && o.obstetric.risk)
     ? `Obstetric risk factors for pelvic-floor dysfunction (${o.obstetric.highRisk ? 'assisted birth / significant tear — higher risk' : 'birth history'}) — consider pelvic-floor physiotherapy assessment if bowel-control or evacuation symptoms are present.`
     : null;
+  // Anthropometrics — BMI / WHtR interpretation. A NOTE only (notes-only by
+  // design): low BMI sharpens the malabsorption read, WHtR ≥0.5 flags central
+  // adiposity. Never changes the Tier.
+  result.anthroNote = (o.anthro && o.anthro.notes && o.anthro.notes.length)
+    ? o.anthro.notes.join(' ')
+    : null;
   // Low data confidence — the core GI section wasn't answered.
   result.coreUnknown = !!(score && score.coreUnknown);
   if (result.coreUnknown) result.reasons.push({ text: 'Note: the core GI section was not completed, so this triage is provisional.', axis: 'data' });
@@ -1911,7 +1965,7 @@ const { scaleFor, RECALL_NOTE, PSS4_ITEMS, PSS4_ANCHORS, PSS4_REVERSED, pss4Scor
         FOOD_TRIGGERS, ABX_COURSES, GAS_LEVELS, STOOLVAR_LEVELS, POSTINF_OPTS, PARADOX_OPTS, dysbiosisLens,
         SURGERIES, surgicalFlags, KNOWN_CONDITIONS, knownConditions,
         MED_CONFOUNDERS, medConfounders, FAMILY_HISTORY, familyHistory,
-        OBSTETRIC_HISTORY, obstetricHistory } = __req('scales.js');
+        OBSTETRIC_HISTORY, obstetricHistory, anthropometrics } = __req('scales.js');
 const { computeScores, scoreConfidence, axisProfile, headlineOutputs } = __req('scoring.js');
 const { RED_FLAGS, anyRedFlag, firedRedFlags, RED_FLAG_BANNER } = __req('redflags.js');
 const { el, esc, toast, patientForm } = __req('util.js');
@@ -1926,6 +1980,7 @@ let redflags = {};     // rf_id -> bool
 let nav = {};          // { goRecords } — set by app.js so the banner can jump to records
 // Modifiable drivers — stored on the visit (extras), kept OUT of the Index.
 const blankExtras = () => ({
+  heightCm: null, weightKg: null, waistCm: null,   // anthropometrics — optional, notes-only (BMI / WHtR)
   bristol: null, pss4: [null, null, null, null], nrsPain: null, painRegion: null,
   meds: { abx: false, ppi: false, nsaid: false },
   dietFibre: null, dietProcessed: null, alcohol: null, activity: null,
@@ -2302,11 +2357,17 @@ function render() {
 
   root.appendChild(patientBanner());
 
-  if (RED_FLAGS.length) root.appendChild(redFlagCard());
+  // Clinical intake flow:
+  //   Anthropometrics → History → Safety screen → Gut symptoms →
+  //   Lifestyle & modifiable drivers → Systemic features → Adaptive deep dive.
 
-  // History-taking — grouped up front with the safety screen (clinical flow):
-  // diagnosed/suspected conditions, surgical history, and current medications.
-  root.appendChild(el('div', { class: 'grp-label', style: 'margin:6px 2px 2px' }, 'History'));
+  // 1 — Anthropometrics (optional; BMI / WHtR — context, not scored).
+  root.appendChild(el('div', { class: 'grp-label', style: 'margin:6px 2px 2px' }, 'Anthropometrics'));
+  root.appendChild(anthropometricsCard());
+
+  // 2 — History: diagnosed/suspected conditions, family & birth history,
+  // surgical history, current medications.
+  root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'History'));
   root.appendChild(conditionsCard());
   root.appendChild(familyHistoryCard());
   // Obstetric/birth history is shown only for patients recorded as Female (the
@@ -2316,6 +2377,12 @@ function render() {
   root.appendChild(medsCard());
   root.appendChild(medConfoundersCard());
 
+  // 3 — Safety screen: alarm / red-flag features (history then informs which matter).
+  if (RED_FLAGS.length) {
+    root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Safety screen'));
+    root.appendChild(redFlagCard());
+  }
+
   if (!SECTIONS.length || !QUESTIONS.length) {
     root.appendChild(el('div', { class: 'card' },
       '<div class="empty-note">🌱<br>No domains locked yet.<br>' +
@@ -2323,25 +2390,33 @@ function render() {
     return;
   }
 
-  // Always-on symptom domains (conditional ones are revealed adaptively below).
-  SECTIONS.filter(sec => !sec.conditional).forEach(sec => root.appendChild(sectionCard(sec)));
-
-  // Targeted symptoms — hidden until the GI core warrants them (revealIf),
-  // or via the manual clinician toggle. Placed right after the symptom domains.
-  root.appendChild(targetedSymptomsArea());
-
-  // Modifiable drivers (not part of the Index; stored for patterns/strains).
-  // (Conditions / surgeries / medications moved up to the History block above.)
-  root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Drivers & context'));
+  // 4 — Gut symptoms: the validated GI core + symptom-characterising cards
+  // (stool form, pain & Rome IV — the last two gated on reported pain).
+  root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Gut symptoms'));
+  const giSec = SECTIONS.find(s => s.id === 'GI');
+  if (giSec) root.appendChild(sectionCard(giSec));
   root.appendChild(bristolCard());
-  root.appendChild(pss4Card());
   // Pain + Rome IV are gated on reported abdominal pain (gsrs_pain ≥ 1) — Rome IV
   // requires recurrent pain, so this spares pain-free patients the burden.
   root.appendChild(wrapHidden('reveal-card-pain', painCard()));
+  root.appendChild(wrapHidden('reveal-card-rome', romeCard()));
+
+  // 5 — Lifestyle & modifiable drivers (not part of the Index; feed patterns).
+  root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Lifestyle & modifiable drivers'));
   root.appendChild(lifestyleCard());
   root.appendChild(sleepCard());
-  root.appendChild(wrapHidden('reveal-card-rome', romeCard()));
   root.appendChild(dysCard());
+
+  // 6 — Systemic features: the standalone systemic axes (immune/inflammatory,
+  // brain-gut & mood, nutrient, functional impact) + the PSS-4 stress scale
+  // (which feeds the Psychosocial axis, so it sits with the brain-gut items).
+  root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Systemic features'));
+  SECTIONS.filter(s => ['IM', 'BG', 'NU', 'IMP'].includes(s.id)).forEach(sec => root.appendChild(sectionCard(sec)));
+  root.appendChild(pss4Card());
+
+  // 7 — Adaptive deep dive: targeted symptom sections (AR / UG / SY), hidden
+  // until the GI core warrants them (revealIf) or the manual toggle is used.
+  root.appendChild(targetedSymptomsArea());
 
   const actions = el('div', { class: 'card row', style: 'justify-content:flex-end' });
   actions.appendChild(el('button', { class: 'btn btn-g', onclick: calc }, 'See results →'));
@@ -2389,7 +2464,7 @@ function sectionCard(sec) {
 // conditional section. refreshReveals() decides which holders are visible.
 function targetedSymptomsArea() {
   const wrap = el('div', { id: 'targeted-wrap' });
-  wrap.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Targeted symptoms (shown when relevant)'));
+  wrap.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Adaptive deep dive (shown when relevant)'));
   const toggle = el('button', { class: 'btn btn-gh', type: 'button', id: 'targetedToggle', style: 'margin:0 0 8px' },
     '+ Show all targeted symptom questions');
   toggle.onclick = () => {
@@ -2647,6 +2722,57 @@ function medConfoundersCard() {
 // symptom-led gate (constipation / urgency) hasn't tripped.
 function obstetricCard() {
   return chipMultiCard('Birth history', 'Vaginal or assisted births and significant perineal tears — pelvic-floor risk factors (optional, not scored).', '#7A4A8C', OBSTETRIC_HISTORY, 'obstetric', refreshReveals);
+}
+
+// Anthropometrics — optional height/weight/waist; computes BMI + WHtR live.
+// Notes-only: feeds clinician interpretation, never the Index or the triage Tier.
+function anthropometricsCard() {
+  const card = el('div', { class: 'sec-card' });
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:#3A4A5A' }, 'Anthropometrics'));
+  const body = el('div', { class: 'sec-body' });
+  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' },
+    'Optional. Used for BMI and waist-to-height ratio — context for interpretation, not part of the score.'));
+
+  const out = el('div', { style: 'margin-top:10px' });
+  const numInput = (key, label, placeholder) => {
+    const wrap = el('div', { style: 'flex:1;min-width:90px' });
+    wrap.appendChild(el('label', { style: 'font-size:11px;font-weight:600;color:var(--inkt);display:block;margin-bottom:3px' }, esc(label)));
+    const inp = el('input', { type: 'text', inputmode: 'decimal', value: extras[key] == null ? '' : String(extras[key]), placeholder,
+      style: 'width:100%;padding:9px 12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px' });
+    inp.oninput = () => {
+      const v = inp.value.trim();
+      extras[key] = v === '' ? null : Number(v);
+      renderOut();
+    };
+    wrap.appendChild(inp);
+    return wrap;
+  };
+  const inputs = el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap' });
+  inputs.appendChild(numInput('heightCm', 'Height (cm)', 'e.g. 170'));
+  inputs.appendChild(numInput('weightKg', 'Weight (kg)', 'e.g. 68'));
+  inputs.appendChild(numInput('waistCm', 'Waist (cm)', 'e.g. 84'));
+  body.appendChild(inputs);
+
+  function renderOut() {
+    const a = anthropometrics(extras, session);
+    out.innerHTML = '';
+    if (a.bmi == null && a.whtr == null) return;
+    const grid = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' });
+    const tile = (label, val, band) => el('div', { style: 'flex:1;min-width:120px;border:1px solid var(--bdr);border-radius:10px;padding:9px 12px;background:var(--surf2)' },
+      `<div style="font-size:11px;font-weight:700;color:var(--inks)">${esc(label)}</div>
+       <div style="display:flex;align-items:baseline;gap:8px;margin-top:3px">
+         <div style="font-size:20px;font-weight:800;color:var(--ink)">${val == null ? '—' : esc(String(val))}</div>
+         ${band ? `<span class="pill ${bandPillClass(band === 'Underweight' || band === 'Low' ? 'Mild–Moderate' : band === 'Normal' || band === 'Healthy' ? 'Minimal' : band === 'Overweight' || band === 'Increased' ? 'Significant' : 'Severe')}">${esc(band)}</span>` : ''}
+       </div>`);
+    if (a.bmi != null) grid.appendChild(tile('BMI (kg/m²)', a.bmi, a.bmiBand));
+    if (a.whtr != null) grid.appendChild(tile('Waist-to-height', a.whtr, a.whtrBand));
+    out.appendChild(grid);
+    if (a.caveat) out.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7B5900' }, esc(a.caveat)));
+  }
+  renderOut();
+  body.appendChild(out);
+  card.appendChild(body);
+  return card;
 }
 
 // Generic 0–3 segmented row used by the diet/lifestyle drivers.
@@ -2913,6 +3039,7 @@ function computeAll() {
   const meds = medConfounders(extras);
   const famhx = familyHistory(extras);
   const obstetric = obstetricHistory(extras);
+  const anthro = anthropometrics(extras, session);
   const autonomicFlag = (typeof answers.sy_orthostatic === 'number' && answers.sy_orthostatic >= 2)
     || (typeof answers.sy_palpitations === 'number' && answers.sy_palpitations >= 2);
   // Gynaecological / endometriosis overlap: cyclical flare (≥ moderate) with
@@ -2937,8 +3064,9 @@ function computeAll() {
     family: famhx,
     gynOverlap,
     obstetric,
+    anthro,
   });
-  return { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, correlateLoad, meds, famhx, obstetric };
+  return { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, correlateLoad, meds, famhx, obstetric, anthro };
 }
 
 // Per-domain bar card, shared by the patient results and the Clinician tab.
@@ -3160,6 +3288,8 @@ function triageCard(tri, rome, showInvestigations) {
     '⚕️ ' + esc(tri.gynNote)));
   if (tri.pelvicNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
     '🧷 ' + esc(tri.pelvicNote)));
+  if (tri.anthroNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
+    '📏 ' + esc(tri.anthroNote)));
   if (tri.alsoConsider.length) {
     tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-weight:600' }, 'Also worth noting:'));
     tri.alsoConsider.forEach(a => tcard.appendChild(el('div', { class: 'q-sub', style: 'padding-left:4px' },
@@ -3348,7 +3478,7 @@ function buildPatientPrint(c) {
 }
 
 function buildClinicianPrint(c) {
-  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, meds, famhx, obstetric } = c;
+  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, meds, famhx, obstetric, anthro } = c;
   const dateStr = new Date().toLocaleDateString('en-AU', { year: 'numeric', month: 'long', day: 'numeric' });
   const patName = (session.name || '').trim() || 'Not recorded';
   const priors = priorVisits();
@@ -3381,7 +3511,7 @@ function buildClinicianPrint(c) {
       <div style="margin-top:3px;font-size:11px">${esc(tri.action)}</div>
       ${tri.reasons.length ? `<div style="font-size:10.5px;margin-top:4px">Reasons: ${tri.reasons.map(r => esc(r.text)).join(' · ')}</div>` : ''}
       ${tri.alsoConsider.length ? `<div style="font-size:10.5px;margin-top:3px">Also consider: ${tri.alsoConsider.map(a => `${esc(a.label)} (${a.reasons.map(r => esc(r.text)).join('; ')})`).join(' / ')}</div>` : ''}
-      ${[].concat(tri.conditionGuidance || [], tri.familyNotes || [], tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [], tri.medNote ? [tri.medNote] : []).map(n => `<div style="font-size:10.5px;margin-top:3px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
+      ${[].concat(tri.conditionGuidance || [], tri.familyNotes || [], tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [], tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : []).map(n => `<div style="font-size:10.5px;margin-top:3px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
     </div>
     ${tri.investigations && tri.investigations.length ? `
       <div style="font-weight:600;font-size:11px;margin:6px 0 3px">Suggested investigations / management:</div>
@@ -3418,6 +3548,12 @@ function buildClinicianPrint(c) {
   if (obstetric && obstetric.list && obstetric.list.length) {
     h += `<div class="pr-section"><div class="pr-sh">Obstetric / birth history</div>
       <div style="font-size:10.5px">${esc(obstetric.list.join(', '))}</div></div>`;
+  }
+  if (anthro && (anthro.bmi != null || anthro.whtr != null)) {
+    const bmiTxt = anthro.bmi != null ? `BMI ${anthro.bmi}${anthro.bmiBand ? ` (${anthro.bmiBand})` : ''}` : null;
+    const whtrTxt = anthro.whtr != null ? `Waist-to-height ${anthro.whtr}${anthro.whtrBand ? ` (${anthro.whtrBand})` : ''}` : null;
+    h += `<div class="pr-section"><div class="pr-sh">Anthropometrics</div>
+      <div style="font-size:10.5px">${esc([bmiTxt, whtrTxt].filter(Boolean).join(' · '))}${anthro.caveat ? `<br><i>${esc(anthro.caveat)}</i>` : ''}</div></div>`;
   }
   if (meds && meds.list && meds.list.length) {
     h += `<div class="pr-section"><div class="pr-sh">Medication confounders</div>
