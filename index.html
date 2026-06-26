@@ -84,6 +84,7 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 .bristol-opt{display:flex;gap:10px;align-items:center;border:1.5px solid var(--bdr);border-radius:8px;padding:9px 12px;background:var(--surf);text-align:left;width:100%}
 .bristol-opt.sel{border-color:var(--g);background:var(--gp)}
 .bristol-n{width:24px;height:24px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0}
+.bristol-ic{flex-shrink:0;display:block}
 .nrs-row{display:flex;gap:4px;flex-wrap:wrap}
 .nrs-opt{flex:1;min-width:30px;border:1.5px solid var(--bdr);background:var(--surf);border-radius:7px;padding:9px 0;text-align:center;font-weight:700;font-size:13px;color:var(--inks)}
 .nrs-opt.sel{border-color:var(--re);background:#FCEBEB;color:var(--re)}
@@ -2407,6 +2408,24 @@ function updateProgress() {
 
 const PSS4_COLOR = ['s0', 's0', 's1', 's2', 's3']; // map 0–4 anchors to colour classes
 
+// Compact stylised SVG glyph for each Bristol type — a shape cue beside the
+// label. Drawn from primitives (NOT the original chart art), so it scales,
+// prints, and adds no external assets to the single-file app. Tinted with the
+// type's own colour so the icon and tag read as one.
+function bristolIcon(n, color, size) {
+  const w = size || 34, h = Math.round(w * 0.62), c = color || '#6B4A2E';
+  const shapes = {
+    1: '<circle cx="7" cy="8" r="3"/><circle cx="17" cy="6" r="3"/><circle cx="27" cy="8" r="3"/><circle cx="12" cy="16" r="3"/><circle cx="23" cy="16" r="3"/>',
+    2: '<circle cx="7" cy="11" r="5"/><circle cx="14" cy="11" r="5.5"/><circle cx="21" cy="11" r="5.5"/><circle cx="28" cy="11" r="5"/>',
+    3: '<rect x="3" y="7" width="28" height="9" rx="4.5"/><g stroke="#fff" stroke-width="1.1"><line x1="11" y1="7.5" x2="11" y2="15.5"/><line x1="17" y1="7.5" x2="17" y2="15.5"/><line x1="23" y1="7.5" x2="23" y2="15.5"/></g>',
+    4: '<rect x="2" y="8" width="30" height="7" rx="3.5"/>',
+    5: '<ellipse cx="8" cy="11" rx="5" ry="4"/><ellipse cx="18" cy="11" rx="5" ry="4"/><ellipse cx="27" cy="11" rx="4.5" ry="3.5"/>',
+    6: '<circle cx="8" cy="13" r="4"/><circle cx="14" cy="9" r="4"/><circle cx="20" cy="11" r="4.5"/><circle cx="26" cy="13" r="4"/><circle cx="13" cy="15" r="3.5"/><circle cx="22" cy="15" r="3.5"/>',
+    7: '<ellipse cx="17" cy="12" rx="14" ry="3.6"/><circle cx="5" cy="18" r="1.3"/><circle cx="17" cy="19" r="1.3"/><circle cx="29" cy="18" r="1.3"/>',
+  };
+  return `<svg class="bristol-ic" viewBox="0 0 34 22" width="${w}" height="${h}" fill="${c}" aria-hidden="true">${shapes[n] || ''}</svg>`;
+}
+
 function bristolCard() {
   const card = el('div', { class: 'sec-card' });
   card.appendChild(el('div', { class: 'sec-head', style: 'background:#6B4A2E' }, 'Stool type (Bristol scale)'));
@@ -2416,6 +2435,7 @@ function bristolCard() {
   BRISTOL_TYPES.forEach(t => {
     const b = el('button', { class: `bristol-opt${extras.bristol === t.n ? ' sel' : ''}`, type: 'button' },
       `<span class="bristol-n" style="background:${t.col}">${t.n}</span>
+       ${bristolIcon(t.n, t.col)}
        <span><b>${esc(t.label)}</b> · <span class="muted">${esc(t.sub)}</span><br><small style="color:${t.col}">${esc(t.tag)}</small></span>`);
     b.onclick = () => { extras.bristol = t.n; grid.querySelectorAll('.bristol-opt').forEach(o => o.classList.remove('sel')); b.classList.add('sel'); };
     grid.appendChild(b);
