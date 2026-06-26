@@ -84,7 +84,7 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 .bristol-opt{display:flex;gap:10px;align-items:center;border:1.5px solid var(--bdr);border-radius:8px;padding:9px 12px;background:var(--surf);text-align:left;width:100%}
 .bristol-opt.sel{border-color:var(--g);background:var(--gp)}
 .bristol-n{width:24px;height:24px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0}
-.bristol-ic{flex-shrink:0;display:block}
+.bristol-ic{flex-shrink:0;display:inline-block;vertical-align:middle}
 .nrs-row{display:flex;gap:4px;flex-wrap:wrap}
 .nrs-opt{flex:1;min-width:30px;border:1.5px solid var(--bdr);background:var(--surf);border-radius:7px;padding:9px 0;text-align:center;font-weight:700;font-size:13px;color:var(--inks)}
 .nrs-opt.sel{border-color:var(--re);background:#FCEBEB;color:var(--re)}
@@ -856,7 +856,7 @@ function modifiableFactors(extras) {
       score: plPct != null ? `${plPct}/100${ex.pss4Score != null ? ` · PSS-4 ${ex.pss4Score}/16` : ''}` : null,
       color: pl ? pl.c : '#999' },
     { icon: '⚡', label: 'Pain (NRS)', band: pn ? pn.l : '—', score: ex.nrsPain != null ? `${ex.nrsPain}/10` : null, color: pn ? pn.c : '#999' },
-    { icon: '💩', label: 'Bristol stool', band: bt ? `Type ${bt.n}` : '—', score: bt ? bt.tag : null, color: bt ? bt.col : '#999' },
+    { icon: '💩', bristolN: bt ? bt.n : null, label: 'Bristol stool', band: bt ? `Type ${bt.n}` : '—', score: bt ? bt.tag : null, color: bt ? bt.col : '#999' },
     { icon: '💊', label: 'Recent disruptors', band: disrupt.length ? `${disrupt.length} flagged` : (ex.meds ? 'None' : '—'),
       score: disrupt.length ? disrupt.map(d => d.label).join(', ') : null, color: disrupt.length ? '#A32D2D' : (ex.meds ? '#0F6E56' : '#999') },
     { icon: '🥗', label: 'Diet quality', band: db ? db.l : '—', score: null, color: db ? db.c : '#999' },
@@ -2426,6 +2426,13 @@ function bristolIcon(n, color, size) {
   return `<svg class="bristol-ic" viewBox="0 0 34 22" width="${w}" height="${h}" fill="${c}" aria-hidden="true">${shapes[n] || ''}</svg>`;
 }
 
+// Leading icon for a modifiable-driver row: the selected Bristol type uses its
+// stool-shape glyph (tinted with the type colour); every other driver keeps its
+// emoji. Trailing space so it sits cleanly before the label.
+function factorIcon(f) {
+  return (f && f.bristolN) ? bristolIcon(f.bristolN, f.color, 20) + ' ' : f.icon + ' ';
+}
+
 function bristolCard() {
   const card = el('div', { class: 'sec-card' });
   card.appendChild(el('div', { class: 'sec-head', style: 'background:#6B4A2E' }, 'Stool type (Bristol scale)'));
@@ -2435,7 +2442,7 @@ function bristolCard() {
   BRISTOL_TYPES.forEach(t => {
     const b = el('button', { class: `bristol-opt${extras.bristol === t.n ? ' sel' : ''}`, type: 'button' },
       `<span class="bristol-n" style="background:${t.col}">${t.n}</span>
-       ${bristolIcon(t.n, t.col)}
+       ${bristolIcon(t.n, t.col, 42)}
        <span><b>${esc(t.label)}</b> · <span class="muted">${esc(t.sub)}</span><br><small style="color:${t.col}">${esc(t.tag)}</small></span>`);
     b.onclick = () => { extras.bristol = t.n; grid.querySelectorAll('.bristol-opt').forEach(o => o.classList.remove('sel')); b.classList.add('sel'); };
     grid.appendChild(b);
@@ -2986,7 +2993,7 @@ function calc() {
   driv.appendChild(el('div', { class: 'q-sub' }, 'Shown for context — not added to the GI Symptom Burden score. These feed the pattern & triage guidance.'));
   const dg = el('div', { class: 'drivers' });
   modifiableFactors(driverExtras).forEach(f => dg.appendChild(el('div', { class: 'driver' },
-    `<div class="dl" style="font-weight:600;margin-bottom:2px">${f.icon} ${esc(f.label)}</div>
+    `<div class="dl" style="font-weight:600;margin-bottom:2px">${factorIcon(f)}${esc(f.label)}</div>
      <div class="dv" style="color:${f.color}">${esc(f.band)}</div>
      ${f.score ? `<div class="dl">${esc(f.score)}</div>` : ''}`)));
   driv.appendChild(dg);
@@ -3193,7 +3200,7 @@ function clinicianDetailCard(c) {
   // Modifiable driver raw values
   card.appendChild(chead('Modifiable driver raw values'));
   const drRows = modifiableFactors(driverExtras).map(f =>
-    `<tr><td>${f.icon} ${esc(f.label)}</td><td style="color:${f.color}">${esc(f.band)}</td><td style="color:var(--inkt)">${esc(f.score || '')}</td></tr>`
+    `<tr><td>${factorIcon(f)}${esc(f.label)}</td><td style="color:${f.color}">${esc(f.band)}</td><td style="color:var(--inkt)">${esc(f.score || '')}</td></tr>`
   ).join('');
   card.appendChild(tbl(['Factor', 'Band', 'Score'], drRows));
 
@@ -3271,7 +3278,7 @@ function buildPatientPrint(c) {
     // Band shown as a colour swatch + dark, bold text so it stays legible in
     // print (coloured text alone was low-contrast for the lighter bands).
     h += `<div class="pr-section"><div class="pr-sh">Lifestyle factors</div>
-      <table class="pr-tbl"><tbody>${mf.map(f => `<tr><td style="color:#000">${f.icon} ${esc(f.label)}</td><td style="color:#000"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${f.color};margin-right:6px;vertical-align:middle"></span><b>${esc(f.band)}</b>${f.score ? ` <span style="color:#555">· ${esc(f.score)}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
+      <table class="pr-tbl"><tbody>${mf.map(f => `<tr><td style="color:#000">${factorIcon(f)}${esc(f.label)}</td><td style="color:#000"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${f.color};margin-right:6px;vertical-align:middle"></span><b>${esc(f.band)}</b>${f.score ? ` <span style="color:#555">· ${esc(f.score)}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
   h += `<div class="pr-footer">This is a screening tool — it is not a diagnosis. Please discuss your results with your clinician.<br>Beyond Mechanics · Gut & Systemic Health Screen (GSHS) · ${esc(dateStr)}</div>`;
@@ -3405,7 +3412,7 @@ function buildClinicianPrint(c) {
   // Modifiable drivers
   h += `<div class="pr-section"><div class="pr-sh">Modifiable drivers</div>
     <table class="pr-tbl"><thead><tr><th>Factor</th><th>Band</th><th>Score</th></tr></thead><tbody>
-      ${modifiableFactors(driverExtras).map(f => `<tr><td>${f.icon} ${esc(f.label)}</td><td style="color:${f.color}">${esc(f.band)}</td><td>${esc(f.score || '')}</td></tr>`).join('')}
+      ${modifiableFactors(driverExtras).map(f => `<tr><td>${factorIcon(f)}${esc(f.label)}</td><td style="color:${f.color}">${esc(f.band)}</td><td>${esc(f.score || '')}</td></tr>`).join('')}
     </tbody></table></div>`;
 
   // Item-level responses (page 2)
