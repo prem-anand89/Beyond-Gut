@@ -3300,8 +3300,11 @@ function buildClinicianPrint(c) {
   </div>`;
 
   // Scores — GSHS headline (4 primary) + secondary axes. No blended index.
+  // disruption_load and dysbiosis_correlate_load values are raw signal counts (0–6),
+  // not percentages. All other axis values (including psychosocial_load) are 0–100%.
+  const COUNT_LOADS = new Set(['disruption_load', 'dysbiosis_correlate_load']);
   const pctOrCount = (o) => o.value == null ? '—'
-    : (o.max != null ? `${o.value}/${o.max}` : (o.key && (o.key.endsWith('_load')) ? o.value : o.value + '%'));
+    : (o.max != null ? `${o.value}/${o.max}` : (COUNT_LOADS.has(o.key) ? o.value : o.value + '%'));
   const headRow = (o) => `<tr><td>${esc(o.label)}</td><td><b>${esc(String(pctOrCount(o)))}</b>${o.band ? ` — ${esc(o.band)}` : ''}</td></tr>`;
   h += `<div class="pr-section"><div class="pr-sh">Scores — primary</div>
     <table class="pr-tbl"><tbody>
@@ -3392,7 +3395,9 @@ function buildClinicianPrint(c) {
       <table class="pr-tbl"><tbody>${qs.map(q => {
         const val = answers[q.id];
         const labels = scaleFor(q.scale);
-        const disp = val === 'na' ? 'N/A' : val == null ? '—' : `${val} — ${esc(labels[val] || '')}`;
+        const disp = q.freeText
+          ? (typeof val === 'string' && val.trim() ? esc(val) : '—')
+          : val === 'na' ? 'N/A' : val == null ? '—' : `${val} — ${esc(labels[val] || '')}`;
         return `<tr><td>${esc(q.patientText)}</td><td style="white-space:nowrap">${disp}</td></tr>`;
       }).join('')}</tbody></table>`;
   });
