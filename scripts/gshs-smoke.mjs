@@ -144,13 +144,16 @@ ok(schema.QUESTIONS.some(q => q.id === 'nu_known_def_which' && q.freeText && q.r
 
 // 14. Conditional sections never enter the validated Index.
 const aPelvic = {}; GI_IDS.forEach(id => (aPelvic[id] = 0));
-aPelvic.ar_incontinence = 3; aPelvic.ar_straining = 3; aPelvic.ar_blockage = 3;
+aPelvic.ar_incont_urge = 3; aPelvic.ar_straining = 3; aPelvic.ar_blockage = 3;
 ok(scoring.computeScores(aPelvic, {}).index === 0, 'answered targeted (AR) items do not move the GSRS Index');
 
 // 15. pelvic_floor pattern fires and reaches Tier 2 (physio candidacy).
-const rPF = run(2, { ar_incontinence: 3, ar_straining: 3, ar_blockage: 3 });
+const rPF = run(2, { ar_incont_urge: 3, ar_straining: 3, ar_blockage: 3 });
 ok(rPF.pat.some(p => p.id === 'pelvic_floor' && p.axis === 'pelvic'), 'pelvic_floor pattern fires (axis pelvic)');
 ok(reasons(rPF.tri).some(r => /pelvic-floor physiotherapy/i.test(r.text)), 'pelvic_floor reaches a triage tier (physio candidacy)');
+// 15b. Each faecal-incontinence subtype independently fires the pattern.
+['ar_incont_urge', 'ar_incont_passive', 'ar_incont_flatus'].forEach(id =>
+  ok(run(2, { [id]: 3 }).pat.some(p => p.id === 'pelvic_floor'), `${id} alone fires pelvic_floor`));
 
 // 16. functional_dyspepsia fires on early satiety / fullness.
 const rFD = run(2, { ug_earlysat: 3, ug_fullness: 3 });
