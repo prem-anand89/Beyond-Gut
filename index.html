@@ -500,7 +500,7 @@ const QUESTIONS = [
     revealIf: { type: 'item', id: 'nu_known_def', min: 1 },
     patientText: 'Which ones? (B12 / iron / vitamin D / magnesium)' },
   { id: 'nu_hair', section: 'NU', patientText: 'Hair thinning or hair loss' },
-  { id: 'nu_iron', section: 'NU', patientText: 'Pallor, breathlessness, or restless legs',
+  { id: 'nu_iron', section: 'NU', patientText: 'Looking pale, breathlessness, or restless legs',
     patientSub: 'Possible iron-deficiency signs' },
   { id: 'nu_mouth', section: 'NU', patientText: 'Cracks at the corners of your mouth, sore tongue, or easy bruising',
     patientSub: 'Possible micronutrient-deficiency signs' },
@@ -533,7 +533,8 @@ const QUESTIONS = [
   { id: 'sy_orthostatic', section: 'SY', optional: true, patientText: 'Light-headed or dizzy when standing up' },
   { id: 'sy_palpitations', section: 'SY', optional: true, patientText: 'Heart racing or palpitations' },
   { id: 'gy_cyclical',     section: 'SY', optional: true, femaleOnly: true,
-    patientText: 'Gut symptoms that flare with your menstrual cycle' },
+    patientText: 'Gut symptoms that flare with your menstrual cycle',
+    patientSub: 'If you have periods — skip if this does not apply' },
 ];
 
 // Adaptive reveal — ONE declarative predicate, used for conditional sections,
@@ -820,8 +821,8 @@ function familyHistory(extras) {
 // so a post-natal patient with passive leakage isn't missed by the symptom-led gate.
 const OBSTETRIC_HISTORY = [
   { id: 'ob_vaginal',      label: 'Vaginal birth(s)' },
-  { id: 'ob_instrumental', label: 'Forceps or ventouse (assisted) birth' },
-  { id: 'ob_tear',         label: 'Significant perineal tear (3rd/4th degree)' },
+  { id: 'ob_instrumental', label: 'Assisted birth (forceps or vacuum / ventouse)' },
+  { id: 'ob_tear',         label: 'Significant tear during birth (3rd- or 4th-degree perineal tear)' },
   { id: 'ob_multiparity',  label: 'Three or more births' },
 ];
 function obstetricHistory(extras) {
@@ -953,8 +954,9 @@ const RED_FLAGS = [
   // Lower-GI / colorectal alarm features
   { id: 'rf_bleeding',   label: 'Blood in your stool, rectal bleeding, or black tarry stools' },
   // Quantified so self-report maps to the meaningful clinical threshold (~5% over
-  // 6 months) rather than any trivial fluctuation.
-  { id: 'rf_weightloss', label: 'Losing weight without trying — e.g. clothes looser, or more than about 5% of your body weight (roughly 3–4 kg / half a stone) over 6 months' },
+  // 6 months) rather than any trivial fluctuation. No fixed kg figure — 5% varies
+  // by body size — with a concrete everyday cue instead.
+  { id: 'rf_weightloss', label: 'Losing weight without trying — for example, your clothes feel looser, or you have lost more than about 5% of your body weight over the past 6 months' },
   { id: 'rf_nocturnal',  label: 'Gut symptoms that wake you from sleep at night' },
   // Threshold lowered to 45 and reframed around persistence (≥6 weeks) — early-onset
   // colorectal cancer is rising and a sustained change warrants review at any age.
