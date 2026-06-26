@@ -732,14 +732,14 @@ function surgicalFlags(extras) {
 const KNOWN_CONDITIONS = [
   { id: 'celiac',     label: 'Coeliac disease',                refer: true },
   { id: 'ibd',        label: 'IBD (Crohn’s or ulcerative colitis)', refer: true },
-  { id: 'ibs',        label: 'IBS' },
-  { id: 'gord',       label: 'GORD / reflux disease' },
-  { id: 'sibo',       label: 'SIBO' },
+  { id: 'ibs',        label: 'IBS', clinNote: 'Diagnosed IBS — manage as IBS (gut-directed therapy / dietary); avoid redundant re-screening.' },
+  { id: 'gord',       label: 'GORD / reflux disease', clinNote: 'Known GORD — relevant to the reflux / upper-GI read.' },
+  { id: 'sibo',       label: 'SIBO', clinNote: 'Known SIBO — relevant to the bloating / fermentation read.' },
   { id: 'divert',     label: 'Diverticular disease' },
-  { id: 'gallstones', label: 'Gallstones' },
-  { id: 'pancreas',   label: 'Pancreatitis / pancreatic insufficiency' },
-  { id: 'liver',      label: 'Liver disease / fatty liver' },
-  { id: 'hpylori',    label: 'H. pylori' },
+  { id: 'gallstones', label: 'Gallstones', clinNote: 'Known gallstones — factor into the upper-GI / biliary read.' },
+  { id: 'pancreas',   label: 'Pancreatitis / pancreatic insufficiency', clinNote: 'Known pancreatic disease / EPI — factor into the malabsorption read.' },
+  { id: 'liver',      label: 'Liver disease / fatty liver', clinNote: 'Known liver disease — factor into interpretation.' },
+  { id: 'hpylori',    label: 'H. pylori', clinNote: 'Known H. pylori — relevant to the upper-GI / dyspepsia read.' },
   { id: 'thyroid',    label: 'Thyroid disorder' },
   { id: 'diabetes',   label: 'Diabetes' },
   { id: 'pcos',       label: 'PCOS' },
@@ -750,9 +750,14 @@ const KNOWN_CONDITIONS = [
 ];
 function knownConditions(extras) {
   const ids = new Set(((extras || {}).conditions) || []);
-  const list = [], referList = [];
-  KNOWN_CONDITIONS.forEach(c => { if (ids.has(c.id)) { list.push(c.label); if (c.refer) referList.push(c.label); } });
-  return { list, referList, count: list.length };
+  const list = [], referList = [], notes = [];
+  KNOWN_CONDITIONS.forEach(c => {
+    if (!ids.has(c.id)) return;
+    list.push(c.label);
+    if (c.refer) referList.push(c.label);
+    if (c.clinNote) notes.push(c.clinNote);
+  });
+  return { list, referList, notes, count: list.length };
 }
 
 // Medication CONFOUNDERS — drugs that commonly cause/aggravate GI symptoms and so
@@ -773,16 +778,32 @@ function medConfounders(extras) {
   return { list, count: list.length };
 }
 
-// Family history — first-degree relative. Quick chip set, surfaced to the clinician.
+// Family history — first-degree relative. Wired into triage: bowel-cancer family
+// history → a Tier-2 screening candidacy; each carries a clinician note + a
+// suggested investigation. (Moved out of the acute red flags — risk factor, not
+// an acute alarm.)
 const FAMILY_HISTORY = [
-  { id: 'fh_celiac', label: 'Coeliac disease' },
-  { id: 'fh_ibd',    label: 'IBD' },
-  { id: 'fh_cancer', label: 'Bowel cancer' },
+  { id: 'fh_celiac', label: 'Coeliac disease',
+    note: 'Family history of coeliac — consider coeliac serology / a lower testing threshold.',
+    invest: 'Coeliac serology (anti-tTG IgA + total IgA)' },
+  { id: 'fh_ibd',    label: 'IBD',
+    note: 'Family history of IBD — consider faecal calprotectin if inflammatory / diarrhoeal features.',
+    invest: 'Faecal calprotectin if inflammatory features' },
+  { id: 'fh_cancer', label: 'Bowel cancer', tier: 2, axis: 'history',
+    reason: 'Family history of bowel/colorectal cancer — discuss colorectal screening (e.g. colonoscopy) per guidelines',
+    note: 'Family history of bowel cancer — discuss colorectal screening per guidelines (esp. first-degree / under 50).',
+    invest: 'Colorectal screening / colonoscopy per guidelines' },
 ];
 function familyHistory(extras) {
   const ids = new Set(((extras || {}).familyHistory) || []);
-  const list = FAMILY_HISTORY.filter(f => ids.has(f.id)).map(f => f.label);
-  return { list, count: list.length };
+  const sel = FAMILY_HISTORY.filter(f => ids.has(f.id));
+  return {
+    list: sel.map(f => f.label),
+    notes: sel.filter(f => f.note).map(f => f.note),
+    invest: sel.filter(f => f.invest).map(f => f.invest),
+    tierReasons: sel.filter(f => f.tier).map(f => ({ tier: f.tier, text: f.reason, axis: f.axis || 'history' })),
+    count: sel.length,
+  };
 }
 
 // Returns the count of dysbiosis-correlate signals present + their labels.
@@ -908,7 +929,8 @@ const RED_FLAGS = [
   { id: 'rf_nocturnal',  label: 'Gut symptoms that wake you from sleep at night' },
   { id: 'rf_newonset50', label: 'A new, persistent change in bowel habit starting after age 50' },
   { id: 'rf_mass',       label: 'A lump or mass you (or a doctor) can feel in your abdomen' },
-  { id: 'rf_famhist',    label: 'Family history of bowel/colorectal cancer or IBD (close relative, especially under 50)' },
+  // (Family history moved out of acute red flags — it's a risk factor, not an acute
+  // alarm. Captured as a Family-history chip set and wired in triage instead.)
   // Upper-GI alarm features
   { id: 'rf_dysphagia',  label: 'Difficulty or pain when swallowing' },
   { id: 'rf_vomiting',   label: 'Persistent vomiting, or vomiting blood / coffee-ground material' },
@@ -1087,9 +1109,8 @@ function axisProfile(score, ex, dys) {
     psychosocial: { axis: 'psychosocial', label: 'Psychosocial / gut-brain', value: psych,
                     band: psych != null ? (psych >= 50 ? 'Significant' : psych >= 25 ? 'Mild–Moderate' : 'Minimal') : null,
                     validated: 'partial', note: 'PSS-4 is validated; BG screen items are draft.' },
-    microbiome:   { axis: 'microbiome',   label: 'Microbiome correlate',   value: dys ? dys.count : 0, max: 7,
-                    band: dys && dys.count >= 2 ? 'Elevated' : 'Low', validated: false,
-                    note: 'Correlate lens, not a measurement — not validated against stool sequencing.' },
+    // (microbiome read removed — superseded by the Disruption / Dysbiosis Correlate
+    // split in headlineOutputs() and the Symptom × Dysbiosis-correlate matrix.)
     impact:       { axis: 'impact',       label: 'Functional impact',      value: n('IMP'), band: bl('IMP'),
                     validated: false, note: 'New domain — no pilot data yet.' },
   };
@@ -1527,6 +1548,8 @@ function triage(score, patterns, firedFlags, dys, opts) {
   // impact as independent of raw symptom severity in driving care intensity.
   if (o.impactBand === 'Significant' || o.impactBand === 'Severe')
     add(2, 'High functional / quality-of-life impact (Impact axis) — consider escalation even if symptom severity alone is lower', 'impact');
+  // Family-history-driven candidacy (e.g. bowel-cancer family history → screening).
+  (o.family && o.family.tierReasons || []).forEach(r => add(r.tier, r.text, r.axis));
   // Orphan pattern, now wired: inflammatory_immune spans a wide specificity range
   // (clear histamine/diagnosed signal vs. a high-but-noisy IM mean) — route by confidence.
   const infl = (patterns || []).find(p => p.id === 'inflammatory_immune');
@@ -1568,6 +1591,14 @@ function triage(score, patterns, firedFlags, dys, opts) {
   result.autonomicNote = o.autonomicFlag
     ? 'Autonomic symptoms reported (light-headedness on standing / palpitations) — consider gut-brain / autonomic overlap.'
     : null;
+  // Management/interpretation guidance from diagnosed conditions (IBS, gallstones…).
+  result.conditionGuidance = (o.conditionNotes && o.conditionNotes.length) ? o.conditionNotes.slice() : [];
+  // Family-history notes (coeliac serology nudge, IBD calprotectin, cancer screening).
+  result.familyNotes = (o.family && o.family.notes && o.family.notes.length) ? o.family.notes.slice() : [];
+  // Gynaecological / endometriosis overlap — cyclical flare alongside abdominal pain.
+  result.gynNote = o.gynOverlap
+    ? 'Cyclical symptom flare with abdominal pain — consider gynaecological / endometriosis overlap.'
+    : null;
   // Low data confidence — the core GI section wasn't answered.
   result.coreUnknown = !!(score && score.coreUnknown);
   if (result.coreUnknown) result.reasons.push({ text: 'Note: the core GI section was not completed, so this triage is provisional.', axis: 'data' });
@@ -1596,6 +1627,7 @@ function triage(score, patterns, firedFlags, dys, opts) {
   pids.forEach(pid => { if (PI[pid]) result.investigations.push(...PI[pid]); });
   if (o.romeResult && o.romeResult.criteriaMet && o.romeResult.subtype && RI[o.romeResult.subtype])
     result.investigations.push(...RI[o.romeResult.subtype]);
+  if (o.family && o.family.invest) result.investigations.push(...o.family.invest);
   result.investigations = [...new Set(result.investigations)];
 
   return result;
@@ -2278,8 +2310,11 @@ function wrapHidden(id, node) {
 function sectionCard(sec) {
   const card = el('div', { class: 'sec-card' });
   const items = questionsOf(sec.id).filter(q => !q.femaleOnly || session.gender === 'Female');
+  // Count only items shown up-front (reveal-on-positive follow-ups are hidden until
+  // their parent is positive, so they shouldn't inflate the header count).
+  const baseCount = items.filter(q => !q.revealIf).length;
   card.appendChild(el('div', { class: 'sec-head', style: `background:${sec.color || '#0F6E56'}` },
-    `${esc(sec.full || sec.label)} <span style="opacity:.8;font-weight:500">${items.length} items</span>`));
+    `${esc(sec.full || sec.label)} <span style="opacity:.8;font-weight:500">${baseCount} items</span>`));
   const body = el('div', { class: 'sec-body' });
   if (!sec.noRecall) body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, esc(recallNote())));
   items.forEach(q => {
@@ -2792,6 +2827,10 @@ function computeAll() {
   const famhx = familyHistory(extras);
   const autonomicFlag = (typeof answers.sy_orthostatic === 'number' && answers.sy_orthostatic >= 2)
     || (typeof answers.sy_palpitations === 'number' && answers.sy_palpitations >= 2);
+  // Gynaecological / endometriosis overlap: cyclical flare (≥ moderate) with
+  // abdominal pain present. gy_cyclical is already female-gated in the schema.
+  const gynOverlap = (typeof answers.gy_cyclical === 'number' && answers.gy_cyclical >= 2)
+    && (typeof answers.gsrs_pain === 'number' && answers.gsrs_pain >= 2);
   // The Dysbiosis Correlate Load (inferred signals only) — the count triage and
   // the Symptom×Microbiome matrix should read, NOT the old merged lens (which
   // also folded in objective exposure history like antibiotics / surgery).
@@ -2804,8 +2843,11 @@ function computeAll() {
     romeResult: rome,
     impactBand: profile.impact.band,
     knownConditions: conditions,
+    conditionNotes: conditions.notes,
     medConfounders: meds.list,
     autonomicFlag,
+    family: famhx,
+    gynOverlap,
   });
   return { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, correlateLoad, meds, famhx };
 }
@@ -3021,6 +3063,12 @@ function triageCard(tri, rome, showInvestigations) {
     '💊 ' + esc(tri.medNote)));
   if (tri.autonomicNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
     '🫀 ' + esc(tri.autonomicNote)));
+  (tri.conditionGuidance || []).forEach(n => tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
+    'ℹ️ ' + esc(n))));
+  (tri.familyNotes || []).forEach(n => tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
+    '🧬 ' + esc(n))));
+  if (tri.gynNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
+    '⚕️ ' + esc(tri.gynNote)));
   if (tri.alsoConsider.length) {
     tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-weight:600' }, 'Also worth noting:'));
     tri.alsoConsider.forEach(a => tcard.appendChild(el('div', { class: 'q-sub', style: 'padding-left:4px' },
@@ -3242,6 +3290,7 @@ function buildClinicianPrint(c) {
       <div style="margin-top:3px;font-size:11px">${esc(tri.action)}</div>
       ${tri.reasons.length ? `<div style="font-size:10.5px;margin-top:4px">Reasons: ${tri.reasons.map(r => esc(r.text)).join(' · ')}</div>` : ''}
       ${tri.alsoConsider.length ? `<div style="font-size:10.5px;margin-top:3px">Also consider: ${tri.alsoConsider.map(a => `${esc(a.label)} (${a.reasons.map(r => esc(r.text)).join('; ')})`).join(' / ')}</div>` : ''}
+      ${[].concat(tri.conditionGuidance || [], tri.familyNotes || [], tri.gynNote ? [tri.gynNote] : [], tri.medNote ? [tri.medNote] : []).map(n => `<div style="font-size:10.5px;margin-top:3px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
     </div>
     ${tri.investigations && tri.investigations.length ? `
       <div style="font-weight:600;font-size:11px;margin:6px 0 3px">Suggested investigations / management:</div>

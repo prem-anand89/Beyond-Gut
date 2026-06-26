@@ -51,7 +51,13 @@ function run(gi, sys = {}, extra = {}, romeIn = {}) {
   const rr = rome.classifyRomeIV(ex.rome, score.clusterNorm);
   // Mirror computeAll(): triage reads the correlate-only split, not the merged lens.
   const correlateLoad = { count: heads.primary.correlate.value, signals: (heads.primary.correlate.signals || []).map(l => ({ label: l })) };
-  const tri = triage(score, pat, [], correlateLoad, { impactBand: prof.impact.band, romeResult: rr, adhesionSurgery: false, knownConditions: scales.knownConditions(ex) });
+  const conditions = scales.knownConditions(ex);
+  const famhx = scales.familyHistory(ex);
+  const gynOverlap = (typeof a.gy_cyclical === 'number' && a.gy_cyclical >= 2) && (typeof a.gsrs_pain === 'number' && a.gsrs_pain >= 2);
+  const tri = triage(score, pat, [], correlateLoad, {
+    impactBand: prof.impact.band, romeResult: rr, adhesionSurgery: false,
+    knownConditions: conditions, conditionNotes: conditions.notes, family: famhx, gynOverlap,
+  });
   return { score, prof, heads, pat, rr, tri, correlateLoad };
 }
 const reasons = (tri) => [tri.reasons, ...tri.alsoConsider.map(x => x.reasons)].flat();
@@ -154,6 +160,23 @@ ok(scales.KNOWN_CONDITIONS.length >= 15 && scales.KNOWN_CONDITIONS.some(c => c.i
 ok(scales.MED_CONFOUNDERS.some(m => m.id === 'glp1'), 'MED_CONFOUNDERS includes GLP-1 agonist');
 ok(scales.FAMILY_HISTORY.length === 3, 'FAMILY_HISTORY chip set present');
 ok(scales.medConfounders({ medsConfounders: ['glp1', 'opioid'] }).count === 2, 'medConfounders() counts selected meds');
+
+// 18. Family history moved out of red flags + wired into triage.
+ok(!req('redflags.js').RED_FLAGS.some(f => f.id === 'rf_famhist'), 'rf_famhist removed from red flags');
+const rFamCancer = run(1, {}, { familyHistory: ['fh_cancer'] });
+ok(reasons(rFamCancer.tri).some(r => /colorectal screening/i.test(r.text)), 'fh_cancer → Tier-2 screening candidacy');
+ok((rFamCancer.tri.investigations || []).some(i => /colonoscopy/i.test(i)), 'fh_cancer adds a screening investigation');
+const rFamCeliac = run(1, {}, { familyHistory: ['fh_celiac'] });
+ok((rFamCeliac.tri.familyNotes || []).some(n => /coeliac serology/i.test(n)), 'fh_celiac → coeliac-serology family note');
+
+// 19. Diagnosed-condition guidance + gynaecological overlap.
+const rIBS = run(2, {}, { conditions: ['ibs'] });
+ok((rIBS.tri.conditionGuidance || []).some(n => /manage as IBS/i.test(n)), 'diagnosed IBS → management guidance note');
+const rGyn = run(2, { gy_cyclical: 3 });
+ok(rGyn.tri.gynNote && /endometriosis/i.test(rGyn.tri.gynNote), 'cyclical flare + pain → gyn overlap note');
+
+// 20. Dead microbiome field removed from axisProfile.
+ok(scoring.axisProfile(scoring.computeScores({}, {}), {}, { count: 0 }).microbiome === undefined, 'axisProfile microbiome field removed');
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);
