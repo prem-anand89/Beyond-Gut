@@ -53,12 +53,13 @@ function run(gi, sys = {}, extra = {}, romeIn = {}) {
   const correlateLoad = { count: heads.primary.correlate.value, signals: (heads.primary.correlate.signals || []).map(l => ({ label: l })) };
   const conditions = scales.knownConditions(ex);
   const famhx = scales.familyHistory(ex);
+  const obstetric = scales.obstetricHistory(ex);
   const gynOverlap = (typeof a.gy_cyclical === 'number' && a.gy_cyclical >= 2) && (typeof a.gsrs_pain === 'number' && a.gsrs_pain >= 2);
   const tri = triage(score, pat, [], correlateLoad, {
     impactBand: prof.impact.band, romeResult: rr, adhesionSurgery: false,
-    knownConditions: conditions, conditionNotes: conditions.notes, family: famhx, gynOverlap,
+    knownConditions: conditions, conditionNotes: conditions.notes, family: famhx, gynOverlap, obstetric,
   });
-  return { score, prof, heads, pat, rr, tri, correlateLoad };
+  return { score, prof, heads, pat, rr, tri, correlateLoad, obstetric };
 }
 const reasons = (tri) => [tri.reasons, ...tri.alsoConsider.map(x => x.reasons)].flat();
 
@@ -177,6 +178,40 @@ ok(rGyn.tri.gynNote && /endometriosis/i.test(rGyn.tri.gynNote), 'cyclical flare 
 
 // 20. Dead microbiome field removed from axisProfile.
 ok(scoring.axisProfile(scoring.computeScores({}, {}), {}, { count: 0 }).microbiome === undefined, 'axisProfile microbiome field removed');
+
+// 21. Clinical-review changes 1 & 2 — alarm wording quantified / lowered.
+const RF = req('redflags.js').RED_FLAGS;
+const rfWeight = RF.find(f => f.id === 'rf_weightloss');
+const rfOnset  = RF.find(f => f.id === 'rf_newonset50');
+ok(/5%/.test(rfWeight.label), 'weight-loss alarm quantified (≈5% threshold in wording)');
+ok(/45/.test(rfOnset.label) && /6 weeks/i.test(rfOnset.label) && !/age 50/.test(rfOnset.label), 'new-onset alarm lowered to 45 + persistence (≥6 weeks)');
+
+// 22. Change 5a — diabetes/thyroid/PCOS now carry clinNotes → conditionGuidance.
+['thyroid', 'diabetes', 'pcos'].forEach(id =>
+  ok(!!scales.KNOWN_CONDITIONS.find(c => c.id === id).clinNote, `${id} has a clinNote (wired into interpretation)`));
+const rDiab = run(2, {}, { conditions: ['diabetes'] });
+ok((rDiab.tri.conditionGuidance || []).some(n => /gastroparesis/i.test(n)), 'diagnosed diabetes → gastroparesis interpretation note');
+
+// 23. Change 5b/5c — probiotic naming softened; manual therapy hedged.
+const rDis = run(2, {}, { meds: { abx: true } });
+ok((rDis.tri.investigations || []).some(i => /strain selection/i.test(i)) &&
+   !(rDis.tri.investigations || []).some(i => /Lactobacillus rhamnosus/i.test(i)), 'probiotic recommendation softened (no named organisms)');
+ok(/after.*assess|once other causes/i.test(req('triage.js').TIERS[2].action), 'Tier-2 action hedges manual therapy as post-assessment adjunct');
+
+// 24. Change 4 — obstetric history exported, risk-graded, drives reveal + note.
+ok(Array.isArray(scales.OBSTETRIC_HISTORY) && scales.OBSTETRIC_HISTORY.length === 4, 'OBSTETRIC_HISTORY chip set present');
+ok(scales.obstetricHistory({ obstetric: ['ob_vaginal'] }).risk === true &&
+   scales.obstetricHistory({ obstetric: ['ob_vaginal'] }).highRisk === false, 'vaginal birth = pelvic risk, not high-risk');
+ok(scales.obstetricHistory({ obstetric: ['ob_instrumental'] }).highRisk === true, 'assisted birth flagged high-risk');
+// AR section reveals on the pelvicRisk flag even with no constipation/urgency.
+const arRevealIf = schema.SECTIONS.find(s => s.id === 'AR').revealIf;
+ok(schema.revealMet(arRevealIf, { answers: {}, clusterNorm: {}, flags: { pelvicRisk: true } }) === true,
+   'obstetric pelvicRisk flag reveals the AR (pelvic-floor) section');
+ok(schema.revealMet(arRevealIf, { answers: {}, clusterNorm: {}, flags: { pelvicRisk: false } }) === false,
+   'no symptom signal + no pelvicRisk → AR stays hidden');
+const rOb = run(1, {}, { obstetric: ['ob_instrumental'] });
+ok(rOb.tri.pelvicNote && /pelvic-floor/i.test(rOb.tri.pelvicNote) && /higher risk/i.test(rOb.tri.pelvicNote),
+   'obstetric high-risk history → pelvic-floor interpretation note');
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

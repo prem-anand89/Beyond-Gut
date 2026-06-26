@@ -393,7 +393,7 @@ const SECTIONS = [
   // optional, so they never enter the Index/mandatory-count/progress. Feed
   // patterns + triage + the clinician Domain breakdown only.
   { id: 'AR', label: 'AR', full: 'Bowel control & evacuation', role: 'standalone', axis: 'pelvic',    color: '#7A4A8C', bg: '#F3ECF7', conditional: true,
-    revealIf: { any: [ { type: 'cluster', cluster: 'Constipation', min: 0.4 }, { type: 'item', id: 'gsrs_urgency', min: 2 } ] } },
+    revealIf: { any: [ { type: 'cluster', cluster: 'Constipation', min: 0.4 }, { type: 'item', id: 'gsrs_urgency', min: 2 }, { type: 'flag', flag: 'pelvicRisk' } ] } },
   { id: 'UG', label: 'UG', full: 'Upper-GI / dyspepsia',       role: 'standalone', axis: 'symptom',   color: '#0F6E56', bg: '#E1F5EE', conditional: true,
     revealIf: { any: [ { type: 'cluster', cluster: 'Reflux', min: 0.3 }, { type: 'cluster', cluster: 'Indigestion', min: 0.3 } ] } },
   { id: 'SY', label: 'SY', full: 'Systemic / autonomic',       role: 'standalone', axis: 'autonomic', color: '#117A8B', bg: '#E2F2F4', conditional: true,
@@ -550,6 +550,9 @@ function revealMet(cond, ctx) {
   const a = (ctx && ctx.answers) || {};
   if (cond.type === 'item') { const v = a[cond.id]; return typeof v === 'number' && v >= cond.min; }
   if (cond.type === 'cluster') { const cn = (ctx && ctx.clusterNorm) || {}; const v = cn[cond.cluster]; return v != null && v >= cond.min; }
+  // Risk-factor flag (e.g. obstetric history → 'pelvicRisk'), supplied by the UI in
+  // ctx.flags so a section can reveal on history, not just on symptom answers.
+  if (cond.type === 'flag') { const fl = (ctx && ctx.flags) || {}; return !!fl[cond.flag]; }
   return true;
 }
 
@@ -744,9 +747,9 @@ const KNOWN_CONDITIONS = [
   { id: 'pancreas',   label: 'Pancreatitis / pancreatic insufficiency', clinNote: 'Known pancreatic disease / EPI — factor into the malabsorption read.' },
   { id: 'liver',      label: 'Liver disease / fatty liver', clinNote: 'Known liver disease — factor into interpretation.' },
   { id: 'hpylori',    label: 'H. pylori', clinNote: 'Known H. pylori — relevant to the upper-GI / dyspepsia read.' },
-  { id: 'thyroid',    label: 'Thyroid disorder' },
-  { id: 'diabetes',   label: 'Diabetes' },
-  { id: 'pcos',       label: 'PCOS' },
+  { id: 'thyroid',    label: 'Thyroid disorder', clinNote: 'Known thyroid disorder — can drive constipation (under-active) or loose stool (over-active); factor into the bowel-habit read.' },
+  { id: 'diabetes',   label: 'Diabetes', clinNote: 'Known diabetes — consider gastroparesis / autonomic neuropathy if early satiety, nausea, or erratic bowel habit.' },
+  { id: 'pcos',       label: 'PCOS', clinNote: 'Known PCOS — metabolic / hormonal overlap; relevant to bloating and bowel-habit interpretation.' },
   { id: 'endo',       label: 'Endometriosis' },
   { id: 'lactose',    label: 'Lactose intolerance' },
   { id: 'foodallergy',label: 'Food allergy / intolerance' },
@@ -808,6 +811,25 @@ function familyHistory(extras) {
     tierReasons: sel.filter(f => f.tier).map(f => ({ tier: f.tier, text: f.reason, axis: f.axis || 'history' })),
     count: sel.length,
   };
+}
+
+// Obstetric / birth-trauma history — the dominant risk factors for pelvic-floor
+// dysfunction and faecal incontinence, and absent from v2 (only C-section was
+// captured, as an adhesion flag). Female-gated in the UI. Context, never scored:
+// drives a pelvic-floor interpretation note AND reveals the anorectal (AR) section
+// so a post-natal patient with passive leakage isn't missed by the symptom-led gate.
+const OBSTETRIC_HISTORY = [
+  { id: 'ob_vaginal',      label: 'Vaginal birth(s)' },
+  { id: 'ob_instrumental', label: 'Forceps or ventouse (assisted) birth' },
+  { id: 'ob_tear',         label: 'Significant perineal tear (3rd/4th degree)' },
+  { id: 'ob_multiparity',  label: 'Three or more births' },
+];
+function obstetricHistory(extras) {
+  const ids = new Set(((extras || {}).obstetric) || []);
+  const sel = OBSTETRIC_HISTORY.filter(o => ids.has(o.id));
+  // Assisted birth / OASI carry the highest pelvic-floor / continence risk.
+  const highRisk = ids.has('ob_instrumental') || ids.has('ob_tear');
+  return { list: sel.map(o => o.label), risk: sel.length > 0, highRisk, count: sel.length };
 }
 
 // Returns the count of dysbiosis-correlate signals present + their labels.
@@ -914,6 +936,7 @@ __e.SURGERIES = SURGERIES; __e.surgicalFlags = surgicalFlags;
 __e.KNOWN_CONDITIONS = KNOWN_CONDITIONS; __e.knownConditions = knownConditions;
 __e.MED_CONFOUNDERS = MED_CONFOUNDERS; __e.medConfounders = medConfounders;
 __e.FAMILY_HISTORY = FAMILY_HISTORY; __e.familyHistory = familyHistory;
+__e.OBSTETRIC_HISTORY = OBSTETRIC_HISTORY; __e.obstetricHistory = obstetricHistory;
 __e.gutHealthIndex = gutHealthIndex; __e.GHI_WEIGHTS = GHI_WEIGHTS;
 __e.TRIM_PLAN = TRIM_PLAN;
 __e.BRISTOL_TYPES = BRISTOL_TYPES; __e.PAIN_REGIONS = PAIN_REGIONS; __e.painBand = painBand; __e.modifiableFactors = modifiableFactors;
@@ -929,9 +952,13 @@ __modules['redflags.js'] = function(__e){
 const RED_FLAGS = [
   // Lower-GI / colorectal alarm features
   { id: 'rf_bleeding',   label: 'Blood in your stool, rectal bleeding, or black tarry stools' },
-  { id: 'rf_weightloss', label: 'Unintentional weight loss' },
+  // Quantified so self-report maps to the meaningful clinical threshold (~5% over
+  // 6 months) rather than any trivial fluctuation.
+  { id: 'rf_weightloss', label: 'Losing weight without trying — e.g. clothes looser, or more than about 5% of your body weight (roughly 3–4 kg / half a stone) over 6 months' },
   { id: 'rf_nocturnal',  label: 'Gut symptoms that wake you from sleep at night' },
-  { id: 'rf_newonset50', label: 'A new, persistent change in bowel habit starting after age 50' },
+  // Threshold lowered to 45 and reframed around persistence (≥6 weeks) — early-onset
+  // colorectal cancer is rising and a sustained change warrants review at any age.
+  { id: 'rf_newonset50', label: 'A new, persistent change in your bowel habit lasting 6 weeks or more (especially if you are over 45)' },
   { id: 'rf_mass',       label: 'A lump or mass you (or a doctor) can feel in your abdomen' },
   // (Family history moved out of acute red flags — it's a risk factor, not an acute
   // alarm. Captured as a Family-history chip set and wired in triage instead.)
@@ -1508,7 +1535,7 @@ const TIERS = {
   1: { level: 1, label: 'Refer for clinical assessment', color: '#A32D2D',
        action: 'One or more answers warrant clinician assessment before starting a gut-health program.' },
   2: { level: 2, label: 'Clinician-led management', color: '#C2622E',
-       action: 'A clinician-guided plan is appropriate; manual or physical therapy may be a useful adjunct for these symptoms.' },
+       action: 'A clinician-guided plan is appropriate. Once other causes have been assessed, manual or physical therapy may be a useful adjunct (limited evidence base) for these symptoms.' },
   3: { level: 3, label: 'Microbiome-support candidate', color: '#BA7517',
        action: 'A reasonable candidate for a clinician-supervised trial of probiotic / microbiome support.' },
   4: { level: 4, label: 'Self-management & monitoring', color: '#0F6E56',
@@ -1540,7 +1567,7 @@ function triage(score, patterns, firedFlags, dys, opts) {
   if (has('mixed_bowel')) add(2, 'Mixed / alternating bowel pattern', 'symptom');
   if (has('reflux_upper_gi')) add(2, 'Reflux / upper-GI pattern', 'symptom');
   if (pain != null && pain >= 0.5) add(2, 'Prominent abdominal-pain cluster', 'symptom');
-  if (o.adhesionSurgery) add(2, 'Prior abdominal/pelvic surgery (adhesions — visceral / fascial manual-therapy candidacy)', 'symptom');
+  if (o.adhesionSurgery) add(2, 'Prior abdominal/pelvic surgery (adhesions — visceral / fascial manual-therapy candidacy, as an adjunct after medical assessment)', 'symptom');
   if (o.romeResult && o.romeResult.criteriaMet) add(2, `Meets Rome IV-informed criteria for ${o.romeResult.subtype}`, 'symptom');
   // Targeted-symptom patterns (adaptive reveal):
   if (has('pelvic_floor')) add(2, 'Pelvic-floor / anorectal dysfunction — pelvic-floor physiotherapy candidacy', 'pelvic');
@@ -1603,6 +1630,12 @@ function triage(score, patterns, firedFlags, dys, opts) {
   result.gynNote = o.gynOverlap
     ? 'Cyclical symptom flare with abdominal pain — consider gynaecological / endometriosis overlap.'
     : null;
+  // Obstetric / birth-trauma history — a pelvic-floor risk factor. A NOTE only
+  // (history is context, not current severity); the pelvic_floor pattern still
+  // drives the actual tier when anorectal symptoms are reported.
+  result.pelvicNote = (o.obstetric && o.obstetric.risk)
+    ? `Obstetric risk factors for pelvic-floor dysfunction (${o.obstetric.highRisk ? 'assisted birth / significant tear — higher risk' : 'birth history'}) — consider pelvic-floor physiotherapy assessment if bowel-control or evacuation symptoms are present.`
+    : null;
   // Low data confidence — the core GI section wasn't answered.
   result.coreUnknown = !!(score && score.coreUnknown);
   if (result.coreUnknown) result.reasons.push({ text: 'Note: the core GI section was not completed, so this triage is provisional.', axis: 'data' });
@@ -1611,7 +1644,7 @@ function triage(score, patterns, firedFlags, dys, opts) {
   const PI = {
     nutrient_malabsorption: ['FBC, iron studies, serum B12, folate, vitamin D', 'Coeliac serology (anti-tTG IgA + total IgA)', 'Clinical examination for malabsorption signs'],
     reflux_upper_gi: ['Empirical PPI trial (4–8 weeks)', 'GI referral if refractory, dysphagia, or unintentional weight loss', 'Review NSAID / aspirin / alcohol intake'],
-    post_disruptor: ['Stool PCR if acutely symptomatic', 'C. difficile PCR if antibiotics in past 3 months', 'Probiotic trial (Lactobacillus rhamnosus GG or Saccharomyces boulardii)'],
+    post_disruptor: ['Stool PCR if acutely symptomatic', 'C. difficile PCR if antibiotics in past 3 months', 'Consider a clinician-supervised probiotic trial (strain selection per indication; evidence is strain- and condition-specific)'],
     bloating_fermentation: ['SIBO breath test (lactulose or glucose H₂/CH₄)', 'Low-FODMAP dietitian referral', 'Note fibre/prebiotic paradox response if present'],
     diarrhoea_dominant: ['Stool calprotectin + stool PCR', 'Coeliac screen (anti-tTG IgA, total IgA)', 'Consider bile acid malabsorption (empirical trial or SeHCAT)'],
     constipation_dominant: ['Dietary fibre and fluid intake assessment', 'Pelvic floor physiotherapy referral', 'Exclude hypothyroidism (TSH), hypercalcaemia'],
@@ -1865,7 +1898,8 @@ const { scaleFor, RECALL_NOTE, PSS4_ITEMS, PSS4_ANCHORS, PSS4_REVERSED, pss4Scor
         DISRUPTORS, ALCOHOL_LEVELS, ACTIVITY_LEVELS, SLEEP_ITEMS, SLEEP_ANCHORS,
         FOOD_TRIGGERS, ABX_COURSES, GAS_LEVELS, STOOLVAR_LEVELS, POSTINF_OPTS, PARADOX_OPTS, dysbiosisLens,
         SURGERIES, surgicalFlags, KNOWN_CONDITIONS, knownConditions,
-        MED_CONFOUNDERS, medConfounders, FAMILY_HISTORY, familyHistory } = __req('scales.js');
+        MED_CONFOUNDERS, medConfounders, FAMILY_HISTORY, familyHistory,
+        OBSTETRIC_HISTORY, obstetricHistory } = __req('scales.js');
 const { computeScores, scoreConfidence, axisProfile, headlineOutputs } = __req('scoring.js');
 const { RED_FLAGS, anyRedFlag, firedRedFlags, RED_FLAG_BANNER } = __req('redflags.js');
 const { el, esc, toast, patientForm } = __req('util.js');
@@ -1891,6 +1925,7 @@ const blankExtras = () => ({
   conditions: [],                    // §7a known diagnosed/suspected conditions (id list) — context, not scored
   medsConfounders: [],               // medication confounders (id list) — symptom-cause context, not scored
   familyHistory: [],                 // first-degree family history (id list) — context, not scored
+  obstetric: [],                     // obstetric / birth-trauma history (id list) — pelvic-floor risk context, not scored
   medsOther: '',                     // §7c other medications free-text — stored, not scored
   rome: { painFreq: null, onset: null, rm_assoc_defecation: false, rm_assoc_freqchange: false, rm_assoc_formchange: false },
 });
@@ -2262,6 +2297,9 @@ function render() {
   root.appendChild(el('div', { class: 'grp-label', style: 'margin:6px 2px 2px' }, 'History'));
   root.appendChild(conditionsCard());
   root.appendChild(familyHistoryCard());
+  // Obstetric/birth history is shown only for patients recorded as Female (the
+  // gender selection in the patient-details form drives this gate).
+  if (session.gender === 'Female') root.appendChild(obstetricCard());
   root.appendChild(surgicalCard());
   root.appendChild(medsCard());
   root.appendChild(medConfoundersCard());
@@ -2370,7 +2408,7 @@ const CARD_REVEAL = {
 // just don't clutter the form. The manual toggle forces everything visible.
 function refreshReveals() {
   const live = computeScores(QUESTIONS.map(q => (answers[q.id] == null ? null : answers[q.id])), { bristol: extras.bristol });
-  const ctx = { answers, clusterNorm: live.clusterNorm };
+  const ctx = { answers, clusterNorm: live.clusterNorm, flags: { pelvicRisk: obstetricHistory(extras).risk } };
   const wrap = document.getElementById('targeted-wrap');
   const manual = !!(wrap && wrap.dataset.manual === '1');
   // Conditional sections
@@ -2565,7 +2603,7 @@ function conditionsCard() {
 
 // Generic multi-select chip card (no "none" toggle), backed by extras[listKey].
 // Used for family history and medication confounders.
-function chipMultiCard(title, sub, bg, items, listKey) {
+function chipMultiCard(title, sub, bg, items, listKey, onChange) {
   const card = el('div', { class: 'sec-card' });
   card.appendChild(el('div', { class: 'sec-head', style: `background:${bg}` }, esc(title)));
   const body = el('div', { class: 'sec-body' });
@@ -2579,6 +2617,7 @@ function chipMultiCard(title, sub, bg, items, listKey) {
       const arr = list(); const i = arr.indexOf(it.id);
       if (i >= 0) arr.splice(i, 1); else arr.push(it.id);
       b.classList.toggle('sel');
+      if (onChange) onChange();
     };
     chips.appendChild(b);
   });
@@ -2590,6 +2629,12 @@ function familyHistoryCard() {
 }
 function medConfoundersCard() {
   return chipMultiCard('Medications that can affect the gut', 'Current medications known to cause or worsen gut symptoms (optional, not scored).', '#7A6A1E', MED_CONFOUNDERS, 'medsConfounders');
+}
+// Obstetric / birth history — female-gated; toggling it re-runs refreshReveals so
+// a birth-trauma risk factor reveals the anorectal (AR) section even when the
+// symptom-led gate (constipation / urgency) hasn't tripped.
+function obstetricCard() {
+  return chipMultiCard('Birth history', 'Vaginal or assisted births and significant perineal tears — pelvic-floor risk factors (optional, not scored).', '#7A4A8C', OBSTETRIC_HISTORY, 'obstetric', refreshReveals);
 }
 
 // Generic 0–3 segmented row used by the diet/lifestyle drivers.
@@ -2855,6 +2900,7 @@ function computeAll() {
   const conditions = knownConditions(extras);
   const meds = medConfounders(extras);
   const famhx = familyHistory(extras);
+  const obstetric = obstetricHistory(extras);
   const autonomicFlag = (typeof answers.sy_orthostatic === 'number' && answers.sy_orthostatic >= 2)
     || (typeof answers.sy_palpitations === 'number' && answers.sy_palpitations >= 2);
   // Gynaecological / endometriosis overlap: cyclical flare (≥ moderate) with
@@ -2878,8 +2924,9 @@ function computeAll() {
     autonomicFlag,
     family: famhx,
     gynOverlap,
+    obstetric,
   });
-  return { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, correlateLoad, meds, famhx };
+  return { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, correlateLoad, meds, famhx, obstetric };
 }
 
 // Per-domain bar card, shared by the patient results and the Clinician tab.
@@ -3099,6 +3146,8 @@ function triageCard(tri, rome, showInvestigations) {
     '🧬 ' + esc(n))));
   if (tri.gynNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
     '⚕️ ' + esc(tri.gynNote)));
+  if (tri.pelvicNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
+    '🧷 ' + esc(tri.pelvicNote)));
   if (tri.alsoConsider.length) {
     tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-weight:600' }, 'Also worth noting:'));
     tri.alsoConsider.forEach(a => tcard.appendChild(el('div', { class: 'q-sub', style: 'padding-left:4px' },
@@ -3287,7 +3336,7 @@ function buildPatientPrint(c) {
 }
 
 function buildClinicianPrint(c) {
-  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, meds, famhx } = c;
+  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, meds, famhx, obstetric } = c;
   const dateStr = new Date().toLocaleDateString('en-AU', { year: 'numeric', month: 'long', day: 'numeric' });
   const patName = (session.name || '').trim() || 'Not recorded';
   const priors = priorVisits();
@@ -3320,7 +3369,7 @@ function buildClinicianPrint(c) {
       <div style="margin-top:3px;font-size:11px">${esc(tri.action)}</div>
       ${tri.reasons.length ? `<div style="font-size:10.5px;margin-top:4px">Reasons: ${tri.reasons.map(r => esc(r.text)).join(' · ')}</div>` : ''}
       ${tri.alsoConsider.length ? `<div style="font-size:10.5px;margin-top:3px">Also consider: ${tri.alsoConsider.map(a => `${esc(a.label)} (${a.reasons.map(r => esc(r.text)).join('; ')})`).join(' / ')}</div>` : ''}
-      ${[].concat(tri.conditionGuidance || [], tri.familyNotes || [], tri.gynNote ? [tri.gynNote] : [], tri.medNote ? [tri.medNote] : []).map(n => `<div style="font-size:10.5px;margin-top:3px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
+      ${[].concat(tri.conditionGuidance || [], tri.familyNotes || [], tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [], tri.medNote ? [tri.medNote] : []).map(n => `<div style="font-size:10.5px;margin-top:3px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
     </div>
     ${tri.investigations && tri.investigations.length ? `
       <div style="font-weight:600;font-size:11px;margin:6px 0 3px">Suggested investigations / management:</div>
@@ -3353,6 +3402,10 @@ function buildClinicianPrint(c) {
   if (famhx && famhx.list && famhx.list.length) {
     h += `<div class="pr-section"><div class="pr-sh">Family history</div>
       <div style="font-size:10.5px">${esc(famhx.list.join(', '))}</div></div>`;
+  }
+  if (obstetric && obstetric.list && obstetric.list.length) {
+    h += `<div class="pr-section"><div class="pr-sh">Obstetric / birth history</div>
+      <div style="font-size:10.5px">${esc(obstetric.list.join(', '))}</div></div>`;
   }
   if (meds && meds.list && meds.list.length) {
     h += `<div class="pr-section"><div class="pr-sh">Medication confounders</div>
