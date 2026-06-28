@@ -2344,7 +2344,7 @@ function render() {
   root.innerHTML = '';
   root.appendChild(el('div', { class: 'intro' },
     `<b>Gut &amp; Systemic Health Screen (GSHS).</b> A multi-axis screening instrument for chronic gut and related systemic symptoms. ` +
-    `This is an educational screening tool, not a diagnosis.`));
+    `This is a screening aid to support clinical assessment — not a diagnosis.`));
 
   // How long this takes — counts only the mandatory questions (optional items
   // and the supplementary driver/history cards are excluded from the count).
@@ -2352,7 +2352,7 @@ function render() {
   const tLo = Math.max(3, Math.round(mainQ * 8 / 60));
   const tHi = Math.max(tLo + 1, Math.round(mainQ * 12 / 60));
   root.appendChild(el('div', { class: 'form-meta' },
-    `<span>📋 <b>${mainQ} questions</b> · about <b>${tLo}–${tHi} minutes</b> <span class="muted">(plus optional history &amp; lifestyle sections, ~2–3 min)</span></span>
+    `<span>📋 <b>${mainQ} questions</b> · about <b>${tLo}–${tHi} minutes</b> <span class="muted">(plus optional history, lifestyle &amp; targeted follow-up questions when relevant)</span></span>
      <span id="progressText" class="muted"></span>`));
 
   root.appendChild(patientBanner());
