@@ -2357,7 +2357,7 @@ function render() {
   const tLo = Math.max(3, tLo0), tHi = Math.max(tLo + 1, tHi0);
   const [oLo, oHi] = minutes(optQ);
   root.appendChild(el('div', { class: 'form-meta' },
-    `<span>📋 <b>${mainQ} questions</b> · about <b>${tLo}–${tHi} minutes</b> <span class="muted">(plus optional history, lifestyle &amp; targeted follow-up questions when relevant — <b>about ${oLo + 1}–${oHi + 1} min more</b>)</span></span>
+    `<span>📋 <b>${mainQ} questions</b> · about <b>${tLo}–${tHi} minutes</b> <span class="muted">(plus optional history, lifestyle &amp; targeted follow-up questions when relevant — about ${oLo + 1}–${oHi + 1} min more)</span></span>
      <span id="progressText" class="muted"></span>`));
 
   root.appendChild(patientBanner());
