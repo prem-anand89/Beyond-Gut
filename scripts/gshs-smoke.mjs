@@ -271,6 +271,8 @@ ok(/Modifiable factors/.test(ptSrc), 'patient print: lifestyle factors renamed t
 ok(/PT_HEAD_DESC/.test(html) && /PT_SUBTYPE_DESC/.test(html), 'patient print: plain-language description maps defined');
 const headDesc = html.match(/const PT_HEAD_DESC = \{[\s\S]*?\};/);
 ok(headDesc && !/GSRS|axis|norm|cluster/i.test(headDesc[0]), 'patient head descriptions are jargon-free');
+ok(/clinicalImpression\(c\)/.test(ptSrc), 'patient print: clinical impression synthesized');
+ok(/Clinical impression/.test(ptSrc) && ptSrc.indexOf('Clinical impression') < ptSrc.indexOf('Your results at a glance'), 'patient print: clinical impression appears before results');
 
 // 28. Clinician report — structure (source-level; DOM renderer not loadable here).
 const clFn = html.match(/function buildClinicianPrint\(c\)\s*\{[\s\S]*?\n\}\n/);

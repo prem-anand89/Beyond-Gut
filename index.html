@@ -3457,6 +3457,12 @@ function buildPatientPrint(c) {
       <ul style="margin:4px 0 0 14px;font-size:10.5px">${fired.map(f => `<li>${esc(f.label)}</li>`).join('')}</ul></div>`;
   }
 
+  // ── Section 0 — Clinical impression (auto-synthesis) ───────────────────────
+  const imp = clinicalImpression(c);
+  h += `<div class="pr-section"><div class="pr-sh">Clinical impression</div>
+    <div style="font-size:11px;line-height:1.5">${esc(imp.txt)}</div>
+    <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:3px">${esc(imp.caveat)}</div></div>`;
+
   // ── Section 1 — Your results at a glance (4 primary outputs) ─────────────────
   h += `<div class="pr-section"><div class="pr-sh">Your results at a glance</div>
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">`;
