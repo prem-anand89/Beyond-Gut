@@ -3873,9 +3873,16 @@ function renderClinician() {
   head.appendChild(el('div', {},
     `<div style="font-weight:700;font-size:16px">👤 ${esc(who)}</div>
      <div class="q-sub" style="margin:2px 0 0">${meta.join(' · ')}</div>`));
-  const printBtn = el('button', { class: 'btn btn-g', type: 'button' }, '🖨 Print clinician report');
+  // Both prints offered here so a visit loaded from Patient records can produce
+  // the patient-facing summary as well as the clinician report.
+  const printBtns = el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap' });
+  const ptBtn = el('button', { class: 'btn btn-gh', type: 'button' }, '🖨 Patient summary');
+  ptBtn.onclick = () => printSummary('patient');
+  const printBtn = el('button', { class: 'btn btn-g', type: 'button' }, '🖨 Clinician report');
   printBtn.onclick = () => printSummary('clinician');
-  head.appendChild(printBtn);
+  printBtns.appendChild(ptBtn);
+  printBtns.appendChild(printBtn);
+  head.appendChild(printBtns);
   root.appendChild(head);
 
   // Clinical impression — auto-synthesis at the top, matching the print report.
