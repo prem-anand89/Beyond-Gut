@@ -2346,13 +2346,18 @@ function render() {
     `<b>Gut &amp; Systemic Health Screen (GSHS).</b> A multi-axis screening instrument for chronic gut and related systemic symptoms. ` +
     `This is a screening aid to support clinical assessment — not a diagnosis.`));
 
-  // How long this takes — counts only the mandatory questions (optional items
-  // and the supplementary driver/history cards are excluded from the count).
+  // How long this takes — the headline count/time is the mandatory questions only.
+  // The optional estimate (shown as an "add" figure) covers the optional QUESTIONS
+  // (targeted symptom follow-ups) plus ~1 min for the history/lifestyle chip cards,
+  // which aren't QUESTIONS; all of it only appears when relevant.
+  const minutes = (n) => [Math.max(1, Math.round(n * 8 / 60)), Math.max(1, Math.round(n * 12 / 60))];
   const mainQ = QUESTIONS.filter(q => !q.optional).length;
-  const tLo = Math.max(3, Math.round(mainQ * 8 / 60));
-  const tHi = Math.max(tLo + 1, Math.round(mainQ * 12 / 60));
+  const optQ = QUESTIONS.filter(q => q.optional).length;
+  const [tLo0, tHi0] = minutes(mainQ);
+  const tLo = Math.max(3, tLo0), tHi = Math.max(tLo + 1, tHi0);
+  const [oLo, oHi] = minutes(optQ);
   root.appendChild(el('div', { class: 'form-meta' },
-    `<span>📋 <b>${mainQ} questions</b> · about <b>${tLo}–${tHi} minutes</b> <span class="muted">(plus optional history, lifestyle &amp; targeted follow-up questions when relevant)</span></span>
+    `<span>📋 <b>${mainQ} questions</b> · about <b>${tLo}–${tHi} minutes</b> <span class="muted">(plus optional history, lifestyle &amp; targeted follow-up questions when relevant — about ${oLo + 1}–${oHi + 1} min more)</span></span>
      <span id="progressText" class="muted"></span>`));
 
   root.appendChild(patientBanner());
