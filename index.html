@@ -1966,7 +1966,7 @@ const { scaleFor, RECALL_NOTE, PSS4_ITEMS, PSS4_ANCHORS, PSS4_REVERSED, pss4Scor
         SURGERIES, surgicalFlags, KNOWN_CONDITIONS, knownConditions,
         MED_CONFOUNDERS, medConfounders, FAMILY_HISTORY, familyHistory,
         OBSTETRIC_HISTORY, obstetricHistory, anthropometrics } = __req('scales.js');
-const { computeScores, scoreConfidence, axisProfile, headlineOutputs } = __req('scoring.js');
+const { computeScores, scoreConfidence, axisProfile, headlineOutputs, bandForPct } = __req('scoring.js');
 const { RED_FLAGS, anyRedFlag, firedRedFlags, RED_FLAG_BANNER } = __req('redflags.js');
 const { el, esc, toast, patientForm } = __req('util.js');
 const Store = __req('storage.js');
@@ -3549,6 +3549,55 @@ function buildPatientPrint(c) {
   return div;
 }
 
+// Print band pill (clinician) — colour-coded so the eye lands on the high axes.
+function prBandPill(band) {
+  if (!band) return '';
+  return `<span class="pr-pill" style="background:${ptBandBg(band)};color:#000;font-size:9.5px">${esc(band)}</span>`;
+}
+// Print provenance tag — validated / part-validated / draft, mirroring provTag().
+function prProv(validated) {
+  const m = validated === true ? ['validated', '#0F6E56']
+    : validated === 'partial' ? ['part. validated', '#7A5800'] : ['draft', '#6B7280'];
+  return `<span style="font-size:9px;color:${m[1]}">${m[0]}</span>`;
+}
+
+// Bands that warrant clinical attention, shared by the impression + physio callout.
+const CONCERN_BANDS = new Set(['Significant', 'Severe', 'Elevated']);
+
+// One- to two-sentence auto-synthesis for the top of the clinician report. Strictly
+// a restatement of computed findings — no inference beyond what each axis/pattern
+// already says — and always closed with an explicit "screening, not diagnosis"
+// caveat so it can never read as a clinical conclusion.
+function clinicalImpression(c) {
+  const { score, sv, conf, fired, rome, tri, heads } = c;
+  const bits = [];
+  if (sv && sv.label) bits.push(`${sv.label.toLowerCase()} gut-symptom burden${score.index != null ? ` (index ${score.index}%)` : ''}`);
+  if (rome && rome.criteriaMet && rome.subtype) bits.push(`pattern consistent with ${rome.subtype}`);
+  const elevated = [];
+  if (heads) {
+    const nut = heads.primary && heads.primary.nutrient;
+    if (nut && CONCERN_BANDS.has(nut.band)) elevated.push('possible malabsorption');
+    (heads.secondaryList || []).forEach(o => { if (CONCERN_BANDS.has(o.band)) elevated.push(o.label.toLowerCase()); });
+  }
+  if (elevated.length) bits.push(`elevated systemic reads (${elevated.join(', ')})`);
+  let txt = bits.length ? `${bits.join('; ')}.` : 'No prominent findings on this screen.';
+  txt = txt.charAt(0).toUpperCase() + txt.slice(1);
+  if (fired && fired.length) txt += ` ⚠ ${fired.length} red-flag item${fired.length > 1 ? 's' : ''} answered Yes (see Red flags).`;
+  if (tri) txt += ` Suggested triage: Tier ${tri.level} — ${tri.label}.`;
+  const caveat = `Screening synthesis only — not a diagnosis.${conf ? ` Confidence ${conf.level}, ${score.completeness}% complete.` : ''} Apply clinical judgement.`;
+  return { txt, caveat };
+}
+
+// Pull every pelvic-floor / visceral-fascial manual-therapy candidacy out of the
+// triage result (reasons + alsoConsider) — the physio-facing read this tool exists
+// to surface. Matches on the axis tag OR the candidacy wording.
+function physioCandidacy(tri) {
+  const all = [].concat(tri.reasons || [], ...((tri.alsoConsider || []).map(a => a.reasons || [])));
+  const seen = new Set();
+  return all.filter(r => (r.axis === 'pelvic') || /manual-therapy|visceral|fascial|pelvic-floor/i.test(r.text || ''))
+    .filter(r => { if (seen.has(r.text)) return false; seen.add(r.text); return true; });
+}
+
 function buildClinicianPrint(c) {
   const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, meds, famhx, obstetric, anthro } = c;
   const dateStr = new Date().toLocaleDateString('en-AU', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -3575,6 +3624,12 @@ function buildClinicianPrint(c) {
     h += `<div class="pr-info"><b>Applicability:</b> ${esc(note)}. Developed in a general adult population — interpret with clinical context.</div>`;
   }
 
+  // Clinical impression — auto-synthesis at the top so the report can be scanned.
+  const imp = clinicalImpression(c);
+  h += `<div class="pr-section"><div class="pr-sh">Clinical impression</div>
+    <div style="font-size:11px;line-height:1.5">${esc(imp.txt)}</div>
+    <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:3px">${esc(imp.caveat)}</div></div>`;
+
   // Triage
   const tierCls = ['', 't1', 't2', 't3', 't4'][tri.level] || 't4';
   h += `<div class="pr-section"><div class="pr-sh">Triage</div>
@@ -3592,22 +3647,39 @@ function buildClinicianPrint(c) {
     ` : ''}
   </div>`;
 
-  // Scores — GSHS headline (4 primary) + secondary axes. No blended index.
-  // disruption_load and dysbiosis_correlate_load values are raw signal counts (0–6),
-  // not percentages. All other axis values (including psychosocial_load) are 0–100%.
+  // Red flags — moved up directly under Triage so the safety read is never buried.
+  h += `<div class="pr-section"><div class="pr-sh">Red flags</div>`;
+  h += fired.length
+    ? `<div class="pr-alert"><div class="pr-alert-t">⚠ ${fired.length} item${fired.length > 1 ? 's' : ''} answered Yes</div>
+       <ul style="margin:4px 0 0 14px;font-size:10.5px">${fired.map(f => `<li>${esc(f.label)}</li>`).join('')}</ul></div>`
+    : `<div style="font-size:11px;color:#555">No red flags answered Yes.</div>`;
+  h += `</div>`;
+
+  // Physiotherapy candidacy — the pelvic-floor / visceral-fascial manual-therapy
+  // read foregrounded for the physio audience (otherwise only implicit in patterns).
+  const physio = physioCandidacy(tri);
+  if (physio.length) {
+    h += `<div class="pr-section"><div class="pr-sh">Physiotherapy candidacy</div>
+      <ul style="margin:0 0 0 14px;font-size:10.5px;line-height:1.6">${physio.map(r => `<li>${esc(r.text)}</li>`).join('')}</ul>
+      <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:2px">An adjunct after medical assessment — not a substitute for it.</div></div>`;
+  }
+
+  // Axis profile — primary + secondary in ONE table with band colour + provenance,
+  // so the validated Gut Symptom Burden is visibly distinguished from the draft
+  // screening axes. disruption_load / dysbiosis_correlate_load are signal counts
+  // (0–6), not percentages; all other axis values are 0–100%.
   const COUNT_LOADS = new Set(['disruption_load', 'dysbiosis_correlate_load']);
   const pctOrCount = (o) => o.value == null ? '—'
-    : (o.max != null ? `${o.value}/${o.max}` : (COUNT_LOADS.has(o.key) ? o.value : o.value + '%'));
-  const headRow = (o) => `<tr><td>${esc(o.label)}</td><td><b>${esc(String(pctOrCount(o)))}</b>${o.band ? ` — ${esc(o.band)}` : ''}</td></tr>`;
-  h += `<div class="pr-section"><div class="pr-sh">Scores — primary</div>
-    <table class="pr-tbl"><tbody>
-      ${heads.primaryList.map(headRow).join('')}
-      <tr><td>Confidence</td><td>${esc(conf.level)} · ${score.completeness}% complete</td></tr>
-      ${score.coreUnknown ? '<tr><td colspan="2" style="color:#A32D2D;font-weight:600">⚠ Core GI section not answered — Gut Symptom Burden provisional</td></tr>' : ''}
-    </tbody></table></div>`;
-  h += `<div class="pr-section"><div class="pr-sh">Scores — secondary axes</div>
-    <table class="pr-tbl"><tbody>
-      ${heads.secondaryList.map(headRow).join('')}
+    : (o.max != null ? `${o.value}/${o.max}` : (COUNT_LOADS.has(o.key) ? `${o.value} signal${o.value === 1 ? '' : 's'}` : o.value + '%'));
+  const axisRow = (o) => `<tr><td>${esc(o.label)}</td><td style="white-space:nowrap"><b>${esc(String(pctOrCount(o)))}</b></td><td>${prBandPill(o.band)}</td><td>${prProv(o.validated)}</td></tr>`;
+  h += `<div class="pr-section"><div class="pr-sh">Axis profile</div>
+    <table class="pr-tbl"><thead><tr><th>Axis</th><th>Value</th><th>Band</th><th>Basis</th></tr></thead><tbody>
+      <tr><td colspan="4" style="font-size:9px;color:#888;font-weight:600">PRIMARY</td></tr>
+      ${heads.primaryList.map(axisRow).join('')}
+      <tr><td colspan="4" style="font-size:9px;color:#888;font-weight:600;padding-top:4px">SECONDARY</td></tr>
+      ${heads.secondaryList.map(axisRow).join('')}
+      <tr><td>Confidence</td><td colspan="3">${esc(conf.level)} · ${score.completeness}% complete</td></tr>
+      ${score.coreUnknown ? '<tr><td colspan="4" style="color:#A32D2D;font-weight:600">⚠ Core GI section not answered — Gut Symptom Burden provisional</td></tr>' : ''}
     </tbody></table></div>`;
   if (conditions && conditions.list && conditions.list.length) {
     h += `<div class="pr-section"><div class="pr-sh">Known conditions reported</div>
@@ -3632,40 +3704,41 @@ function buildClinicianPrint(c) {
       <div style="font-size:10.5px">${esc(meds.list.map(m => m.label + (m.effect ? ` (${m.effect})` : '')).join('; '))}</div></div>`;
   }
 
-  // Red flags
-  h += `<div class="pr-section"><div class="pr-sh">Red flags</div>`;
-  h += fired.length
-    ? `<div class="pr-alert"><div class="pr-alert-t">⚠ ${fired.length} item${fired.length > 1 ? 's' : ''} answered Yes</div>
-       <ul style="margin:4px 0 0 14px;font-size:10.5px">${fired.map(f => `<li>${esc(f.label)}</li>`).join('')}</ul></div>`
-    : `<div style="font-size:11px;color:#555">No red flags answered Yes.</div>`;
-  h += `</div>`;
-
-  // GSRS domain breakdown
+  // GSRS domain breakdown — % cell colour-coded by band so high domains stand out.
   h += `<div class="pr-section"><div class="pr-sh">Domain breakdown</div>
     <table class="pr-tbl"><thead><tr><th>Domain</th><th>Score/Max</th><th>%</th></tr></thead><tbody>`;
   SECTIONS.forEach(s => {
     const sc = score.secScores[s.id] || 0, mx = score.secApplicableMax[s.id] || 0;
-    h += `<tr><td>${esc(s.full || s.label)}</td><td>${sc}/${mx}</td><td>${mx ? Math.round(sc / mx * 100) + '%' : 'n/a'}</td></tr>`;
+    const pct = mx ? Math.round(sc / mx * 100) : null;
+    const bnd = pct != null ? bandForPct(pct) : null;
+    h += `<tr><td>${esc(s.full || s.label)}</td><td>${sc}/${mx}</td><td>${pct != null ? `<b style="color:${bnd.color}">${pct}%</b>` : 'n/a'}</td></tr>`;
   });
   if (score.clusterAgg) {
     ['Reflux', 'Pain', 'Indigestion', 'Diarrhoea', 'Constipation'].forEach(k => {
       const cl = score.clusterAgg[k]; if (!cl || cl.max === 0) return;
-      h += `<tr><td style="padding-left:14px;color:#666">↳ ${esc(k)}</td><td>${cl.sum}/${cl.max}</td><td>${Math.round(cl.sum / cl.max * 100)}%</td></tr>`;
+      const pct = Math.round(cl.sum / cl.max * 100);
+      h += `<tr><td style="padding-left:14px;color:#666">↳ ${esc(k)}</td><td>${cl.sum}/${cl.max}</td><td style="color:${bandForPct(pct).color}">${pct}%</td></tr>`;
     });
   }
   h += `</tbody></table></div>`;
 
-  // Rome IV
+  // Rome IV — full criteria table only when answered; otherwise a single line, so
+  // an unanswered Rome IV doesn't print five empty rows.
   const r = extras.rome || {};
-  h += `<div class="pr-section"><div class="pr-sh">Rome IV-informed bowel-pain pattern</div>
-    <table class="pr-tbl"><tbody>
-      <tr><td>Pain frequency</td><td>${r.painFreq != null ? `${r.painFreq} — ${esc(ROME_FREQ[r.painFreq] || '')}` : '—'}</td></tr>
-      <tr><td>Onset</td><td>${r.onset != null ? `${r.onset} — ${esc(ROME_ONSET[r.onset] || '')}` : '—'}</td></tr>
-      ${ROME_ASSOC.map(a => `<tr><td>${esc(a.label)}</td><td>${r[a.id] ? '<b>Yes</b>' : 'No'}</td></tr>`).join('')}
-      <tr><td><b>Result</b></td><td><b>${rome.criteriaMet ? `Criteria met — ${esc(rome.subtype)}` : rome.answered ? 'Criteria not met' : 'Not answered'}</b></td></tr>
-    </tbody></table>
-    <div style="font-size:9.5px;color:#888;margin-top:3px">Single-visit estimate — not the prospective diary Rome IV was validated against.</div>
-  </div>`;
+  if (rome.answered) {
+    h += `<div class="pr-section"><div class="pr-sh">Rome IV-informed bowel-pain pattern</div>
+      <table class="pr-tbl"><tbody>
+        <tr><td>Pain frequency</td><td>${r.painFreq != null ? `${r.painFreq} — ${esc(ROME_FREQ[r.painFreq] || '')}` : '—'}</td></tr>
+        <tr><td>Onset</td><td>${r.onset != null ? `${r.onset} — ${esc(ROME_ONSET[r.onset] || '')}` : '—'}</td></tr>
+        ${ROME_ASSOC.map(a => `<tr><td>${esc(a.label)}</td><td>${r[a.id] ? '<b>Yes</b>' : 'No'}</td></tr>`).join('')}
+        <tr><td><b>Result</b></td><td><b>${rome.criteriaMet ? `Criteria met — ${esc(rome.subtype)}` : 'Criteria not met'}</b></td></tr>
+      </tbody></table>
+      <div style="font-size:9.5px;color:#888;margin-top:3px">Single-visit estimate — not the prospective diary Rome IV was validated against.</div>
+    </div>`;
+  } else {
+    h += `<div class="pr-section"><div class="pr-sh">Rome IV-informed bowel-pain pattern</div>
+      <div style="font-size:11px;color:#555">Not answered (pain items not reached / completed).</div></div>`;
+  }
 
   // Patterns
   if (patterns.length) {
@@ -3688,23 +3761,25 @@ function buildClinicianPrint(c) {
       ${modifiableFactors(driverExtras).map(f => `<tr><td>${factorIcon(f)}${esc(f.label)}</td><td style="color:${f.color}">${esc(f.band)}</td><td>${esc(f.score || '')}</td></tr>`).join('')}
     </tbody></table></div>`;
 
-  // Item-level responses (page 2)
-  h += `<div class="pr-section pr-page-break"><div class="pr-sh">Item-level responses</div>`;
+  // Item-level responses (page 2) — two columns to roughly halve the footprint.
+  h += `<div class="pr-section pr-page-break"><div class="pr-sh">Item-level responses</div>
+    <div style="column-count:2;column-gap:16px">`;
   SECTIONS.forEach(s => {
     const qs = questionsOf(s.id);
     if (!qs.length) return;
     const sc = score.secScores[s.id] || 0, mx = score.secApplicableMax[s.id] || 0;
-    h += `<div style="font-weight:600;font-size:11px;margin:8px 0 2px;color:#3A4A5A">${esc(s.full || s.label)} — ${sc}/${mx} (${mx ? Math.round(sc / mx * 100) + '%' : 'n/a'})</div>
+    h += `<div style="break-inside:avoid;-webkit-column-break-inside:avoid;margin-bottom:6px">
+      <div style="font-weight:600;font-size:10.5px;margin:0 0 2px;color:#3A4A5A">${esc(s.full || s.label)} — ${sc}/${mx} (${mx ? Math.round(sc / mx * 100) + '%' : 'n/a'})</div>
       <table class="pr-tbl"><tbody>${qs.map(q => {
         const val = answers[q.id];
         const labels = scaleFor(q.scale);
         const disp = q.freeText
           ? (typeof val === 'string' && val.trim() ? esc(val) : '—')
           : val === 'na' ? 'N/A' : val == null ? '—' : `${val} — ${esc(labels[val] || '')}`;
-        return `<tr><td>${esc(q.patientText)}</td><td style="white-space:nowrap">${disp}</td></tr>`;
-      }).join('')}</tbody></table>`;
+        return `<tr><td style="font-size:9.5px">${esc(q.patientText)}</td><td style="white-space:nowrap;font-size:9.5px">${disp}</td></tr>`;
+      }).join('')}</tbody></table></div>`;
   });
-  h += `</div>`;
+  h += `</div></div>`;
 
   // Longitudinal trend (if applicable)
   if (trend && trend.points.length >= 2) {

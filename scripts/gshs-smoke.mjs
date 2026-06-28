@@ -272,5 +272,32 @@ ok(/PT_HEAD_DESC/.test(html) && /PT_SUBTYPE_DESC/.test(html), 'patient print: pl
 const headDesc = html.match(/const PT_HEAD_DESC = \{[\s\S]*?\};/);
 ok(headDesc && !/GSRS|axis|norm|cluster/i.test(headDesc[0]), 'patient head descriptions are jargon-free');
 
+// 28. Clinician report — structure (source-level; DOM renderer not loadable here).
+const clFn = html.match(/function buildClinicianPrint\(c\)\s*\{[\s\S]*?\n\}\n/);
+ok(!!clFn, 'buildClinicianPrint present');
+const clSrc = clFn ? clFn[0] : '';
+// Clinical impression up top, before Triage.
+ok(/clinicalImpression\(c\)/.test(clSrc), 'clinician: clinical impression generated');
+ok(clSrc.indexOf('Clinical impression') < clSrc.indexOf('>Triage<'), 'clinician: impression appears before triage');
+ok(/Screening synthesis only — not a diagnosis/.test(html), 'clinician: impression carries not-a-diagnosis caveat');
+// Red flags moved up — before the Axis profile.
+ok(clSrc.indexOf('>Red flags<') < clSrc.indexOf('>Axis profile<'), 'clinician: red flags moved above axis profile');
+ok(clSrc.indexOf('>Red flags<') < clSrc.indexOf('>Domain breakdown<'), 'clinician: red flags above domain breakdown');
+// Physio candidacy callout.
+ok(/physioCandidacy\(tri\)/.test(clSrc) && /Physiotherapy candidacy/.test(clSrc), 'clinician: physiotherapy candidacy callout');
+// Merged axis profile with provenance + colour.
+ok(/>Axis profile</.test(clSrc) && /prProv\(o\.validated\)/.test(clSrc), 'clinician: axis profile shows validated/draft provenance');
+ok(/prBandPill\(o\.band\)/.test(clSrc), 'clinician: axis bands colour-coded');
+ok(!/Scores — primary/.test(clSrc) && !/Scores — secondary/.test(clSrc), 'clinician: two score tables merged into one');
+// Domain breakdown colour-coded by band.
+ok(/bandForPct\(pct\)\.color/.test(clSrc), 'clinician: domain breakdown % colour-coded by band');
+// Rome collapses when unanswered.
+ok(/if \(rome\.answered\)/.test(clSrc) && /Not answered \(pain items/.test(clSrc), 'clinician: Rome IV collapses to one line when unanswered');
+// Two-column item responses.
+ok(/column-count:2/.test(clSrc), 'clinician: item-level responses use two columns');
+// Helper unit-style checks via source presence (functions are closure-bound).
+ok(/function clinicalImpression\(c\)/.test(html) && /function physioCandidacy\(tri\)/.test(html), 'clinician: impression + physio helpers defined');
+ok(/function prBandPill\(band\)/.test(html) && /function prProv\(validated\)/.test(html), 'clinician: print band-pill + provenance helpers defined');
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);
