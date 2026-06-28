@@ -3415,13 +3415,36 @@ function printSummary(mode) {
   window.print();
 }
 
+// Plain-language, patient-facing one-liners for each headline output. Keep these
+// jargon-free — no "axis", "norm", "GSRS"; the clinician print carries the detail.
+const PT_HEAD_DESC = {
+  gut_symptom_burden: 'How heavy your gut symptoms feel overall, from a validated questionnaire.',
+  nutrient_malabsorption_risk: 'An estimate of whether gut symptoms may be affecting how well you absorb nutrients.',
+  disruption_load: 'Medications or history that can upset the balance of gut bacteria.',
+  dysbiosis_correlate_load: 'Symptom patterns often seen alongside changes in gut bacteria.',
+};
+// Patient-friendly band → background colour (print). Covers both the 0–100 bands
+// (Minimal/Mild–Moderate/Significant/Severe) and the count-load bands (Low/Some/Elevated).
+function ptBandBg(band) {
+  return { Severe: '#FCEBEB', Significant: '#FAECE7', Elevated: '#FAECE7',
+    'Mild–Moderate': '#FAEEDA', Some: '#FAEEDA' }[band] || '#E1F5EE';
+}
+// Plain-language read of the Rome IV-informed IBS subtype (no diagnosis claim).
+const PT_SUBTYPE_DESC = {
+  'IBS-C': 'symptoms tend to come with constipation',
+  'IBS-D': 'symptoms tend to come with loose or frequent stools',
+  'IBS-M': 'symptoms alternate between constipation and loose stools',
+  'IBS-U': 'symptoms do not fit neatly into one pattern',
+};
+
 function buildPatientPrint(c) {
-  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri } = c;
+  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, heads, anthro } = c;
   const dateStr = new Date().toLocaleDateString('en-AU', { year: 'numeric', month: 'long', day: 'numeric' });
   const patName = (session.name || '').trim() || (session.ref || '').trim() || 'Anonymous';
   const isPregnant = session.pregnant === 'yes';
   const ageNum = parseInt(session.age, 10);
   const isMinor = !isNaN(ageNum) && ageNum < 18;
+  const COUNT_LOADS = new Set(['disruption_load', 'dysbiosis_correlate_load']);
 
   const div = document.createElement('div');
   let h = `<div class="pr-logo">Beyond Mechanics</div>
@@ -3438,14 +3461,62 @@ function buildPatientPrint(c) {
       <ul style="margin:4px 0 0 14px;font-size:10.5px">${fired.map(f => `<li>${esc(f.label)}</li>`).join('')}</ul></div>`;
   }
 
-  const svCss = { Severe: '#FCEBEB', Significant: '#FAD7C2', 'Mild–Moderate': '#FAEEDA' }[sv.label] || '#E1F5EE';
-  h += `<div class="pr-hero">
-    <div><div class="big">${sv.index == null ? '—' : sv.index + '%'}</div><div class="sub">Gut Symptom Burden</div></div>
-    <div><span class="pr-pill" style="background:${svCss};color:#000">${esc(sv.label || '—')}</span>
-    <div style="font-size:10.5px;color:#555;margin-top:4px;max-width:340px">${esc(sv.desc || '')}</div>
-    <div style="font-size:10px;color:#888;margin-top:4px">Confidence: ${esc(conf.level)} · ${score.completeness}% complete</div></div></div>`;
+  // ── Section 1 — Your results at a glance (4 primary outputs) ─────────────────
+  h += `<div class="pr-section"><div class="pr-sh">Your results at a glance</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">`;
+  heads.primaryList.forEach(o => {
+    const isCount = COUNT_LOADS.has(o.key);
+    const val = o.value == null ? '—' : (isCount ? `${o.value} signal${o.value === 1 ? '' : 's'}` : o.value + '%');
+    const valTag = o.validated === true ? 'validated questionnaire' : 'screening estimate';
+    h += `<div style="border:1px solid #D9E0E6;border-radius:8px;padding:9px 10px;background:#fff">
+      <div style="font-size:11px;font-weight:700;color:#2A3A4A">${esc(o.label)}</div>
+      <div style="margin:4px 0"><span style="font-size:15px;font-weight:700">${esc(String(val))}</span>
+        ${o.band ? ` <span class="pr-pill" style="background:${ptBandBg(o.band)};color:#000;font-size:9.5px">${esc(o.band)}</span>` : ''}</div>
+      <div style="font-size:9.5px;color:#555;line-height:1.4">${esc(PT_HEAD_DESC[o.key] || '')}</div>
+      <div style="font-size:8.5px;color:#999;margin-top:3px;font-style:italic">(${valTag})</div>
+    </div>`;
+  });
+  h += `</div>`;
+  // Secondary axes — band-only pills, only those that were answered.
+  const secPills = heads.secondaryList.filter(o => o.band).map(o =>
+    `<span class="pr-pill" style="background:${ptBandBg(o.band)};color:#000;font-size:9.5px;margin:2px 4px 2px 0">${esc(o.label)} — ${esc(o.band)}</span>`).join('');
+  if (secPills) {
+    h += `<div style="margin-top:8px"><div style="font-size:9.5px;color:#777;margin-bottom:3px">Other systemic reads (screening estimates):</div>${secPills}</div>`;
+  }
+  h += `</div>`;
 
-  h += `<div class="pr-section"><div class="pr-sh">By area</div>`;
+  // ── Section 2 — What this means for you (triage + plain notes) ───────────────
+  const tierCls = ['', 't1', 't2', 't3', 't4'][tri.level] || 't4';
+  const ptNotes = [].concat(
+    tri.conditionGuidance || [], tri.familyNotes || [],
+    tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [],
+    tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : []);
+  h += `<div class="pr-section"><div class="pr-sh">What this means for you</div>
+    <div class="pr-triage ${tierCls}">
+      <div style="font-weight:700;font-size:12px">Suggested next step: Tier ${tri.level} — ${esc(tri.label)}</div>
+      <div style="font-size:11px;margin-top:4px">${esc(tri.action)}</div>
+      ${tri.reasons.length ? `<div style="font-size:10.5px;color:#555;margin-top:4px">Why: ${tri.reasons.map(r => esc(r.text)).join(' · ')}</div>` : ''}
+      ${ptNotes.length ? `<ul style="margin:6px 0 0 14px;font-size:10.5px;line-height:1.5">${ptNotes.map(n => `<li>ℹ️ ${esc(n)}</li>`).join('')}</ul>` : ''}
+    </div>
+    <div style="font-size:9.5px;color:#888;margin-top:4px">Confidence: ${esc(conf.level)} · ${score.completeness}% complete</div></div>`;
+
+  // ── Section 3 — Bowel pattern (only if Rome IV-informed criteria met) ────────
+  if (rome && rome.criteriaMet && rome.subtype) {
+    h += `<div class="pr-section"><div class="pr-sh">Bowel pattern</div>
+      <div style="font-size:11px"><b>${esc(rome.subtype)}</b> — ${esc(PT_SUBTYPE_DESC[rome.subtype] || '')}.</div>
+      <div style="font-size:9.5px;color:#888;margin-top:3px;font-style:italic">Based on your responses on the day — a pattern to discuss, not a formal diagnosis.</div></div>`;
+  }
+
+  // ── Section 4 — Patterns noted (only if any fired) ──────────────────────────
+  if (patterns.length) {
+    h += `<div class="pr-section"><div class="pr-sh">Patterns noted</div>
+      <div style="font-size:10px;color:#555;margin-bottom:4px">Your responses suggest these may be relevant. Your clinician will review them with you.</div>
+      <ul style="margin:0 0 0 14px;font-size:10.5px;line-height:1.5">${patterns.map(p => `<li><b>${esc(p.label)}</b>${p.desc ? ` — ${esc(p.desc)}` : ''}</li>`).join('')}</ul></div>`;
+  }
+
+  // ── Section 5 — Symptom breakdown (per-area bars) ───────────────────────────
+  h += `<div class="pr-section"><div class="pr-sh">Symptom breakdown</div>
+    <div style="font-size:9.5px;color:#777;margin-bottom:5px">How your symptoms spread across areas. The gut symptom bars come from a validated questionnaire; the rest are screening estimates.</div>`;
   SECTIONS.forEach(s => {
     const sc = score.secScores[s.id] || 0, mx = score.secApplicableMax[s.id] || 0;
     if (!mx) return;
@@ -3456,23 +3527,24 @@ function buildPatientPrint(c) {
   });
   h += `</div>`;
 
-  const tierCls = ['', 't1', 't2', 't3', 't4'][tri.level] || 't4';
-  h += `<div class="pr-section"><div class="pr-sh">Suggested next step</div>
-    <div class="pr-triage ${tierCls}">
-      <div style="font-weight:700;font-size:12px">Tier ${tri.level} — ${esc(tri.label)}</div>
-      <div style="font-size:11px;margin-top:4px">${esc(tri.action)}</div>
-      ${tri.reasons.length ? `<div style="font-size:10.5px;color:#555;margin-top:4px">Why: ${tri.reasons.map(r => esc(r.text)).join(' · ')}</div>` : ''}
-    </div></div>`;
+  // ── Section 6 — Body measurements (only if entered) ─────────────────────────
+  if (anthro && (anthro.bmi != null || anthro.whtr != null)) {
+    const bmiTxt = anthro.bmi != null ? `BMI ${anthro.bmi}${anthro.bmiBand ? ` (${anthro.bmiBand})` : ''}` : null;
+    const whtrTxt = anthro.whtr != null ? `Waist-to-height ratio ${anthro.whtr}${anthro.whtrBand ? ` (${anthro.whtrBand})` : ''}` : null;
+    h += `<div class="pr-section"><div class="pr-sh">Body measurements</div>
+      <div style="font-size:10.5px">${esc([bmiTxt, whtrTxt].filter(Boolean).join(' · '))}${anthro.caveat ? `<br><i style="color:#777">${esc(anthro.caveat)}</i>` : ''}</div></div>`;
+  }
 
+  // ── Section 7 — Modifiable factors ──────────────────────────────────────────
   const mf = modifiableFactors(driverExtras).filter(f => f.band && f.band !== 'Not answered');
   if (mf.length) {
     // Band shown as a colour swatch + dark, bold text so it stays legible in
     // print (coloured text alone was low-contrast for the lighter bands).
-    h += `<div class="pr-section"><div class="pr-sh">Lifestyle factors</div>
+    h += `<div class="pr-section"><div class="pr-sh">Modifiable factors</div>
       <table class="pr-tbl"><tbody>${mf.map(f => `<tr><td style="color:#000">${factorIcon(f)}${esc(f.label)}</td><td style="color:#000"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${f.color};margin-right:6px;vertical-align:middle"></span><b>${esc(f.band)}</b>${f.score ? ` <span style="color:#555">· ${esc(f.score)}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
-  h += `<div class="pr-footer">This is a screening tool — it is not a diagnosis. Please discuss your results with your clinician.<br>Beyond Mechanics · Gut & Systemic Health Screen (GSHS) · ${esc(dateStr)}</div>`;
+  h += `<div class="pr-footer">This is a screening tool — it is not a diagnosis. Please discuss your results with your clinician. For the full clinical detail, ask for the clinician summary.<br>Beyond Mechanics · Gut & Systemic Health Screen (GSHS) · ${esc(dateStr)}</div>`;
   div.innerHTML = h;
   return div;
 }

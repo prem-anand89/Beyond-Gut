@@ -249,5 +249,28 @@ ok(rAnthro.tri.level === run(0).tri.level, 'anthropometrics does not change the 
 ok(['GI','IM','BG','NU','IMP','AR','UG','SY'].every(id => schema.SECTIONS.some(s => s.id === id)), 'all sections still present after reorg');
 ok(run(0, { im_food_react: 3, im_histamine: 3, sk_skin: 3 }, { heightCm: 100, weightKg: 30, waistCm: 70 }).heads.primary.symptom.value === 0, 'GSRS Index unchanged by anthropometrics / systemic answers');
 
+// 27. Patient summary report — structure (source-level; buildPatientPrint is a
+// DOM renderer not loadable in this dependency-free harness, but its data inputs
+// — heads / rome / patterns / anthro — are engine-tested above).
+const ptFn = html.match(/function buildPatientPrint\(c\)\s*\{[\s\S]*?\n\}/);
+ok(!!ptFn, 'buildPatientPrint present');
+const ptSrc = ptFn ? ptFn[0] : '';
+ok(/\bheads\b/.test(ptSrc) && /\banthro\b/.test(ptSrc) && /\brome\b/.test(ptSrc) && /\bpatterns\b/.test(ptSrc),
+   'patient print uses heads, anthro, rome, patterns from c');
+ok(/Your results at a glance/.test(ptSrc), 'patient print: four-output glance grid heading');
+ok(/heads\.primaryList\.forEach/.test(ptSrc), 'patient print: iterates the 4 primary outputs');
+ok(/heads\.secondaryList\.filter/.test(ptSrc), 'patient print: shows secondary axes (answered only)');
+ok(/What this means for you/.test(ptSrc), 'patient print: plain-language triage heading');
+ok(/conditionGuidance[\s\S]*familyNotes[\s\S]*anthroNote/.test(ptSrc), 'patient print: surfaces triage notes as bullets');
+ok(/rome && rome\.criteriaMet/.test(ptSrc), 'patient print: Rome subtype shown only when criteria met');
+ok(/patterns\.length/.test(ptSrc), 'patient print: patterns section gated on any fired');
+ok(/Symptom breakdown/.test(ptSrc), 'patient print: per-area bars renamed to Symptom breakdown');
+ok(/Body measurements/.test(ptSrc) && /anthro\.bmi != null/.test(ptSrc), 'patient print: anthropometrics block gated on entered values');
+ok(/Modifiable factors/.test(ptSrc), 'patient print: lifestyle factors renamed to Modifiable factors');
+// Plain-language maps present and jargon-free.
+ok(/PT_HEAD_DESC/.test(html) && /PT_SUBTYPE_DESC/.test(html), 'patient print: plain-language description maps defined');
+const headDesc = html.match(/const PT_HEAD_DESC = \{[\s\S]*?\};/);
+ok(headDesc && !/GSRS|axis|norm|cluster/i.test(headDesc[0]), 'patient head descriptions are jargon-free');
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);
