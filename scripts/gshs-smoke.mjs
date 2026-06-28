@@ -299,5 +299,18 @@ ok(/column-count:2/.test(clSrc), 'clinician: item-level responses use two column
 ok(/function clinicalImpression\(c\)/.test(html) && /function physioCandidacy\(tri\)/.test(html), 'clinician: impression + physio helpers defined');
 ok(/function prBandPill\(band\)/.test(html) && /function prProv\(validated\)/.test(html), 'clinician: print band-pill + provenance helpers defined');
 
+// 29. Clinician TAB (on-screen) parity — source-level (DOM renderer not loadable).
+const rcFn = html.match(/function renderClinician\(\)\s*\{[\s\S]*?\n\}\n/);
+ok(!!rcFn, 'renderClinician present');
+const rcSrc = rcFn ? rcFn[0] : '';
+ok(/clinicalImpression\(c\)/.test(rcSrc), 'clinician tab: clinical impression added');
+ok(rcSrc.indexOf('clinicalImpression') < rcSrc.indexOf('headlineCard(heads'), 'clinician tab: impression above the headline');
+ok(/physioCandidacy\(tri\)/.test(rcSrc) && /Physiotherapy candidacy/.test(rcSrc), 'clinician tab: physio candidacy callout');
+ok(/No red flags answered Yes/.test(rcSrc), 'clinician tab: foregrounded red-flags card (with none-reassurance)');
+ok(rcSrc.indexOf('Red flags') < rcSrc.indexOf('axisProfileCard'), 'clinician tab: red flags before axis profile');
+// De-dup — the buried red-flag block is gone from clinicianDetailCard.
+const cdFn = html.match(/function clinicianDetailCard\(c\)\s*\{[\s\S]*?\n\}\n/);
+ok(cdFn && !/Red flags — \$\{fired\.length\} answered Yes/.test(cdFn[0]), 'clinician detail: buried red-flag block removed (no duplication)');
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

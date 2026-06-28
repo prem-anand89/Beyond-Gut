@@ -3395,12 +3395,8 @@ function clinicianDetailCard(c) {
   ).join('');
   card.appendChild(tbl(['Factor', 'Band', 'Score'], drRows));
 
-  // Red flag detail
-  if (fired.length) {
-    card.appendChild(chead(`Red flags — ${fired.length} answered Yes`));
-    card.appendChild(el('ul', { style: 'font-size:11.5px;padding-left:18px;color:#A32D2D;margin:2px 0' },
-      fired.map(f => `<li>${esc(f.label)}</li>`).join('')));
-  }
+  // Red flags are shown in a foregrounded card under triage (renderClinician) —
+  // not duplicated here.
 
   return card;
 }
@@ -3863,7 +3859,7 @@ function renderClinician() {
     return;
   }
   const c = lastCalc;
-  const { score, sv, conf, lens, rome, tri, profile, heads, correlateLoad } = c;
+  const { score, sv, conf, lens, rome, tri, profile, heads, correlateLoad, fired } = c;
 
   // Identity + print header
   const who = (session.name || '').trim() || (session.ref || '').trim() || 'Anonymous screen';
@@ -3882,6 +3878,14 @@ function renderClinician() {
   head.appendChild(printBtn);
   root.appendChild(head);
 
+  // Clinical impression — auto-synthesis at the top, matching the print report.
+  const imp = clinicalImpression(c);
+  const impCard = el('div', { class: 'card', style: 'border-left:6px solid #185FA5' });
+  impCard.appendChild(el('h2', {}, 'Clinical impression'));
+  impCard.appendChild(el('div', { style: 'font-size:13px;line-height:1.5' }, esc(imp.txt)));
+  impCard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:4px;font-style:italic' }, esc(imp.caveat)));
+  root.appendChild(impCard);
+
   // GSHS headline (four primary outputs) + symptom-burden detail
   root.appendChild(headlineCard(heads, rome));
   const hero = el('div', { class: 'card' });
@@ -3894,6 +3898,32 @@ function renderClinician() {
 
   // Plan (triage + investigations always shown here) + secondary axes + domain + risk matrix + full detail
   root.appendChild(triageCard(tri, rome, true));
+
+  // Red flags — foregrounded directly under triage (was buried in Clinical detail).
+  const rfCard = el('div', { class: 'card', style: `border-left:6px solid ${fired.length ? '#A32D2D' : '#0F6E56'}` });
+  rfCard.appendChild(el('h2', {}, 'Red flags'));
+  if (fired.length) {
+    rfCard.appendChild(el('div', { style: 'font-weight:700;color:#A32D2D;font-size:13px' },
+      `⚠ ${fired.length} item${fired.length > 1 ? 's' : ''} answered Yes`));
+    rfCard.appendChild(el('ul', { style: 'font-size:12.5px;padding-left:18px;color:#A32D2D;margin:4px 0 0' },
+      fired.map(f => `<li>${esc(f.label)}</li>`).join('')));
+  } else {
+    rfCard.appendChild(el('div', { class: 'q-sub' }, 'No red flags answered Yes.'));
+  }
+  root.appendChild(rfCard);
+
+  // Physiotherapy candidacy — pelvic-floor / visceral-fascial manual-therapy read.
+  const physio = physioCandidacy(tri);
+  if (physio.length) {
+    const phCard = el('div', { class: 'card', style: 'border-left:6px solid #7A4A8C' });
+    phCard.appendChild(el('h2', {}, 'Physiotherapy candidacy'));
+    phCard.appendChild(el('ul', { style: 'font-size:12.5px;padding-left:18px;margin:2px 0' },
+      physio.map(r => `<li>${esc(r.text)}</li>`).join('')));
+    phCard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:2px;font-style:italic' },
+      'An adjunct after medical assessment — not a substitute for it.'));
+    root.appendChild(phCard);
+  }
+
   root.appendChild(axisProfileCard(profile, heads));
   root.appendChild(domainBarsCard(score, true));   // full domain breakdown incl. GSRS cluster shape
   root.appendChild(riskMatrixCard(sv, correlateLoad));
