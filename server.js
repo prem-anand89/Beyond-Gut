@@ -2,14 +2,14 @@ const express = require('express');
 const path = require('path');
 const app = express();
 
+// Define credentials (change these!)
+const username = 'clinician';
+const password = 'clinic2024';
+const credentials = Buffer.from(`${username}:${password}`).toString('base64');
+
 // HTTP Basic Auth middleware
 app.use((req, res, next) => {
   const auth = req.headers.authorization;
-
-  // Define credentials (change these!)
-  const username = 'clinician';
-  const password = 'clinic2024';
-  const credentials = Buffer.from(`${username}:${password}`).toString('base64');
 
   // Check if Authorization header exists and matches
   if (!auth || auth !== `Basic ${credentials}`) {
