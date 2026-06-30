@@ -1,0 +1,16 @@
+{
+  "name": "beyond-gut-gshs",
+  "version": "1.0.0",
+  "description": "Gut & Systemic Health Screen",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["health", "screening", "clinical"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
