@@ -3,8 +3,8 @@ const path = require('path');
 const app = express();
 
 // Define credentials (change these!)
-const username = 'clinician';
-const password = 'clinic2024';
+const username = 'demo';
+const password = 'gshs2024';
 const credentials = Buffer.from(`${username}:${password}`).toString('base64');
 
 // HTTP Basic Auth middleware
