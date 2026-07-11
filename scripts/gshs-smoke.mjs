@@ -314,5 +314,69 @@ ok(rcSrc.indexOf('Red flags') < rcSrc.indexOf('axisProfileCard'), 'clinician tab
 const cdFn = html.match(/function clinicianDetailCard\(c\)\s*\{[\s\S]*?\n\}\n/);
 ok(cdFn && !/Red flags — \$\{fired\.length\} answered Yes/.test(cdFn[0]), 'clinician detail: buried red-flag block removed (no duplication)');
 
+// 30. Questionnaire & scoring audit fix pass.
+
+// 30a. Cluster-balanced GI index — equal per-symptom severity in clusters of
+// different sizes (Reflux=2 items, Indigestion=4 items) must yield the SAME
+// index. Previously the index was an item-weighted mean, so severe-reflux-only
+// (6/45=13%) and severe-indigestion-only (12/45=27%) landed in different bands
+// despite identical per-symptom severity.
+const refluxOnly = { gsrs_heartburn: 3, gsrs_regurg: 3, gsrs_pain: 0, gsrs_hunger: 0, gsrs_nausea: 0,
+  gsrs_rumbling: 0, gsrs_bloating: 0, gsrs_burping: 0, gsrs_gas: 0, gsrs_diarrhoea: 0, gsrs_loose: 0,
+  gsrs_urgency: 0, gsrs_constip: 0, gsrs_hard: 0, gsrs_incomplete: 0 };
+const indigOnly = { gsrs_heartburn: 0, gsrs_regurg: 0, gsrs_pain: 0, gsrs_hunger: 0, gsrs_nausea: 0,
+  gsrs_rumbling: 3, gsrs_bloating: 3, gsrs_burping: 3, gsrs_gas: 3, gsrs_diarrhoea: 0, gsrs_loose: 0,
+  gsrs_urgency: 0, gsrs_constip: 0, gsrs_hard: 0, gsrs_incomplete: 0 };
+const sRefluxOnly = scoring.computeScores(refluxOnly, {});
+const sIndigOnly = scoring.computeScores(indigOnly, {});
+ok(sRefluxOnly.index === sIndigOnly.index, 'cluster-balanced index: equal severity in different-size clusters yields equal index');
+ok(sRefluxOnly.index === 20, 'cluster-balanced index: one maxed cluster of five yields the expected 20% mean');
+
+// 30b. Bristol nudge scoped to bowel-habit clusters only — a pure-reflux
+// patient (Constipation/Diarrhoea genuinely unanswered) must see NO index
+// change from an abnormal Bristol type, since neither bowel cluster exists to
+// nudge. Previously the nudge was added to the whole GI norm regardless.
+const pureRefluxSparse = { gsrs_heartburn: 1, gsrs_regurg: 1 };
+const sNoBristol = scoring.computeScores(pureRefluxSparse, {});
+const sWithBristol = scoring.computeScores(pureRefluxSparse, { bristol: 1 });
+ok(sNoBristol.index === sWithBristol.index, 'Bristol nudge does not move the index when bowel-habit clusters are unanswered');
+ok((sWithBristol.bristolAddPts || 0) === 0, 'bristolAddPts is 0 when bowel-habit clusters are unanswered');
+// Positive case: an answered (even all-zero) bowel-habit cluster DOES get nudged.
+const bowelAnswered = { gsrs_constip: 0, gsrs_hard: 0, gsrs_incomplete: 0, gsrs_diarrhoea: 0, gsrs_loose: 0, gsrs_urgency: 0 };
+const sBowelNoBristol = scoring.computeScores(bowelAnswered, {});
+const sBowelWithBristol = scoring.computeScores(bowelAnswered, { bristol: 1 });
+ok(sBowelWithBristol.index > sBowelNoBristol.index, 'Bristol nudge raises the index when bowel-habit clusters are answered');
+
+// 30c. Re-confirm the de-blend invariant survives the cluster-mean rewrite.
+ok(run(0, { im_food_react: 3, im_infections: 3 }, { pss4Score: 16 }).heads.primary.symptom.value === 0,
+  'de-blend invariant still holds after the cluster-balanced index rewrite');
+
+// 30d. Universal symptom-duration item — ungated, driverOnly, never touches
+// the Index; feeds triage.durationNote as plain context (never the Tier).
+const durQ = schema.QUESTIONS.find(q => q.id === 'sx_duration');
+ok(!!durQ && !durQ.revealIf && durQ.driverOnly === true, 'sx_duration present, ungated, driverOnly');
+ok(scoring.computeScores({ sx_duration: 4, gsrs_pain: 0 }, {}).index === 0, 'sx_duration answer never enters the Index');
+const rNoDuration = run(1, {});
+ok(rNoDuration.tri.durationNote == null, 'durationNote absent when sx_duration unanswered');
+// durationNote is populated via ui-patient.js computeAll() (durationLabel lookup),
+// not via run()'s raw triage() call — verify the wiring exists in source instead.
+ok(/durationLabel/.test(html) && /result\.durationNote/.test(html), 'durationLabel/durationNote wiring present in source');
+
+// 30e. gy_cyclical reachability — the SY section must reveal on pain/bloating
+// (its own item's real clinical trigger), not just fatigue/brain-fog. Item-level
+// revealIf cannot work here since refreshReveals() toggles the item holder
+// independently of its ancestor section holder (a nested display:none parent
+// still hides a "visible" child) — so this must be a section-level gate.
+const sySection = schema.SECTIONS.find(s => s.id === 'SY');
+const syCtxPainOnly = { answers: { gsrs_pain: 2 }, clusterNorm: {} };
+const syCtxFatigueOnly = { answers: { bg_fatigue: 2 }, clusterNorm: {} };
+const syCtxNeither = { answers: { gsrs_pain: 0, bg_fatigue: 0 }, clusterNorm: {} };
+ok(schema.revealMet(sySection.revealIf, syCtxPainOnly), 'SY section reveals on gsrs_pain alone (gy_cyclical reachable)');
+ok(schema.revealMet(sySection.revealIf, syCtxFatigueOnly), 'SY section still reveals on bg_fatigue alone (original trigger preserved)');
+ok(!schema.revealMet(sySection.revealIf, syCtxNeither), 'SY section stays hidden when neither trigger is met');
+// End-to-end: pain + cyclical answered, no fatigue/brain-fog → gynNote fires.
+const r30e = run(0, { gsrs_pain: 2, gy_cyclical: 2 });
+ok(r30e.tri.gynNote != null, 'gynOverlap note fires for pain+cyclical presentation with no fatigue/brain-fog (previously unreachable)');
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

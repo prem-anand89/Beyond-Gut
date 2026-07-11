@@ -397,7 +397,18 @@ const SECTIONS = [
   { id: 'UG', label: 'UG', full: 'Upper-GI / dyspepsia',       role: 'standalone', axis: 'symptom',   color: '#0F6E56', bg: '#E1F5EE', conditional: true,
     revealIf: { any: [ { type: 'cluster', cluster: 'Reflux', min: 0.3 }, { type: 'cluster', cluster: 'Indigestion', min: 0.3 } ] } },
   { id: 'SY', label: 'SY', full: 'Systemic / autonomic',       role: 'standalone', axis: 'autonomic', color: '#117A8B', bg: '#E2F2F4', conditional: true,
-    revealIf: { any: [ { type: 'item', id: 'bg_fatigue', min: 2 }, { type: 'item', id: 'bg_brainfog', min: 2 } ] } },
+    // Reveals on fatigue/brain-fog (original trigger) OR on pain/bloating — the
+    // real clinical trigger for gy_cyclical, which lives in this section. Without
+    // the pain/bloating arm, a patient with cyclical pain/bloating flares and no
+    // fatigue/brain-fog never saw gy_cyclical, so the triage gynOverlap note
+    // (which needs gy_cyclical + gsrs_pain) could never fire for that patient —
+    // the exact presentation it exists to catch. Widening the SECTION gate
+    // (rather than adding an item-level revealIf on gy_cyclical alone) is
+    // required: refreshReveals() toggles item-level holders independently of
+    // their parent section holder, and an item nested inside a display:none
+    // section stays hidden regardless of its own reveal state.
+    revealIf: { any: [ { type: 'item', id: 'bg_fatigue', min: 2 }, { type: 'item', id: 'bg_brainfog', min: 2 },
+                        { type: 'item', id: 'gsrs_pain', min: 2 }, { type: 'item', id: 'gsrs_bloating', min: 2 } ] } },
 ];
 
 // ── QUESTIONS — co-design output. ───────────────────────────────────────────
@@ -405,6 +416,19 @@ const SECTIONS = [
 // GI items use the DEFAULT 0–3 severity scale. `cluster` tags the 5 validated
 // GSRS syndromes for the per-cluster breakdown shown on results.
 const QUESTIONS = [
+  // ── Universal symptom duration/chronicity — ungated, always visible ─────────
+  // The only prior duration question (rome.onset) lives inside the pain-gated
+  // Rome IV card (CARD_REVEAL, ui-patient.js), so a patient with e.g. chronic
+  // diarrhoea/constipation and no abdominal pain was never asked how long
+  // they'd had symptoms — yet acute-vs-chronic is one of the highest-value
+  // triage inputs. driverOnly: excluded from GI section scoring / completeness
+  // / the Index (same mechanism as sleep/PSS-4, just rendered through the
+  // normal questionRow() pipeline since it lives in QUESTIONS). Feeds
+  // triage.durationNote only — never the Index, never a Tier change.
+  { id: 'sx_duration', section: 'GI', driverOnly: true, scale: 'DURATION',
+    patientText: 'How long have you had these gut symptoms?',
+    patientSub: 'Your best estimate — this helps tell a new problem from a longstanding one' },
+
   // ── GI core — Reflux cluster ──
   { id: 'gsrs_heartburn', section: 'GI', cluster: 'Reflux',
     patientText: 'Heartburn', patientSub: 'A burning feeling rising from your stomach or chest' },
@@ -593,13 +617,21 @@ __modules['scales.js'] = function(__e){
 const SCALES = {
   // generic 0–3 severity fallback (placeholder; real scales added in co-design)
   DEFAULT: ['None', 'Mild', 'Moderate', 'Severe'],
+  // Universal symptom-duration scale (sx_duration) — same onset bands as Rome
+  // IV's own onset question (romeiv.js ROME_ONSET), duplicated here as a plain
+  // vocabulary so schema.js doesn't need to reach into the Rome IV module for a
+  // label list. Never scored numerically beyond its driverOnly item index.
+  DURATION: ['Less than 3 months', '3–6 months', '6 months to a year', '1–3 years', 'More than 3 years'],
 };
 function scaleFor(name) { return SCALES[name] || SCALES.DEFAULT; }
 
 // Recall window note (Phase 0.5 §1 mechanism, carried forward). Shown under
 // scored symptom sections in the patient view; suppressed where a section opts
-// out via `noRecall:true`.
-const RECALL_NOTE = 'Answer for how things have been over the past 2 weeks.';
+// out via `noRecall:true`. The "how much this bothered you" clause disambiguates
+// the None/Mild/Moderate/Severe scale, which is otherwise ambiguous between how
+// OFTEN a symptom occurred and how BAD it was when it did — added once here
+// (not per-question) so it applies uniformly without duplicating text.
+const RECALL_NOTE = 'Rate how much this bothered you, overall, over the past 2 weeks.';
 
 // ── MODIFIABLE-DRIVER INSTRUMENTS ───────────────────────────────────────────
 // Shown alongside the result and stored on the visit (extras), but kept OUT of
@@ -1100,6 +1132,14 @@ function bristolTransit(b) {
   return (typeof b === 'number') ? Math.abs(b - 4) / 3 : null; // 0–1, null if absent
 }
 
+// The 5 validated GSRS symptom clusters that make up the GI core. Kept as a
+// named constant (not derived from QUESTIONS at call time) so the cluster-
+// balanced index below is auditable at a glance.
+const GI_CLUSTERS = ['Reflux', 'Pain', 'Indigestion', 'Diarrhoea', 'Constipation'];
+// Bristol transit is a bowel-habit signal — it must only nudge the
+// bowel-direction clusters, never reflux/pain/indigestion (see BRISTOL_ALPHA).
+const BRISTOL_CLUSTERS = new Set(['Constipation', 'Diarrhoea']);
+
 // answers: id-map OR positional array. opts.bristol (1–7) optionally feeds the
 // GI core via bristolTransit() — see BRISTOL_ALPHA note above.
 function computeScores(answers, opts) {
@@ -1122,7 +1162,6 @@ function computeScores(answers, opts) {
 
   const secScores = {}, secNorm = {}, bands = {}, secAnswered = {}, secApplicableMax = {};
   let answeredItems = 0, scoredItems = 0;
-  const coreNorms = [];   // ONLY the validated GSRS core feeds the Index now.
 
   for (const sec of SECTIONS) {
     const qs = QUESTIONS.filter(q => q.section === sec.id && !q.driverOnly);
@@ -1138,21 +1177,48 @@ function computeScores(answers, opts) {
     secApplicableMax[sec.id] = maxSum;
     secAnswered[sec.id] = { answered: n, of: qs.length };
     bands[sec.id] = maxSum ? Math.min(3, Math.floor(sum / maxSum * 4)) : 0;
-    let norm = maxSum > 0 ? sum / maxSum : null; // domain MEAN over APPLICABLE items, 0–1
-    // Dual-role Bristol: nudge the GI core only when the GI questionnaire itself
-    // was answered (Bristol augments, it never substitutes for, the items).
-    if (sec.id === 'GI' && norm != null && bristolSignal != null) {
-      norm = Math.min(1, norm + BRISTOL_ALPHA * bristolSignal);
-    }
+    const norm = maxSum > 0 ? sum / maxSum : null; // domain MEAN over APPLICABLE items, 0–1
     secNorm[sec.id] = norm;
     scoredItems += denom; answeredItems += n;
-    if (norm != null && sec.role === 'core') coreNorms.push(norm); // standalone axes never enter the Index
   }
 
-  // Gut Symptom Burden Index = GSRS core ONLY (no blend). The standalone axes are
-  // scored above and surfaced separately via axisProfile() — they never touch this.
-  const coreMean = coreNorms.length ? coreNorms.reduce((a, b) => a + b, 0) / coreNorms.length : null;
+  // ── Cluster-balanced GI core index ──────────────────────────────────────
+  // The Index is the MEAN OF THE 5 CLUSTER NORMS, not an item-count-weighted
+  // mean over all 15 raw items. The clusters are uneven in size (Reflux has 2
+  // items, Indigestion has 4) — an item-weighted mean means two patients with
+  // identical per-symptom severity in different clusters land in different
+  // bands purely because one cluster happens to have more items. Giving every
+  // cluster equal say removes that bias. secNorm.GI is overwritten below with
+  // this cluster-balanced value so it stays the single source of truth every
+  // downstream reader (patterns.gi(), the domain bar, axisProfile) relies on.
+  const clusterNormForIndex = {};
+  for (const k of GI_CLUSTERS) {
+    let v = clusterNorm[k];
+    // Dual-role Bristol: nudge only the bowel-direction clusters, and only when
+    // that cluster itself was answered (Bristol augments, never substitutes).
+    if (v != null && bristolSignal != null && BRISTOL_CLUSTERS.has(k)) {
+      v = Math.min(1, v + BRISTOL_ALPHA * bristolSignal);
+    }
+    clusterNormForIndex[k] = v;
+  }
+  const answeredClusterNorms = GI_CLUSTERS.map(k => clusterNormForIndex[k]).filter(v => v != null);
+  const coreMean = answeredClusterNorms.length
+    ? answeredClusterNorms.reduce((a, b) => a + b, 0) / answeredClusterNorms.length
+    : null;
+  if (secNorm.GI !== undefined) secNorm.GI = coreMean; // GI is the sole 'core' section (schema.js)
   const index = coreMean != null ? Math.round(coreMean * 100) : null;
+
+  // Bristol-nudge transparency for the UI: how many index points the stool-form
+  // nudge added, computed as the cluster-balanced mean WITH vs WITHOUT the nudge
+  // (previously this compared two different units — an item-weighted baseline
+  // against the whole-index-nudged value — which no longer holds now that the
+  // nudge is scoped per-cluster).
+  let bristolAddPts = 0;
+  if (bristolSignal != null) {
+    const unnudged = GI_CLUSTERS.map(k => clusterNorm[k]).filter(v => v != null);
+    const unnudgedMean = unnudged.length ? unnudged.reduce((a, b) => a + b, 0) / unnudged.length : null;
+    if (coreMean != null && unnudgedMean != null) bristolAddPts = Math.round((coreMean - unnudgedMean) * 100);
+  }
 
   const completeness = scoredItems ? Math.round(answeredItems / scoredItems * 100) : 100;
   const coreUnknown = coreMean == null;                 // GI/GSRS section wasn't answered at all
@@ -1162,7 +1228,7 @@ function computeScores(answers, opts) {
     : { index: null, label: null, provisional: true,
         desc: 'Core GI section not completed — no Gut Symptom Burden score available.' };
 
-  return { secScores, secNorm, secApplicableMax, bands, secAnswered, completeness, index, severity, bristolSignal, clusterAgg, clusterNorm, coreUnknown };
+  return { secScores, secNorm, secApplicableMax, bands, secAnswered, completeness, index, severity, bristolSignal, bristolAddPts, clusterAgg, clusterNorm, coreUnknown };
 }
 
 // Shared confidence descriptor (Phase 0.5 §3 mechanism).
@@ -1682,6 +1748,12 @@ function triage(score, patterns, firedFlags, dys, opts) {
   result.autonomicNote = o.autonomicFlag
     ? 'Autonomic symptoms reported (light-headedness on standing / palpitations) — consider gut-brain / autonomic overlap.'
     : null;
+  // Symptom duration (sx_duration) — plain context note, never a Tier trigger.
+  // Universal (ungated) item, so this is available regardless of whether the
+  // pain-gated Rome IV onset question was ever reached.
+  result.durationNote = o.durationLabel
+    ? `Symptom duration reported: ${o.durationLabel}.`
+    : null;
   // Management/interpretation guidance from diagnosed conditions (IBS, gallstones…).
   result.conditionGuidance = (o.conditionNotes && o.conditionNotes.length) ? o.conditionNotes.slice() : [];
   // Family-history notes (coeliac serology nudge, IBD calprotectin, cancer screening).
@@ -2098,7 +2170,7 @@ function saveVisit() {
 // Recall window narrows on follow-ups so the screen is sensitive to recent change.
 function recallNote() {
   return session.followup
-    ? 'This is a follow-up — answer for how things have been SINCE YOUR LAST VISIT.'
+    ? 'This is a follow-up — rate how much this has bothered you SINCE YOUR LAST VISIT.'
     : RECALL_NOTE;
 }
 
@@ -3051,6 +3123,9 @@ function computeAll() {
   // abdominal pain present. gy_cyclical is already female-gated in the schema.
   const gynOverlap = (typeof answers.gy_cyclical === 'number' && answers.gy_cyclical >= 2)
     && (typeof answers.gsrs_pain === 'number' && answers.gsrs_pain >= 2);
+  // Universal duration/chronicity item — resolved to its label here so triage.js
+  // stays pure (no scales.js dependency for one lookup).
+  const durationLabel = typeof answers.sx_duration === 'number' ? scaleFor('DURATION')[answers.sx_duration] : null;
   // The Dysbiosis Correlate Load (inferred signals only) — the count triage and
   // the Symptom×Microbiome matrix should read, NOT the old merged lens (which
   // also folded in objective exposure history like antibiotics / surgery).
@@ -3065,6 +3140,7 @@ function computeAll() {
     knownConditions: conditions,
     conditionNotes: conditions.notes,
     medConfounders: meds.list,
+    durationLabel,
     autonomicFlag,
     family: famhx,
     gynOverlap,
@@ -3085,15 +3161,19 @@ function domainBarsCard(score, withClusters) {
     const sc = score.secScores[s.id] || 0;
     const max = score.secApplicableMax[s.id] || 0; // applicable max (excludes N/A items)
     if (!max) return; // skip sections with nothing answered (e.g. un-revealed targeted sections)
-    const p = Math.round(sc / max * 100);
+    // GI's bar reflects the cluster-balanced core norm (same value the headline
+    // Index is built from) rather than the raw item-weighted sum/max, so the two
+    // never disagree. Other sections still show the plain item mean.
+    const giNorm = s.id === 'GI' ? score.secNorm.GI : null;
+    const p = giNorm != null ? Math.round(giNorm * 100) : Math.round(sc / max * 100);
     const detail = withClusters ? `${sc}/${max} · ${p}%` : p + '%';
     card.appendChild(el('div', { class: 'bar-row' },
       `<div class="bar-label"><span>${esc(s.full || s.label)}</span><span class="muted">${detail}</span></div>
        <div class="bar-track"><div class="bar-fill" style="width:${p}%;background:${s.color || '#0F6E56'}"></div></div>`));
     if (!withClusters || s.id !== 'GI') return;
     // Bristol transit transparency + GSRS per-cluster symptom shape (clinician view).
-    if (score.bristolSignal != null && score.secNorm.GI != null) {
-      const addPts = Math.round((score.secNorm.GI - (max ? sc / max : 0)) * 100);
+    if (score.bristolSignal != null) {
+      const addPts = score.bristolAddPts || 0;
       const bt = BRISTOL_TYPES.find(t => t.n === extras.bristol);
       card.appendChild(el('div', { class: 'q-sub', style: 'margin:-4px 0 12px;padding-left:2px;color:var(--inks)' },
         `↳ Stool transit ${addPts > 0 ? `adds +${addPts} pts to` : 'adds nothing to'} gut-core${bt ? ` · Type ${bt.n} (${esc(bt.tag)})` : ''} — capped so it can't dominate.`));
@@ -3295,6 +3375,8 @@ function triageCard(tri, rome, showInvestigations) {
     '🧷 ' + esc(tri.pelvicNote)));
   if (tri.anthroNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
     '📏 ' + esc(tri.anthroNote)));
+  if (tri.durationNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
+    '⏱️ ' + esc(tri.durationNote)));
   if (tri.alsoConsider.length) {
     tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-weight:600' }, 'Also worth noting:'));
     tri.alsoConsider.forEach(a => tcard.appendChild(el('div', { class: 'q-sub', style: 'padding-left:4px' },
@@ -3497,7 +3579,8 @@ function buildPatientPrint(c) {
   const ptNotes = [].concat(
     tri.conditionGuidance || [], tri.familyNotes || [],
     tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [],
-    tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : []);
+    tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : [],
+    tri.durationNote ? [tri.durationNote] : []);
   h += `<div class="pr-section"><div class="pr-sh">What this means for you</div>
     <div class="pr-triage ${tierCls}">
       <div style="font-weight:700;font-size:12px">Suggested next step: Tier ${tri.level} — ${esc(tri.label)}</div>
@@ -3527,7 +3610,9 @@ function buildPatientPrint(c) {
   SECTIONS.forEach(s => {
     const sc = score.secScores[s.id] || 0, mx = score.secApplicableMax[s.id] || 0;
     if (!mx) return;
-    const p = Math.round(sc / mx * 100);
+    // GI bar matches the headline Index (cluster-balanced), not a raw item mean.
+    const giNorm = s.id === 'GI' ? score.secNorm.GI : null;
+    const p = giNorm != null ? Math.round(giNorm * 100) : Math.round(sc / mx * 100);
     h += `<div class="pr-bar-row"><span style="width:150px;flex:none;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.full || s.label)}</span>
       <div class="pr-bar-track"><div class="pr-bar-fill" style="width:${p}%;background:${s.color || '#0F6E56'}"></div></div>
       <span style="width:34px;flex:none;text-align:right">${p}%</span></div>`;
@@ -3645,7 +3730,7 @@ function buildClinicianPrint(c) {
       <div style="margin-top:3px;font-size:11px">${esc(tri.action)}</div>
       ${tri.reasons.length ? `<div style="font-size:10.5px;margin-top:4px">Reasons: ${tri.reasons.map(r => esc(r.text)).join(' · ')}</div>` : ''}
       ${tri.alsoConsider.length ? `<div style="font-size:10.5px;margin-top:3px">Also consider: ${tri.alsoConsider.map(a => `${esc(a.label)} (${a.reasons.map(r => esc(r.text)).join('; ')})`).join(' / ')}</div>` : ''}
-      ${[].concat(tri.conditionGuidance || [], tri.familyNotes || [], tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [], tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : []).map(n => `<div style="font-size:10.5px;margin-top:3px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
+      ${[].concat(tri.conditionGuidance || [], tri.familyNotes || [], tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [], tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : [], tri.durationNote ? [tri.durationNote] : []).map(n => `<div style="font-size:10.5px;margin-top:3px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
     </div>
     ${tri.investigations && tri.investigations.length ? `
       <div style="font-weight:600;font-size:11px;margin:6px 0 3px">Suggested investigations / management:</div>
@@ -3716,7 +3801,11 @@ function buildClinicianPrint(c) {
     <table class="pr-tbl"><thead><tr><th>Domain</th><th>Score/Max</th><th>%</th></tr></thead><tbody>`;
   SECTIONS.forEach(s => {
     const sc = score.secScores[s.id] || 0, mx = score.secApplicableMax[s.id] || 0;
-    const pct = mx ? Math.round(sc / mx * 100) : null;
+    // GI's % matches the headline Index (cluster-balanced); Score/Max stays the
+    // raw item tally for transparency — the two are allowed to look inconsistent
+    // (see the Bristol-transit note above), that's the point of showing both.
+    const giNorm = s.id === 'GI' ? score.secNorm.GI : null;
+    const pct = giNorm != null ? Math.round(giNorm * 100) : (mx ? Math.round(sc / mx * 100) : null);
     const bnd = pct != null ? bandForPct(pct) : null;
     h += `<tr><td>${esc(s.full || s.label)}</td><td>${sc}/${mx}</td><td>${pct != null ? `<b style="color:${bnd.color}">${pct}%</b>` : 'n/a'}</td></tr>`;
   });
