@@ -378,5 +378,36 @@ ok(!schema.revealMet(sySection.revealIf, syCtxNeither), 'SY section stays hidden
 const r30e = run(0, { gsrs_pain: 2, gy_cyclical: 2 });
 ok(r30e.tri.gynNote != null, 'gynOverlap note fires for pain+cyclical presentation with no fatigue/brain-fog (previously unreachable)');
 
+// 31. Content-overlap cleanup — gas & food-reaction questions.
+
+// 31a. im_food_react reworded to a digestive-symptom construct, no longer
+// overlapping im_histamine's allergic/vasomotor wording ("rash"/"congestion").
+const imFoodReactQ = schema.QUESTIONS.find(q => q.id === 'im_food_react');
+ok(!!imFoodReactQ && !/rash|congestion/i.test(imFoodReactQ.patientSub || ''),
+  'im_food_react wording no longer overlaps im_histamine (no rash/congestion)');
+
+// 31b. Pattern wiring for both items is untouched — only text changed.
+ok(/av\(a, 'im_food_react'\)/.test(html), 'im_food_react still read by id in bloating_fermentation');
+ok(/av\(a, 'im_histamine'\)/.test(html), 'im_histamine still read by id in inflammatory_immune');
+// inflammatory_immune fires on im_histamine alone (GI present, no im_food_react
+// or skin needed) — confirms the histamine signal still gates the pattern.
+const r31b = run(1, { im_histamine: 3, im_food_react: 0, sk_skin: 0 });
+ok(r31b.pat.some(p => p.id === 'inflammatory_immune'), 'inflammatory_immune still fires on im_histamine alone');
+
+// 31c. dys.gasFoul UI label no longer implies frequency ("Excessive") — that's
+// gsrs_gas's job; this field is scoped to the foul/sulfur quality signal.
+ok(/'Foul or sulfur-smelling wind'/.test(html), 'dys.gasFoul label present without "Excessive"');
+ok(!/Excessive or foul/.test(html), 'old "Excessive or foul" gasFoul wording removed');
+
+// 31d. secNorm.IM composition unchanged in shape — still exactly 6 scored items.
+const imScored = schema.QUESTIONS.filter(q => q.section === 'IM' && !q.optional && !q.freeText && !q.driverOnly);
+ok(imScored.length === 6, 'IM section still has exactly 6 scored items (no item silently added/removed)');
+
+// 31e. foodallergy clinNote surfaces end-to-end via conditionGuidance.
+const foodallergyDef = scales.KNOWN_CONDITIONS.find(c => c.id === 'foodallergy');
+ok(!!foodallergyDef && !!foodallergyDef.clinNote, 'foodallergy carries a clinNote');
+const r31e = run(0, {}, { conditions: ['foodallergy'] });
+ok(r31e.tri.conditionGuidance.some(n => /food allergy/i.test(n)), 'foodallergy clinNote surfaces in triage.conditionGuidance end-to-end');
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

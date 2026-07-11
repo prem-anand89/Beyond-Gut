@@ -470,8 +470,11 @@ const QUESTIONS = [
     patientText: 'Incomplete emptying', patientSub: "A feeling your bowel isn't completely empty afterward" },
 
   // ── IM — Immune, inflammatory & skin (DRAFT) ──
-  { id: 'im_food_react', section: 'IM', patientText: 'Reactions to certain foods',
-    patientSub: 'Bloating, rash, headache, or congestion after eating particular foods' },
+  // Digestive-symptom framing (not allergic/vasomotor) so this stays a distinct
+  // construct from im_histamine below — both are non-optional IM items and a
+  // histamine-type reaction could otherwise score on both for one phenomenon.
+  { id: 'im_food_react', section: 'IM', patientText: 'Digestive reactions to certain foods',
+    patientSub: 'Bloating, stomach upset, or other digestive symptoms after eating particular foods' },
   { id: 'im_infections', section: 'IM', patientText: 'Frequent infections',
     patientSub: 'Colds, UTIs, or skin infections several times a year' },
   { id: 'im_allergies', section: 'IM', patientText: 'Allergies or hay fever',
@@ -792,7 +795,7 @@ const KNOWN_CONDITIONS = [
   { id: 'pcos',       label: 'PCOS', clinNote: 'Known PCOS — metabolic / hormonal overlap; relevant to bloating and bowel-habit interpretation.' },
   { id: 'endo',       label: 'Endometriosis' },
   { id: 'lactose',    label: 'Lactose intolerance' },
-  { id: 'foodallergy',label: 'Food allergy / intolerance' },
+  { id: 'foodallergy',label: 'Food allergy / intolerance', clinNote: 'Known food allergy/intolerance — factor into the food-reaction / IM read.' },
   { id: 'mood',       label: 'Diagnosed anxiety or depression' },
 ];
 function knownConditions(extras) {
@@ -2917,8 +2920,9 @@ function dysCard() {
   body.appendChild(segRow('Antibiotic courses in the last 12 months', ABX_COURSES, () => extras.abxCourses, v => extras.abxCourses = v));
   // Stool variability (segmented 0–2)
   body.appendChild(segRow('Does your stool type change a lot day to day?', STOOLVAR_LEVELS, () => extras.dys.stoolVar, v => extras.dys.stoolVar = v));
-  // Foul / excessive gas (segmented 0–3)
-  body.appendChild(segRow('Excessive or foul / sulfur-smelling wind', GAS_LEVELS, () => extras.dys.gasFoul, v => extras.dys.gasFoul = v));
+  // Foul-smelling gas (segmented 0–3) — frequency is already gsrs_gas's job
+  // (validated GSRS core); this item is scoped strictly to the quality signal.
+  body.appendChild(segRow('Foul or sulfur-smelling wind', GAS_LEVELS, () => extras.dys.gasFoul, v => extras.dys.gasFoul = v));
 
   // Post-infectious onset (chips)
   body.appendChild(chipRow('Did your gut symptoms first start after food poisoning, a stomach bug, or travel?',
