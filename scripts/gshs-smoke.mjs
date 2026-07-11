@@ -471,5 +471,54 @@ ok(/Probiotic/.test(ttNote) && /Low-FODMAP diet/.test(ttNote) && /acupuncture/.t
 ok(/tri\.bowelFreqNote/.test(html) && /tri\.smokingNote/.test(html) && /tri\.treatmentsTriedNote/.test(html),
   'bowelFreqNote/smokingNote/treatmentsTriedNote referenced in source (render wiring present)');
 
+// 33. Frequency dimension — per-cluster symptom frequency nudging the Index.
+
+// 33a. Frequency-only nudge on a non-bowel cluster (no Bristol arm applies).
+const refluxMild = { gsrs_heartburn: 1, gsrs_regurg: 1 };            // norm = 2/6 ≈ 0.333
+const refluxNoFreq = scoring.computeScores(refluxMild, {});
+const refluxWithFreq = scoring.computeScores(refluxMild, { clusterFreq: { Reflux: 3 } }); // Daily
+ok(refluxWithFreq.index > refluxNoFreq.index, 'frequency nudge raises the index on a non-bowel cluster');
+ok(refluxWithFreq.frequencyAddPts === 15, 'frequencyAddPts reports the full FREQUENCY_ALPHA lift (+15) when uncapped');
+ok(refluxWithFreq.index === refluxNoFreq.index + 15, 'index rise matches frequencyAddPts exactly');
+
+// 33b. Frequency does not nudge an unanswered cluster.
+const refluxOnlyNoConstipFreq = scoring.computeScores(refluxMild, { clusterFreq: { Constipation: 3 } });
+ok(refluxOnlyNoConstipFreq.index === refluxNoFreq.index, 'frequency on an unanswered cluster does not move the index');
+
+// 33c. Combined Bristol + frequency on the SAME bowel cluster is capped at
+// NUDGE_CAP_PER_CLUSTER (0.15), not the naive sum (0.30) — the case that
+// motivated nudgeAddPts as a separate, always-accurate combined-total field.
+const constipMild = { gsrs_constip: 1, gsrs_hard: 1, gsrs_incomplete: 1 }; // norm ≈ 0.333
+const bristolOnly = scoring.computeScores(constipMild, { bristol: 1 });          // Bristol type 1 → full BRISTOL_ALPHA
+const combined = scoring.computeScores(constipMild, { bristol: 1, clusterFreq: { Constipation: 3 } });
+ok(combined.index === bristolOnly.index, 'combined Bristol+frequency nudge on one cluster is capped, not additive (index unchanged vs Bristol alone)');
+ok(combined.nudgeAddPts === 15, 'nudgeAddPts reports the capped combined total (+15), not the naive sum (+30)');
+// Documented edge case: per-signal marginal isolation can both read 0 here —
+// this is correct (holding either signal fixed, the other alone already
+// saturates the cap) but must never be summed as a substitute for nudgeAddPts.
+ok(combined.bristolAddPts === 0 && combined.frequencyAddPts === 0,
+  'per-signal marginal AddPts both read 0 in the saturated case (documented, use nudgeAddPts instead)');
+
+// 33d. Raw clusterNorm (read by patterns.js) is unaffected by frequency —
+// only clusterNormForIndex/secNorm.GI/index move. Same separation Bristol's
+// nudge already relies on, must hold for every nudge added to this mechanism.
+ok(refluxWithFreq.clusterNorm.Reflux === refluxNoFreq.clusterNorm.Reflux,
+  'raw clusterNorm.Reflux is unaffected by the frequency nudge (patterns.js unaffected)');
+const pat33 = patterns.detectPatterns(refluxNoFreq, { dys: {} }, refluxMild);
+const pat33Freq = patterns.detectPatterns(refluxWithFreq, { dys: {} }, refluxMild);
+ok(JSON.stringify(pat33.map(p => p.id)) === JSON.stringify(pat33Freq.map(p => p.id)),
+  'pattern firing is identical with/without the frequency nudge (only the Index moved)');
+
+// 33e. Backward compatibility — clusterFreq entirely absent from opts behaves
+// identically to the pre-change Bristol-only mechanism (same fixture as the
+// earlier Bristol-scoping regression test).
+const legacyNoFreqOpt = scoring.computeScores(bowelAnswered, { bristol: 1 });
+ok(legacyNoFreqOpt.index === sBowelWithBristol.index, 'omitting clusterFreq entirely behaves identically to pre-change Bristol-only behaviour');
+
+// 33f. UI wiring present in source.
+ok(/CLUSTER_FREQ_LEVELS/.test(html) && /clusterFreqCard/.test(html), 'clusterFreqCard + CLUSTER_FREQ_LEVELS present in source');
+ok(/clusterFreq: extras\.clusterFreq/.test(html), 'computeAll() passes extras.clusterFreq into computeScores()');
+ok(/clusterFreq: \{ Reflux: null/.test(html), 'blankExtras() initialises clusterFreq for all 5 clusters');
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

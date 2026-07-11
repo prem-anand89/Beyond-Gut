@@ -719,6 +719,14 @@ const SMOKING_LEVELS    = ['Never smoked', 'Former smoker', 'Current smoker'];  
 // module-level (not function-local) so modifiableFactors() can label it too.
 const FREQ_LEVELS = ['Rarely', 'Some days', 'Most days', 'Daily']; // 0–3
 const HYDRATION_LEVELS  = ['Low (<1L/day)', 'Moderate (1–2L/day)', 'Good (2L+/day)'];             // 0–2
+// Per-GSRS-cluster symptom-occurrence frequency — deliberately a DIFFERENT
+// recall window ("usual pattern, last 2–3 months") from the validated GSRS
+// severity items' 2-week window: a raw days-out-of-14 count is a poor fit for
+// a chronic, often relapsing-remitting population, since a single atypical
+// fortnight could under-represent someone's real burden. Additive/unvalidated
+// (not part of GSRS itself), so it's free to use its own window — it nudges
+// the Index (scoring.js) but never touches the validated severity items.
+const CLUSTER_FREQ_LEVELS = ['1–2 days/week', '3–4 days/week', '5–6 days/week', 'Daily or almost daily']; // 0–3
 // Sleep — relocated from a scored screen domain to a modifiable DRIVER (TRIM_PLAN
 // §8.3). Context only: tracked over time, kept OUT of the GI Symptom Burden score.
 const SLEEP_ITEMS   = ['Trouble falling asleep', 'Waking during the night', 'Waking unrefreshed', 'Fewer hours than you need'];
@@ -1055,6 +1063,7 @@ __e.PSS4_ITEMS = PSS4_ITEMS; __e.PSS4_REVERSED = PSS4_REVERSED; __e.PSS4_ANCHORS
 __e.psychLoadScore = psychLoadScore; __e.loadBand = loadBand;
 __e.DISRUPTORS = DISRUPTORS; __e.ALCOHOL_LEVELS = ALCOHOL_LEVELS; __e.ACTIVITY_LEVELS = ACTIVITY_LEVELS; __e.dietBurden = dietBurden; __e.dietBand = dietBand;
 __e.STOOL_FREQ_LEVELS = STOOL_FREQ_LEVELS; __e.SMOKING_LEVELS = SMOKING_LEVELS; __e.HYDRATION_LEVELS = HYDRATION_LEVELS; __e.FREQ_LEVELS = FREQ_LEVELS;
+__e.CLUSTER_FREQ_LEVELS = CLUSTER_FREQ_LEVELS;
 __e.SLEEP_ITEMS = SLEEP_ITEMS; __e.SLEEP_ANCHORS = SLEEP_ANCHORS; __e.sleepBurden = sleepBurden; __e.sleepBand = sleepBand;
 __e.FOOD_TRIGGERS = FOOD_TRIGGERS; __e.ABX_COURSES = ABX_COURSES; __e.GAS_LEVELS = GAS_LEVELS; __e.STOOLVAR_LEVELS = STOOLVAR_LEVELS;
 __e.POSTINF_OPTS = POSTINF_OPTS; __e.PARADOX_OPTS = PARADOX_OPTS; __e.dysbiosisLens = dysbiosisLens;
@@ -1180,6 +1189,24 @@ const GI_CLUSTERS = ['Reflux', 'Pain', 'Indigestion', 'Diarrhoea', 'Constipation
 // bowel-direction clusters, never reflux/pain/indigestion (see BRISTOL_ALPHA).
 const BRISTOL_CLUSTERS = new Set(['Constipation', 'Diarrhoea']);
 
+// Per-cluster symptom-OCCURRENCE frequency (opts.clusterFreq — see scales.js
+// CLUSTER_FREQ_LEVELS) — a second, unvalidated/additive nudge signal, same
+// "augments, never substitutes" discipline as Bristol, but applies to ALL 5
+// clusters (unlike Bristol's bowel-only scope), since frequency is a general
+// amplifier of lived burden, not bowel-specific. Deliberately its own 2–3
+// month "usual pattern" recall window, decoupled from GSRS severity's 2-week
+// window (see scales.js comment) — never blended into the severity items
+// themselves.
+const FREQUENCY_ALPHA = 0.15;       // same magnitude as BRISTOL_ALPHA
+// Combined ceiling for Bristol + frequency on the SAME cluster (only possible
+// on Constipation/Diarrhoea, the two clusters where both signals apply).
+// Without this cap the two could naively sum to 0.30 — double the "a single
+// external signal alone can't lift Minimal out of Minimal" discipline BRISTOL_ALPHA
+// alone already relies on (< the 0.20 coreLow/Minimal band threshold). Capping
+// the COMBINED total at 0.15 preserves that exact invariant even when both
+// signals are present on the same cluster.
+const NUDGE_CAP_PER_CLUSTER = 0.15;
+
 // answers: id-map OR positional array. opts.bristol (1–7) optionally feeds the
 // GI core via bristolTransit() — see BRISTOL_ALPHA note above.
 function computeScores(answers, opts) {
@@ -1231,33 +1258,58 @@ function computeScores(answers, opts) {
   // cluster equal say removes that bias. secNorm.GI is overwritten below with
   // this cluster-balanced value so it stays the single source of truth every
   // downstream reader (patterns.gi(), the domain bar, axisProfile) relies on.
-  const clusterNormForIndex = {};
-  for (const k of GI_CLUSTERS) {
-    let v = clusterNorm[k];
-    // Dual-role Bristol: nudge only the bowel-direction clusters, and only when
-    // that cluster itself was answered (Bristol augments, never substitutes).
-    if (v != null && bristolSignal != null && BRISTOL_CLUSTERS.has(k)) {
-      v = Math.min(1, v + BRISTOL_ALPHA * bristolSignal);
-    }
-    clusterNormForIndex[k] = v;
+  //
+  // Nudges (Bristol + frequency) are applied HERE, to a cluster mean used ONLY
+  // for this Index — never to the raw `clusterNorm` object returned below,
+  // which patterns.js's clu()/gi() read directly. That separation is what
+  // keeps an external driver signal from silently shifting pattern-firing
+  // thresholds; it must hold for every future nudge added here, not just these two.
+  const clusterFreq = (opts && opts.clusterFreq) || {};
+  function clusterNudge(k, includeBristol, includeFreq) {
+    let n = 0;
+    if (includeBristol && bristolSignal != null && BRISTOL_CLUSTERS.has(k)) n += BRISTOL_ALPHA * bristolSignal;
+    if (includeFreq && typeof clusterFreq[k] === 'number') n += FREQUENCY_ALPHA * (clusterFreq[k] / 3);
+    return Math.min(n, NUDGE_CAP_PER_CLUSTER);
   }
-  const answeredClusterNorms = GI_CLUSTERS.map(k => clusterNormForIndex[k]).filter(v => v != null);
-  const coreMean = answeredClusterNorms.length
-    ? answeredClusterNorms.reduce((a, b) => a + b, 0) / answeredClusterNorms.length
-    : null;
+  function coreMeanWith(includeBristol, includeFreq) {
+    const norms = GI_CLUSTERS.map(k => {
+      const v = clusterNorm[k];
+      return v != null ? Math.min(1, v + clusterNudge(k, includeBristol, includeFreq)) : null;
+    }).filter(v => v != null);
+    return norms.length ? norms.reduce((a, b) => a + b, 0) / norms.length : null;
+  }
+  const coreMean = coreMeanWith(true, true);
   if (secNorm.GI !== undefined) secNorm.GI = coreMean; // GI is the sole 'core' section (schema.js)
   const index = coreMean != null ? Math.round(coreMean * 100) : null;
 
-  // Bristol-nudge transparency for the UI: how many index points the stool-form
-  // nudge added, computed as the cluster-balanced mean WITH vs WITHOUT the nudge
-  // (previously this compared two different units — an item-weighted baseline
-  // against the whole-index-nudged value — which no longer holds now that the
-  // nudge is scoped per-cluster).
+  // Nudge transparency for the UI. Two related but different numbers:
+  //   - nudgeAddPts: the TOTAL combined lift from both signals together
+  //     (coreMean with both vs coreMean with neither). Always accurate,
+  //     including when Bristol and frequency both independently saturate
+  //     NUDGE_CAP_PER_CLUSTER on the same cluster — the case where isolating
+  //     each signal's own marginal contribution (below) degenerates to 0+0
+  //     even though the combined lift is clearly nonzero. Use THIS for any
+  //     single "how much did drivers add" headline number.
+  //   - bristolAddPts / frequencyAddPts: each signal's OWN marginal
+  //     contribution, holding the other constant. Correct and useful for a
+  //     detailed per-signal breakdown in the common (non-saturated) case, but
+  //     can both read 0 in the saturated edge case above — never sum these
+  //     two as a substitute for nudgeAddPts, they can under-report by design.
+  let nudgeAddPts = 0;
+  const hasFreq = GI_CLUSTERS.some(k => typeof clusterFreq[k] === 'number');
+  if (bristolSignal != null || hasFreq) {
+    const withoutEither = coreMeanWith(false, false);
+    if (coreMean != null && withoutEither != null) nudgeAddPts = Math.round((coreMean - withoutEither) * 100);
+  }
   let bristolAddPts = 0;
   if (bristolSignal != null) {
-    const unnudged = GI_CLUSTERS.map(k => clusterNorm[k]).filter(v => v != null);
-    const unnudgedMean = unnudged.length ? unnudged.reduce((a, b) => a + b, 0) / unnudged.length : null;
-    if (coreMean != null && unnudgedMean != null) bristolAddPts = Math.round((coreMean - unnudgedMean) * 100);
+    const withoutBristol = coreMeanWith(false, true);
+    if (coreMean != null && withoutBristol != null) bristolAddPts = Math.round((coreMean - withoutBristol) * 100);
+  }
+  let frequencyAddPts = 0;
+  if (hasFreq) {
+    const withoutFreq = coreMeanWith(true, false);
+    if (coreMean != null && withoutFreq != null) frequencyAddPts = Math.round((coreMean - withoutFreq) * 100);
   }
 
   const completeness = scoredItems ? Math.round(answeredItems / scoredItems * 100) : 100;
@@ -1268,7 +1320,7 @@ function computeScores(answers, opts) {
     : { index: null, label: null, provisional: true,
         desc: 'Core GI section not completed — no Gut Symptom Burden score available.' };
 
-  return { secScores, secNorm, secApplicableMax, bands, secAnswered, completeness, index, severity, bristolSignal, bristolAddPts, clusterAgg, clusterNorm, coreUnknown };
+  return { secScores, secNorm, secApplicableMax, bands, secAnswered, completeness, index, severity, bristolSignal, bristolAddPts, frequencyAddPts, nudgeAddPts, clusterAgg, clusterNorm, coreUnknown };
 }
 
 // Shared confidence descriptor (Phase 0.5 §3 mechanism).
@@ -1364,7 +1416,7 @@ function headlineOutputs(score, ex, dys) {
 }
 
 __e.BANDS = BANDS; __e.computeScores = computeScores; __e.scoreConfidence = scoreConfidence;
-__e.BRISTOL_ALPHA = BRISTOL_ALPHA; __e.bristolTransit = bristolTransit;
+__e.BRISTOL_ALPHA = BRISTOL_ALPHA; __e.bristolTransit = bristolTransit; __e.GI_CLUSTERS = GI_CLUSTERS;
 __e.bandForPct = bandForPct; __e.axisBand = axisBand; __e.axisProfile = axisProfile; __e.headlineOutputs = headlineOutputs;
 return __e;
 };
@@ -2090,12 +2142,22 @@ __modules['ui-patient.js'] = function(__e){
 const { SECTIONS, QUESTIONS, questionsOf, sectionMax, itemMax, revealMet } = __req('schema.js');
 const { scaleFor, RECALL_NOTE, PSS4_ITEMS, PSS4_ANCHORS, PSS4_REVERSED, pss4Score, BRISTOL_TYPES, PAIN_REGIONS, modifiableFactors,
         DISRUPTORS, ALCOHOL_LEVELS, ACTIVITY_LEVELS, SLEEP_ITEMS, SLEEP_ANCHORS,
-        STOOL_FREQ_LEVELS, SMOKING_LEVELS, HYDRATION_LEVELS, FREQ_LEVELS,
+        STOOL_FREQ_LEVELS, SMOKING_LEVELS, HYDRATION_LEVELS, FREQ_LEVELS, CLUSTER_FREQ_LEVELS,
         FOOD_TRIGGERS, ABX_COURSES, GAS_LEVELS, STOOLVAR_LEVELS, POSTINF_OPTS, PARADOX_OPTS, dysbiosisLens,
         SURGERIES, surgicalFlags, KNOWN_CONDITIONS, knownConditions,
         MED_CONFOUNDERS, medConfounders, TREATMENTS_TRIED, treatmentsTried, FAMILY_HISTORY, familyHistory,
         OBSTETRIC_HISTORY, obstetricHistory, anthropometrics } = __req('scales.js');
-const { computeScores, scoreConfidence, axisProfile, headlineOutputs, bandForPct } = __req('scoring.js');
+const { computeScores, scoreConfidence, axisProfile, headlineOutputs, bandForPct, GI_CLUSTERS } = __req('scoring.js');
+// Human-readable per-cluster prompt for clusterFreqCard() — mirrors the same
+// 5 GSRS clusters scoring.js nudges, kept in sync by reusing GI_CLUSTERS
+// itself as the iteration order (not a separately-maintained id list).
+const GI_CLUSTER_FREQ_LABELS = {
+  Reflux: 'Heartburn or acid reflux',
+  Pain: 'Abdominal pain',
+  Indigestion: 'Bloating, gas, or fullness',
+  Diarrhoea: 'Loose or urgent stools',
+  Constipation: 'Constipation or hard stools',
+};
 const { RED_FLAGS, anyRedFlag, firedRedFlags, RED_FLAG_BANNER } = __req('redflags.js');
 const { el, esc, toast, patientForm } = __req('util.js');
 const Store = __req('storage.js');
@@ -2111,6 +2173,7 @@ let nav = {};          // { goRecords } — set by app.js so the banner can jump
 const blankExtras = () => ({
   heightCm: null, weightKg: null, waistCm: null,   // anthropometrics — optional, notes-only (BMI / WHtR)
   bristol: null, bowelFreq: null,    // bowelFreq: stools/week band — paired with Bristol, context only
+  clusterFreq: { Reflux: null, Pain: null, Indigestion: null, Diarrhoea: null, Constipation: null }, // per-cluster symptom-occurrence frequency — nudges the Index, see scoring.js
   pss4: [null, null, null, null], nrsPain: null, painRegion: null,
   meds: { abx: false, ppi: false, nsaid: false },
   dietFibre: null, dietProcessed: null, alcohol: null, activity: null,
@@ -2535,6 +2598,7 @@ function render() {
   const giSec = SECTIONS.find(s => s.id === 'GI');
   if (giSec) root.appendChild(sectionCard(giSec));
   root.appendChild(bristolCard());
+  root.appendChild(clusterFreqCard());
   // Pain + Rome IV are gated on reported abdominal pain (gsrs_pain ≥ 1) — Rome IV
   // requires recurrent pain, so this spares pain-free patients the burden.
   root.appendChild(wrapHidden('reveal-card-pain', painCard()));
@@ -2715,6 +2779,28 @@ function bristolCard() {
   // Bowel frequency — paired here with stool form, the two classic bowel-habit
   // descriptors. Context only (never enters the Index or Rome IV scoring).
   body.appendChild(segRow('How often do you have a bowel movement?', STOOL_FREQ_LEVELS, () => extras.bowelFreq, v => extras.bowelFreq = v));
+  card.appendChild(body);
+  return card;
+}
+
+// Per-cluster symptom-occurrence frequency — a SEPARATE card from bristolCard()
+// (which already carries the Bristol grid + bowel-movement frequency; five more
+// rows there would overload it). Deliberately uses its OWN "usual pattern, last
+// 2–3 months" recall window, NOT recallNote() (the validated GSRS severity
+// items' 2-week window) — the two questions ask different things over
+// different periods and must not look like they share one recall period.
+// Unlike bowelFreq/duration, these DO feed the Index (capped nudge — see
+// scoring.js FREQUENCY_ALPHA), so this is closer in kind to bristolCard().
+function clusterFreqCard() {
+  const card = el('div', { class: 'sec-card' });
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:#6B4A2E' }, 'How often, typically'));
+  const body = el('div', { class: 'sec-body' });
+  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' },
+    "Thinking about your usual pattern over the last 2–3 months (not just the last 2 weeks) — how many days a week do you typically get each of these? Gently feeds the matching part of your gut-core score (capped so it can't dominate)."));
+  GI_CLUSTERS.forEach(k => {
+    body.appendChild(segRow(GI_CLUSTER_FREQ_LABELS[k], CLUSTER_FREQ_LEVELS,
+      () => extras.clusterFreq[k], v => extras.clusterFreq[k] = v));
+  });
   card.appendChild(body);
   return card;
 }
@@ -3188,7 +3274,7 @@ function questionRow(q) {
 // regenerate results without re-running the render pipeline.
 function computeAll() {
   const answerArr = QUESTIONS.map(q => (answers[q.id] == null ? null : answers[q.id]));
-  const score = computeScores(answerArr, { bristol: extras.bristol });
+  const score = computeScores(answerArr, { bristol: extras.bristol, clusterFreq: extras.clusterFreq });
   const sv = score.severity;
   const conf = scoreConfidence(score);
   const ps = pss4Score(extras.pss4);
@@ -3279,12 +3365,21 @@ function domainBarsCard(score, withClusters) {
       `<div class="bar-label"><span>${esc(s.full || s.label)}</span><span class="muted">${detail}</span></div>
        <div class="bar-track"><div class="bar-fill" style="width:${p}%;background:${s.color || '#0F6E56'}"></div></div>`));
     if (!withClusters || s.id !== 'GI') return;
-    // Bristol transit transparency + GSRS per-cluster symptom shape (clinician view).
-    if (score.bristolSignal != null) {
-      const addPts = score.bristolAddPts || 0;
+    // Nudge transparency (Bristol + symptom frequency) + GSRS per-cluster
+    // symptom shape (clinician view). Uses nudgeAddPts (the combined total),
+    // NOT bristolAddPts+frequencyAddPts summed — those two can both read 0 in
+    // the edge case where each independently saturates the per-cluster cap
+    // while the combined nudge is clearly nonzero (see scoring.js comment).
+    const hasBristol = score.bristolSignal != null;
+    const hasFreq = extras.clusterFreq && Object.values(extras.clusterFreq).some(v => typeof v === 'number');
+    if (hasBristol || hasFreq) {
+      const addPts = score.nudgeAddPts || 0;
       const bt = BRISTOL_TYPES.find(t => t.n === extras.bristol);
+      const parts = [];
+      if (hasBristol) parts.push(`stool transit${bt ? ` (Type ${bt.n}, ${esc(bt.tag)})` : ''}`);
+      if (hasFreq) parts.push('symptom frequency');
       card.appendChild(el('div', { class: 'q-sub', style: 'margin:-4px 0 12px;padding-left:2px;color:var(--inks)' },
-        `↳ Stool transit ${addPts > 0 ? `adds +${addPts} pts to` : 'adds nothing to'} gut-core${bt ? ` · Type ${bt.n} (${esc(bt.tag)})` : ''} — capped so it can't dominate.`));
+        `↳ ${parts.join(' + ')} ${addPts > 0 ? `adds +${addPts} pts to` : 'adds nothing to'} gut-core — capped so it can't dominate.`));
     }
     if (score.clusterAgg) {
       ['Reflux', 'Pain', 'Indigestion', 'Diarrhoea', 'Constipation'].forEach(k => {
