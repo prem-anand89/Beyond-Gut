@@ -711,6 +711,14 @@ const DISRUPTORS = [
 ];
 const ALCOHOL_LEVELS  = ['None', 'Light', 'Moderate', 'Heavy'];        // 0–3
 const ACTIVITY_LEVELS = ['Sedentary', 'Light', 'Moderate', 'Active'];  // 0–3
+// Coverage-gap drivers (bowel frequency, smoking, hydration) — same "context
+// only, kept OUT of the Index" treatment as every other driver on this page.
+const STOOL_FREQ_LEVELS = ['<3 times/week', '3–6 times/week', '1–3 times/day', '>3 times/day']; // 0–3
+const SMOKING_LEVELS    = ['Never smoked', 'Former smoker', 'Current smoker'];                   // 0–2
+// Shared with lifestyleCard()'s diet-frequency rows AND the new caffeine row —
+// module-level (not function-local) so modifiableFactors() can label it too.
+const FREQ_LEVELS = ['Rarely', 'Some days', 'Most days', 'Daily']; // 0–3
+const HYDRATION_LEVELS  = ['Low (<1L/day)', 'Moderate (1–2L/day)', 'Good (2L+/day)'];             // 0–2
 // Sleep — relocated from a scored screen domain to a modifiable DRIVER (TRIM_PLAN
 // §8.3). Context only: tracked over time, kept OUT of the GI Symptom Burden score.
 const SLEEP_ITEMS   = ['Trouble falling asleep', 'Waking during the night', 'Waking unrefreshed', 'Fewer hours than you need'];
@@ -826,6 +834,27 @@ function medConfounders(extras) {
   const ids = new Set(((extras || {}).medsConfounders) || []);
   const list = MED_CONFOUNDERS.filter(m => ids.has(m.id));
   return { list, count: list.length };
+}
+
+// Management history — what the patient has already tried, so a clinician
+// doesn't re-suggest something that's already failed. Context only, not scored.
+const TREATMENTS_TRIED = [
+  { id: 'probiotic',    label: 'Probiotic' },
+  { id: 'lowfodmap',    label: 'Low-FODMAP diet' },
+  { id: 'ppi',          label: 'PPI / acid suppressant' },
+  { id: 'laxative',     label: 'Laxative' },
+  { id: 'antispasmodic',label: 'Antispasmodic' },
+  { id: 'antidiarrheal',label: 'Anti-diarrhoeal (e.g. loperamide)' },
+  { id: 'fibresupp',    label: 'Fibre supplement' },
+  { id: 'elimination',  label: 'Elimination diet' },
+  { id: 'gut_abx',      label: 'Gut-targeted antibiotic (e.g. rifaximin)' },
+  { id: 'psych',        label: 'Gut-directed hypnotherapy / CBT' },
+];
+function treatmentsTried(extras) {
+  const ex = extras || {};
+  const ids = new Set(ex.treatmentsTried || []);
+  const list = TREATMENTS_TRIED.filter(t => ids.has(t.id));
+  return { list, other: ex.treatmentsTriedOther || '', count: list.length };
 }
 
 // Family history — first-degree relative. Wired into triage: bowel-cancer family
@@ -960,6 +989,9 @@ function modifiableFactors(extras) {
   const disrupt = DISRUPTORS.filter(d => ex.meds && ex.meds[d.id]);
   const alc = ex.alcohol  != null ? ALCOHOL_LEVELS[ex.alcohol]   : null;
   const act = ex.activity != null ? ACTIVITY_LEVELS[ex.activity] : null;
+  const smk = ex.smoking  != null ? SMOKING_LEVELS[ex.smoking]   : null;
+  const caf = ex.caffeine != null ? FREQ_LEVELS[ex.caffeine]     : null;
+  const hyd = ex.hydration != null ? HYDRATION_LEVELS[ex.hydration] : null;
   const sBurden = sleepBurden(ex.sleep);
   const sb = sleepBand(sBurden);
   const surg = surgicalFlags(ex);
@@ -972,7 +1004,10 @@ function modifiableFactors(extras) {
     { icon: '💊', label: 'Recent disruptors', band: disrupt.length ? `${disrupt.length} flagged` : (ex.meds ? 'None' : '—'),
       score: disrupt.length ? disrupt.map(d => d.label).join(', ') : null, color: disrupt.length ? '#A32D2D' : (ex.meds ? '#0F6E56' : '#999') },
     { icon: '🥗', label: 'Diet quality', band: db ? db.l : '—', score: null, color: db ? db.c : '#999' },
-    { icon: '🏃', label: 'Lifestyle', band: act || '—', score: alc != null ? `Alcohol: ${alc}` : null, color: act ? '#117A8B' : '#999' },
+    { icon: '🏃', label: 'Lifestyle', band: act || '—',
+      score: [alc != null ? `Alcohol: ${alc}` : null, smk != null ? `Smoking: ${smk}` : null].filter(Boolean).join(' · ') || null,
+      color: act ? '#117A8B' : '#999' },
+    { icon: '🚰', label: 'Hydration & caffeine', band: hyd || '—', score: caf != null ? `Caffeine: ${caf}` : null, color: hyd ? '#117A8B' : '#999' },
     { icon: '😴', label: 'Sleep', band: sb ? sb.l : '—', score: sBurden != null ? `${Math.round(sBurden * 100)}/100 disturbance` : null, color: sb ? sb.c : '#999' },
     { icon: '🔪', label: 'Surgical history', band: surg.count ? `${surg.count} noted` : 'None noted',
       score: surg.count ? surg.list.join(', ') : null, color: surg.count ? '#185FA5' : '#999' },
@@ -1019,12 +1054,14 @@ const TRIM_PLAN = {
 __e.PSS4_ITEMS = PSS4_ITEMS; __e.PSS4_REVERSED = PSS4_REVERSED; __e.PSS4_ANCHORS = PSS4_ANCHORS; __e.pss4Score = pss4Score; __e.pss4Band = pss4Band;
 __e.psychLoadScore = psychLoadScore; __e.loadBand = loadBand;
 __e.DISRUPTORS = DISRUPTORS; __e.ALCOHOL_LEVELS = ALCOHOL_LEVELS; __e.ACTIVITY_LEVELS = ACTIVITY_LEVELS; __e.dietBurden = dietBurden; __e.dietBand = dietBand;
+__e.STOOL_FREQ_LEVELS = STOOL_FREQ_LEVELS; __e.SMOKING_LEVELS = SMOKING_LEVELS; __e.HYDRATION_LEVELS = HYDRATION_LEVELS; __e.FREQ_LEVELS = FREQ_LEVELS;
 __e.SLEEP_ITEMS = SLEEP_ITEMS; __e.SLEEP_ANCHORS = SLEEP_ANCHORS; __e.sleepBurden = sleepBurden; __e.sleepBand = sleepBand;
 __e.FOOD_TRIGGERS = FOOD_TRIGGERS; __e.ABX_COURSES = ABX_COURSES; __e.GAS_LEVELS = GAS_LEVELS; __e.STOOLVAR_LEVELS = STOOLVAR_LEVELS;
 __e.POSTINF_OPTS = POSTINF_OPTS; __e.PARADOX_OPTS = PARADOX_OPTS; __e.dysbiosisLens = dysbiosisLens;
 __e.SURGERIES = SURGERIES; __e.surgicalFlags = surgicalFlags;
 __e.KNOWN_CONDITIONS = KNOWN_CONDITIONS; __e.knownConditions = knownConditions;
 __e.MED_CONFOUNDERS = MED_CONFOUNDERS; __e.medConfounders = medConfounders;
+__e.TREATMENTS_TRIED = TREATMENTS_TRIED; __e.treatmentsTried = treatmentsTried;
 __e.FAMILY_HISTORY = FAMILY_HISTORY; __e.familyHistory = familyHistory;
 __e.OBSTETRIC_HISTORY = OBSTETRIC_HISTORY; __e.obstetricHistory = obstetricHistory;
 __e.anthropometrics = anthropometrics;
@@ -1757,6 +1794,22 @@ function triage(score, patterns, firedFlags, dys, opts) {
   result.durationNote = o.durationLabel
     ? `Symptom duration reported: ${o.durationLabel}.`
     : null;
+  // Bowel frequency (sx_duration's bowel-habit counterpart) — plain context,
+  // never a Tier trigger. Not wired into Rome IV or any pattern eval.
+  result.bowelFreqNote = o.bowelFreqLabel
+    ? `Reported bowel frequency: ${o.bowelFreqLabel}.`
+    : null;
+  // Smoking — only "Current smoker" is flagged (reflux/PUD/IBD-flare
+  // confounder worth surfacing); former/never smoker gets no note, matching
+  // how alcohol/activity carry no note at all.
+  result.smokingNote = o.smokingLabel === 'Current smoker'
+    ? 'Current smoker — relevant to reflux/PUD risk and can affect gut symptom interpretation.'
+    : null;
+  // Treatments already tried — so a clinician doesn't re-suggest a failed
+  // intervention. Plain context, never a Tier trigger.
+  result.treatmentsTriedNote = ((o.treatmentsTried && o.treatmentsTried.length) || o.treatmentsTriedOther)
+    ? `Already tried: ${[...(o.treatmentsTried || []), o.treatmentsTriedOther].filter(Boolean).join(', ')}.`
+    : null;
   // Management/interpretation guidance from diagnosed conditions (IBS, gallstones…).
   result.conditionGuidance = (o.conditionNotes && o.conditionNotes.length) ? o.conditionNotes.slice() : [];
   // Family-history notes (coeliac serology nudge, IBD calprotectin, cancer screening).
@@ -2037,9 +2090,10 @@ __modules['ui-patient.js'] = function(__e){
 const { SECTIONS, QUESTIONS, questionsOf, sectionMax, itemMax, revealMet } = __req('schema.js');
 const { scaleFor, RECALL_NOTE, PSS4_ITEMS, PSS4_ANCHORS, PSS4_REVERSED, pss4Score, BRISTOL_TYPES, PAIN_REGIONS, modifiableFactors,
         DISRUPTORS, ALCOHOL_LEVELS, ACTIVITY_LEVELS, SLEEP_ITEMS, SLEEP_ANCHORS,
+        STOOL_FREQ_LEVELS, SMOKING_LEVELS, HYDRATION_LEVELS, FREQ_LEVELS,
         FOOD_TRIGGERS, ABX_COURSES, GAS_LEVELS, STOOLVAR_LEVELS, POSTINF_OPTS, PARADOX_OPTS, dysbiosisLens,
         SURGERIES, surgicalFlags, KNOWN_CONDITIONS, knownConditions,
-        MED_CONFOUNDERS, medConfounders, FAMILY_HISTORY, familyHistory,
+        MED_CONFOUNDERS, medConfounders, TREATMENTS_TRIED, treatmentsTried, FAMILY_HISTORY, familyHistory,
         OBSTETRIC_HISTORY, obstetricHistory, anthropometrics } = __req('scales.js');
 const { computeScores, scoreConfidence, axisProfile, headlineOutputs, bandForPct } = __req('scoring.js');
 const { RED_FLAGS, anyRedFlag, firedRedFlags, RED_FLAG_BANNER } = __req('redflags.js');
@@ -2056,9 +2110,11 @@ let nav = {};          // { goRecords } — set by app.js so the banner can jump
 // Modifiable drivers — stored on the visit (extras), kept OUT of the Index.
 const blankExtras = () => ({
   heightCm: null, weightKg: null, waistCm: null,   // anthropometrics — optional, notes-only (BMI / WHtR)
-  bristol: null, pss4: [null, null, null, null], nrsPain: null, painRegion: null,
+  bristol: null, bowelFreq: null,    // bowelFreq: stools/week band — paired with Bristol, context only
+  pss4: [null, null, null, null], nrsPain: null, painRegion: null,
   meds: { abx: false, ppi: false, nsaid: false },
   dietFibre: null, dietProcessed: null, alcohol: null, activity: null,
+  smoking: null, caffeine: null, hydration: null,   // coverage-gap lifestyle drivers — context only
   sleep: [null, null, null, null],   // relocated from a scored domain to a driver
   abxCourses: null,                  // Dys-R: antibiotic dose /12mo
   dys: { stoolVar: null, postInfectious: null, gasFoul: null, fibreParadox: null, foodTriggers: [] },
@@ -2066,6 +2122,8 @@ const blankExtras = () => ({
   surgeryOther: '',                  // free-text "Other" — stored, not scored
   conditions: [],                    // §7a known diagnosed/suspected conditions (id list) — context, not scored
   medsConfounders: [],               // medication confounders (id list) — symptom-cause context, not scored
+  treatmentsTried: [],               // management history (id list) — context, not scored
+  treatmentsTriedOther: '',          // free-text "Other" — stored, not scored
   familyHistory: [],                 // first-degree family history (id list) — context, not scored
   obstetric: [],                     // obstetric / birth-trauma history (id list) — pelvic-floor risk context, not scored
   medsOther: '',                     // §7c other medications free-text — stored, not scored
@@ -2456,6 +2514,7 @@ function render() {
   root.appendChild(surgicalCard());
   root.appendChild(medsCard());
   root.appendChild(medConfoundersCard());
+  root.appendChild(treatmentsTriedCard());
 
   // 3 — Safety screen: alarm / red-flag features (history then informs which matter).
   if (RED_FLAGS.length) {
@@ -2652,7 +2711,11 @@ function bristolCard() {
     b.onclick = () => { extras.bristol = t.n; grid.querySelectorAll('.bristol-opt').forEach(o => o.classList.remove('sel')); b.classList.add('sel'); };
     grid.appendChild(b);
   });
-  body.appendChild(grid); card.appendChild(body);
+  body.appendChild(grid);
+  // Bowel frequency — paired here with stool form, the two classic bowel-habit
+  // descriptors. Context only (never enters the Index or Rome IV scoring).
+  body.appendChild(segRow('How often do you have a bowel movement?', STOOL_FREQ_LEVELS, () => extras.bowelFreq, v => extras.bowelFreq = v));
+  card.appendChild(body);
   return card;
 }
 
@@ -2797,6 +2860,35 @@ function familyHistoryCard() {
 function medConfoundersCard() {
   return chipMultiCard('Medications that can affect the gut', 'Current medications known to cause or worsen gut symptoms (optional, not scored).', '#7A6A1E', MED_CONFOUNDERS, 'medsConfounders');
 }
+// Management history — what's already been tried, so a clinician doesn't
+// re-suggest a failed intervention. Needs a free-text "Other" alongside the
+// chips (same shape as medsCard()'s "Other regular medications"), so this is a
+// standalone function rather than a chipMultiCard() wrapper.
+function treatmentsTriedCard() {
+  const card = el('div', { class: 'sec-card' });
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:#7A6A1E' }, 'Treatments already tried'));
+  const body = el('div', { class: 'sec-body' });
+  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' },
+    "So your clinician doesn't re-suggest something you've already tried (optional, not scored)."));
+  const chips = el('div', { class: 'chips' });
+  TREATMENTS_TRIED.forEach(t => {
+    const b = el('button', { class: `chip-opt${extras.treatmentsTried.includes(t.id) ? ' sel' : ''}`, type: 'button' }, esc(t.label));
+    b.onclick = () => {
+      const i = extras.treatmentsTried.indexOf(t.id);
+      if (i >= 0) extras.treatmentsTried.splice(i, 1); else extras.treatmentsTried.push(t.id);
+      b.classList.toggle('sel');
+    };
+    chips.appendChild(b);
+  });
+  body.appendChild(chips);
+  body.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;margin-bottom:4px' }, 'Other treatments tried (optional)'));
+  const ttInput = el('input', { type: 'text', value: extras.treatmentsTriedOther || '', placeholder: 'e.g. acupuncture, herbal remedies',
+    style: 'width:100%;padding:9px 12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px' });
+  ttInput.oninput = () => { extras.treatmentsTriedOther = ttInput.value; };
+  body.appendChild(ttInput);
+  card.appendChild(body);
+  return card;
+}
 // Obstetric / birth history — female-gated; toggling it re-runs refreshReveals so
 // a birth-trauma risk factor reveals the anorectal (AR) section even when the
 // symptom-led gate (constipation / urgency) hasn't tripped.
@@ -2870,15 +2962,17 @@ function segRow(label, levels, getter, setter) {
 }
 
 function lifestyleCard() {
-  const FREQ = ['Rarely', 'Some days', 'Most days', 'Daily'];
   const card = el('div', { class: 'sec-card' });
   card.appendChild(el('div', { class: 'sec-head', style: 'background:#117A8B' }, 'Diet & lifestyle'));
   const body = el('div', { class: 'sec-body' });
   body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, 'Modifiable habits we track over time — not part of the score.'));
-  body.appendChild(segRow('Plants, fibre & fermented foods',        FREQ,            () => extras.dietFibre,     v => extras.dietFibre = v));
-  body.appendChild(segRow('Ultra-processed or sugary foods/drinks', FREQ,            () => extras.dietProcessed, v => extras.dietProcessed = v));
+  body.appendChild(segRow('Plants, fibre & fermented foods',        FREQ_LEVELS,     () => extras.dietFibre,     v => extras.dietFibre = v));
+  body.appendChild(segRow('Ultra-processed or sugary foods/drinks', FREQ_LEVELS,     () => extras.dietProcessed, v => extras.dietProcessed = v));
+  body.appendChild(segRow('Caffeine (coffee, tea, energy drinks)',  FREQ_LEVELS,     () => extras.caffeine,      v => extras.caffeine = v));
   body.appendChild(segRow('Alcohol',                                ALCOHOL_LEVELS,  () => extras.alcohol,       v => extras.alcohol = v));
   body.appendChild(segRow('Physical activity',                      ACTIVITY_LEVELS, () => extras.activity,      v => extras.activity = v));
+  body.appendChild(segRow('Smoking',                                SMOKING_LEVELS,  () => extras.smoking,       v => extras.smoking = v));
+  body.appendChild(segRow('Water intake',                           HYDRATION_LEVELS,() => extras.hydration,     v => extras.hydration = v));
   card.appendChild(body);
   return card;
 }
@@ -3103,6 +3197,7 @@ function computeAll() {
     bgAnxiety: answers.bg_anxiety, bgMood: answers.bg_mood,
     meds: extras.meds, dietFibre: extras.dietFibre, dietProcessed: extras.dietProcessed,
     alcohol: extras.alcohol, activity: extras.activity,
+    smoking: extras.smoking, caffeine: extras.caffeine, hydration: extras.hydration, // coverage-gap drivers
     sleep: extras.sleep,                                  // sleep driver — feeds the modifiable-factors card
     surgeries: extras.surgeries, surgeryOther: extras.surgeryOther,
     abxCourses: extras.abxCourses, dys: extras.dys,
@@ -3130,6 +3225,11 @@ function computeAll() {
   // Universal duration/chronicity item — resolved to its label here so triage.js
   // stays pure (no scales.js dependency for one lookup).
   const durationLabel = typeof answers.sx_duration === 'number' ? scaleFor('DURATION')[answers.sx_duration] : null;
+  // Coverage-gap drivers resolved to labels/lists here, same reasoning as
+  // durationLabel — triage.js stays pure, no scales.js dependency for a lookup.
+  const bowelFreqLabel = typeof extras.bowelFreq === 'number' ? STOOL_FREQ_LEVELS[extras.bowelFreq] : null;
+  const smokingLabel = typeof extras.smoking === 'number' ? SMOKING_LEVELS[extras.smoking] : null;
+  const triedResolved = treatmentsTried(extras);
   // The Dysbiosis Correlate Load (inferred signals only) — the count triage and
   // the Symptom×Microbiome matrix should read, NOT the old merged lens (which
   // also folded in objective exposure history like antibiotics / surgery).
@@ -3145,6 +3245,10 @@ function computeAll() {
     conditionNotes: conditions.notes,
     medConfounders: meds.list,
     durationLabel,
+    bowelFreqLabel,
+    smokingLabel,
+    treatmentsTried: triedResolved.list.map(t => t.label),
+    treatmentsTriedOther: triedResolved.other,
     autonomicFlag,
     family: famhx,
     gynOverlap,
@@ -3381,6 +3485,12 @@ function triageCard(tri, rome, showInvestigations) {
     '📏 ' + esc(tri.anthroNote)));
   if (tri.durationNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
     '⏱️ ' + esc(tri.durationNote)));
+  if (tri.bowelFreqNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
+    '🚽 ' + esc(tri.bowelFreqNote)));
+  if (tri.smokingNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
+    '🚬 ' + esc(tri.smokingNote)));
+  if (tri.treatmentsTriedNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
+    '💉 ' + esc(tri.treatmentsTriedNote)));
   if (tri.alsoConsider.length) {
     tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-weight:600' }, 'Also worth noting:'));
     tri.alsoConsider.forEach(a => tcard.appendChild(el('div', { class: 'q-sub', style: 'padding-left:4px' },
@@ -3584,7 +3694,8 @@ function buildPatientPrint(c) {
     tri.conditionGuidance || [], tri.familyNotes || [],
     tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [],
     tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : [],
-    tri.durationNote ? [tri.durationNote] : []);
+    tri.durationNote ? [tri.durationNote] : [], tri.bowelFreqNote ? [tri.bowelFreqNote] : [],
+    tri.smokingNote ? [tri.smokingNote] : [], tri.treatmentsTriedNote ? [tri.treatmentsTriedNote] : []);
   h += `<div class="pr-section"><div class="pr-sh">What this means for you</div>
     <div class="pr-triage ${tierCls}">
       <div style="font-weight:700;font-size:12px">Suggested next step: Tier ${tri.level} — ${esc(tri.label)}</div>
@@ -3734,7 +3845,7 @@ function buildClinicianPrint(c) {
       <div style="margin-top:3px;font-size:11px">${esc(tri.action)}</div>
       ${tri.reasons.length ? `<div style="font-size:10.5px;margin-top:4px">Reasons: ${tri.reasons.map(r => esc(r.text)).join(' · ')}</div>` : ''}
       ${tri.alsoConsider.length ? `<div style="font-size:10.5px;margin-top:3px">Also consider: ${tri.alsoConsider.map(a => `${esc(a.label)} (${a.reasons.map(r => esc(r.text)).join('; ')})`).join(' / ')}</div>` : ''}
-      ${[].concat(tri.conditionGuidance || [], tri.familyNotes || [], tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [], tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : [], tri.durationNote ? [tri.durationNote] : []).map(n => `<div style="font-size:10.5px;margin-top:3px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
+      ${[].concat(tri.conditionGuidance || [], tri.familyNotes || [], tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [], tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : [], tri.durationNote ? [tri.durationNote] : [], tri.bowelFreqNote ? [tri.bowelFreqNote] : [], tri.smokingNote ? [tri.smokingNote] : [], tri.treatmentsTriedNote ? [tri.treatmentsTriedNote] : []).map(n => `<div style="font-size:10.5px;margin-top:3px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
     </div>
     ${tri.investigations && tri.investigations.length ? `
       <div style="font-weight:600;font-size:11px;margin:6px 0 3px">Suggested investigations / management:</div>

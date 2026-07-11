@@ -409,5 +409,67 @@ ok(!!foodallergyDef && !!foodallergyDef.clinNote, 'foodallergy carries a clinNot
 const r31e = run(0, {}, { conditions: ['foodallergy'] });
 ok(r31e.tri.conditionGuidance.some(n => /food allergy/i.test(n)), 'foodallergy clinNote surfaces in triage.conditionGuidance end-to-end');
 
+// 32. Coverage-gap additions — bowel frequency, smoking, caffeine, hydration,
+// treatments already tried.
+
+// 32a. blankExtras() carries the new fields with correct default shapes.
+ok(/bowelFreq: null/.test(html), 'blankExtras: bowelFreq default present');
+ok(/smoking: null, caffeine: null, hydration: null/.test(html), 'blankExtras: smoking/caffeine/hydration defaults present');
+ok(/treatmentsTried: \[\], *$/m.test(html) || /treatmentsTried: \[\],/.test(html), 'blankExtras: treatmentsTried default present');
+ok(/treatmentsTriedOther: ''/.test(html), 'blankExtras: treatmentsTriedOther default present');
+
+// 32b. None of the 5 new fields touch computeScores().index — regression guard.
+// (They're never read by computeScores() at all — it only reads QUESTIONS-based
+// answers — so this just confirms the baseline is unaffected by their presence
+// in an extras-shaped object passed alongside.)
+const baselineIdx = scoring.computeScores({ gsrs_pain: 2, gsrs_heartburn: 1 }, {}).index;
+const idxWithNewFields = scoring.computeScores({ gsrs_pain: 2, gsrs_heartburn: 1 }, { bristol: null }).index;
+ok(baselineIdx === idxWithNewFields, 'new coverage-gap fields do not touch computeScores().index');
+
+// 32c. modifiableFactors() — smoking folds into the Lifestyle row's score
+// string; caffeine/hydration produce a new Hydration & caffeine row.
+const mfBase = scales.modifiableFactors({});
+const lifestyleRowBase = mfBase.find(f => f.label === 'Lifestyle');
+ok(lifestyleRowBase && lifestyleRowBase.band === '—' && lifestyleRowBase.score === null, 'Lifestyle row shows — / null when unset');
+const hydRowBase = mfBase.find(f => f.label === 'Hydration & caffeine');
+ok(hydRowBase && hydRowBase.band === '—' && hydRowBase.score === null, 'Hydration & caffeine row shows — / null when unset');
+const mfSet = scales.modifiableFactors({ alcohol: 1, smoking: 2, activity: 3, caffeine: 3, hydration: 0 });
+const lifestyleRowSet = mfSet.find(f => f.label === 'Lifestyle');
+ok(/Alcohol: Light/.test(lifestyleRowSet.score) && /Smoking: Current smoker/.test(lifestyleRowSet.score),
+  'Lifestyle row score combines alcohol + smoking when both set');
+const hydRowSet = mfSet.find(f => f.label === 'Hydration & caffeine');
+ok(hydRowSet.band === 'Low (<1L/day)' && /Caffeine: Daily/.test(hydRowSet.score),
+  'Hydration & caffeine row shows both fields when set');
+
+// 32d. treatmentsTried(extras) resolves ids → labels correctly.
+const ttEmpty = scales.treatmentsTried({});
+ok(ttEmpty.count === 0 && ttEmpty.list.length === 0, 'treatmentsTried: empty extras → count 0');
+const ttSet = scales.treatmentsTried({ treatmentsTried: ['probiotic', 'lowfodmap'], treatmentsTriedOther: 'acupuncture' });
+ok(ttSet.count === 2 && ttSet.list.map(t => t.label).join(',') === 'Probiotic,Low-FODMAP diet' && ttSet.other === 'acupuncture',
+  'treatmentsTried: ids resolve to labels, Other passes through');
+
+// 32e. End-to-end triage notes — call triage() directly (mirrors how run()
+// builds its opts) since bowelFreqLabel/smokingLabel/treatmentsTried are
+// resolved in ui-patient.js's computeAll(), not in run()'s simplified rebuild.
+const base32 = run(1, {});
+function triageWith(extraOpts) {
+  return triage(base32.score, base32.pat, [], base32.correlateLoad, Object.assign({
+    impactBand: base32.prof.impact.band, romeResult: base32.rr, adhesionSurgery: false,
+  }, extraOpts));
+}
+ok(triageWith({}).bowelFreqNote == null, 'bowelFreqNote null when bowelFreqLabel unset');
+ok(/3–6 times\/week/.test(triageWith({ bowelFreqLabel: '3–6 times/week' }).bowelFreqNote), 'bowelFreqNote set when bowelFreqLabel provided');
+ok(triageWith({ smokingLabel: 'Never smoked' }).smokingNote == null, 'smokingNote null for Never smoked');
+ok(triageWith({ smokingLabel: 'Former smoker' }).smokingNote == null, 'smokingNote null for Former smoker');
+ok(/Current smoker|reflux\/PUD/.test(triageWith({ smokingLabel: 'Current smoker' }).smokingNote || ''), 'smokingNote set only for Current smoker');
+ok(triageWith({}).treatmentsTriedNote == null, 'treatmentsTriedNote null when nothing tried');
+const ttNote = triageWith({ treatmentsTried: ['Probiotic', 'Low-FODMAP diet'], treatmentsTriedOther: 'acupuncture' }).treatmentsTriedNote;
+ok(/Probiotic/.test(ttNote) && /Low-FODMAP diet/.test(ttNote) && /acupuncture/.test(ttNote), 'treatmentsTriedNote lists resolved labels + Other');
+
+// 32f. All three render sites reference the three new note fields (source-level
+// presence check, matching the existing durationNote wiring-check style).
+ok(/tri\.bowelFreqNote/.test(html) && /tri\.smokingNote/.test(html) && /tri\.treatmentsTriedNote/.test(html),
+  'bowelFreqNote/smokingNote/treatmentsTriedNote referenced in source (render wiring present)');
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);
