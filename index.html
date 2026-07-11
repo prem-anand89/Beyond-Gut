@@ -593,7 +593,6 @@ function revealMet(cond, ctx) {
 
 // ── Derived index — the ONLY question index in the app. ─────────────────────
 const QID = Object.freeze(QUESTIONS.reduce((m, q, i) => { m[q.id] = i; return m; }, {}));
-const QTOTAL = QUESTIONS.length;
 
 // Per-item max = (scale option count − 1). Per-section max = Σ item maxes.
 function itemMax(q) { return scaleFor(q.scale).length - 1; }
@@ -605,7 +604,7 @@ function sectionMax(sectionId) { return _sectionMax[sectionId] || 0; }
 function questionsOf(sectionId) { return QUESTIONS.filter(q => q.section === sectionId); }
 
 __e.SCHEMA_VERSION = SCHEMA_VERSION; __e.SECTIONS = SECTIONS; __e.QUESTIONS = QUESTIONS;
-__e.QID = QID; __e.QTOTAL = QTOTAL; __e.itemMax = itemMax; __e.sectionMax = sectionMax; __e.questionsOf = questionsOf;
+__e.QID = QID; __e.itemMax = itemMax; __e.sectionMax = sectionMax; __e.questionsOf = questionsOf;
 __e.revealMet = revealMet;
 return __e;
 };
@@ -654,10 +653,6 @@ const PSS4_ANCHORS = ['Never', 'Almost never', 'Sometimes', 'Fairly often', 'Ver
 function pss4Score(arr) {
   if (!arr || arr.some(v => v == null)) return null;
   return arr.reduce((sum, v, i) => sum + (PSS4_REVERSED[i] ? (4 - v) : v), 0);
-}
-function pss4Band(s) {
-  if (s == null) return null;
-  return s <= 5 ? { l: 'Low', c: '#0F6E56' } : s <= 9 ? { l: 'Moderate', c: '#BA7517' } : { l: 'High', c: '#A32D2D' };
 }
 
 // Bristol Stool Form Scale (Lewis & Heaton 1997), types 1–7.
@@ -967,23 +962,11 @@ function dysbiosisLens(extras) {
     signals.push({ k: 'abx', label: (ABX_COURSES[ex.abxCourses] || ex.abxCourses) + ' antibiotic course(s) in 12mo' });
   if (d.postInfectious === 1) signals.push({ k: 'postinf', label: 'Post-infectious onset' });
   if ((d.foodTriggers || []).length >= 2) signals.push({ k: 'fodmap', label: d.foodTriggers.length + ' fermentable-food triggers' });
-  if (typeof d.gasFoul === 'number' && d.gasFoul >= 2) signals.push({ k: 'gas', label: 'Foul / excessive gas' });
+  if (typeof d.gasFoul === 'number' && d.gasFoul >= 2) signals.push({ k: 'gas', label: 'Foul-smelling gas' });
   if (d.fibreParadox === 1) signals.push({ k: 'paradox', label: 'Worse with fibre / probiotics' });
   if (typeof d.stoolVar === 'number' && d.stoolVar >= 1) signals.push({ k: 'var', label: 'Day-to-day stool variability' });
   if (surgicalFlags(ex).microbiome) signals.push({ k: 'surg', label: 'Microbiome-altering surgery' });
   return { count: signals.length, signals };
-}
-
-// LEGACY — superseded by axisProfile() / headlineOutputs() in scoring.js. This
-// blended single number is NO LONGER surfaced in any patient- or clinician-facing
-// view (it mixed validated severity with the un-validated correlate count, which
-// is exactly the composite the axis-model redesign removed). Retained ONLY so the
-// pilot CSV can still emit it for internal comparison against the old composite.
-const GHI_WEIGHTS = { severity: 0.7, risk: 0.3, riskMax: 6 };
-function gutHealthIndex(severityIndex, lensCount) {
-  if (severityIndex == null) return null;
-  const risk = Math.min(1, (lensCount || 0) / GHI_WEIGHTS.riskMax) * 100;
-  return Math.round(GHI_WEIGHTS.severity * severityIndex + GHI_WEIGHTS.risk * risk);
 }
 
 // ONE shared driver descriptor used by every surface (results now; report later).
@@ -1059,7 +1042,7 @@ const TRIM_PLAN = {
     'Validate each Dys-R signal against stool sequencing before any dysbiosis claim (§10.5).',
   ],
 };
-__e.PSS4_ITEMS = PSS4_ITEMS; __e.PSS4_REVERSED = PSS4_REVERSED; __e.PSS4_ANCHORS = PSS4_ANCHORS; __e.pss4Score = pss4Score; __e.pss4Band = pss4Band;
+__e.PSS4_ITEMS = PSS4_ITEMS; __e.PSS4_REVERSED = PSS4_REVERSED; __e.PSS4_ANCHORS = PSS4_ANCHORS; __e.pss4Score = pss4Score;
 __e.psychLoadScore = psychLoadScore; __e.loadBand = loadBand;
 __e.DISRUPTORS = DISRUPTORS; __e.ALCOHOL_LEVELS = ALCOHOL_LEVELS; __e.ACTIVITY_LEVELS = ACTIVITY_LEVELS; __e.dietBurden = dietBurden; __e.dietBand = dietBand;
 __e.STOOL_FREQ_LEVELS = STOOL_FREQ_LEVELS; __e.SMOKING_LEVELS = SMOKING_LEVELS; __e.HYDRATION_LEVELS = HYDRATION_LEVELS; __e.FREQ_LEVELS = FREQ_LEVELS;
@@ -1074,7 +1057,6 @@ __e.TREATMENTS_TRIED = TREATMENTS_TRIED; __e.treatmentsTried = treatmentsTried;
 __e.FAMILY_HISTORY = FAMILY_HISTORY; __e.familyHistory = familyHistory;
 __e.OBSTETRIC_HISTORY = OBSTETRIC_HISTORY; __e.obstetricHistory = obstetricHistory;
 __e.anthropometrics = anthropometrics;
-__e.gutHealthIndex = gutHealthIndex; __e.GHI_WEIGHTS = GHI_WEIGHTS;
 __e.TRIM_PLAN = TRIM_PLAN;
 __e.BRISTOL_TYPES = BRISTOL_TYPES; __e.PAIN_REGIONS = PAIN_REGIONS; __e.painBand = painBand; __e.modifiableFactors = modifiableFactors;
 return __e;
@@ -1102,7 +1084,8 @@ const RED_FLAGS = [
   // alarm. Captured as a Family-history chip set and wired in triage instead.)
   // Upper-GI alarm features
   { id: 'rf_dysphagia',  label: 'Difficulty or pain when swallowing' },
-  { id: 'rf_vomiting',   label: 'Persistent vomiting, or vomiting blood / coffee-ground material' },
+  { id: 'rf_vomiting',   label: 'Persistent vomiting' },
+  { id: 'rf_hematemesis',label: 'Vomiting blood or coffee-ground material' },
   // Systemic / other
   { id: 'rf_anaemia',    label: 'Diagnosed iron-deficiency anaemia without a clear cause' },
   { id: 'rf_jaundice',   label: 'Yellowing of the skin or eyes (jaundice)' },
@@ -1265,10 +1248,22 @@ function computeScores(answers, opts) {
   // keeps an external driver signal from silently shifting pattern-firing
   // thresholds; it must hold for every future nudge added here, not just these two.
   const clusterFreq = (opts && opts.clusterFreq) || {};
+  // Pain's frequency signal comes from Rome IV's painFreq (opts.romePainFreq,
+  // 0–5), NOT clusterFreqCard()'s clusterFreq.Pain — that would duplicate
+  // "how often do you get abdominal pain", which Rome IV already asks. Scaled
+  // by /5 (ROME_FREQ has 6 levels) instead of /3 (CLUSTER_FREQ_LEVELS has 4).
+  const romePainFreq = opts && opts.romePainFreq;
+  function clusterFreqSignal(k) {
+    if (k === 'Pain') return typeof romePainFreq === 'number' ? romePainFreq / 5 : null;
+    return typeof clusterFreq[k] === 'number' ? clusterFreq[k] / 3 : null;
+  }
   function clusterNudge(k, includeBristol, includeFreq) {
     let n = 0;
     if (includeBristol && bristolSignal != null && BRISTOL_CLUSTERS.has(k)) n += BRISTOL_ALPHA * bristolSignal;
-    if (includeFreq && typeof clusterFreq[k] === 'number') n += FREQUENCY_ALPHA * (clusterFreq[k] / 3);
+    if (includeFreq) {
+      const fs = clusterFreqSignal(k);
+      if (fs != null) n += FREQUENCY_ALPHA * fs;
+    }
     return Math.min(n, NUDGE_CAP_PER_CLUSTER);
   }
   function coreMeanWith(includeBristol, includeFreq) {
@@ -1296,7 +1291,7 @@ function computeScores(answers, opts) {
   //     can both read 0 in the saturated edge case above — never sum these
   //     two as a substitute for nudgeAddPts, they can under-report by design.
   let nudgeAddPts = 0;
-  const hasFreq = GI_CLUSTERS.some(k => typeof clusterFreq[k] === 'number');
+  const hasFreq = GI_CLUSTERS.some(k => clusterFreqSignal(k) != null);
   if (bristolSignal != null || hasFreq) {
     const withoutEither = coreMeanWith(false, false);
     if (coreMean != null && withoutEither != null) nudgeAddPts = Math.round((coreMean - withoutEither) * 100);
@@ -1472,12 +1467,20 @@ function bowelSubtype(clusterNorm) {
 // Single cross-sectional pass, NOT the prospective diary Rome IV was validated
 // against. Classifies a PATTERN CONSISTENT WITH Rome IV criteria — never call
 // this a diagnosis in any UI string.
-function classifyRomeIV(rome, clusterNorm) {
+// sxDuration: optional fallback for onset, from the universal sx_duration item
+// (schema.js) — DURATION and ROME_ONSET share identical index-mapped bands
+// (see scales.js comment), so no rescaling needed. rome.onset was previously a
+// SEPARATE question asked again inside the Rome card for pain-positive
+// patients — a near-exact duplicate of sx_duration, which every patient
+// already answers. Only fall back when rome.onset itself is unanswered
+// (preserves any historical visit that explicitly answered both).
+function classifyRomeIV(rome, clusterNorm, sxDuration) {
   const r = rome || {};
+  const onset = typeof r.onset === 'number' ? r.onset : (typeof sxDuration === 'number' ? sxDuration : null);
   const freqMet = typeof r.painFreq === 'number' && r.painFreq >= ROME_FREQ_MET;
-  const onsetMet = typeof r.onset === 'number' && r.onset >= ROME_ONSET_MET;
+  const onsetMet = typeof onset === 'number' && onset >= ROME_ONSET_MET;
   const assocCount = ROME_ASSOC.filter(a => !!r[a.id]).length;
-  const answered = typeof r.painFreq === 'number' && typeof r.onset === 'number';
+  const answered = typeof r.painFreq === 'number' && typeof onset === 'number';
   if (!answered) return { criteriaMet: false, answered: false, subtype: null, assocCount };
   const criteriaMet = freqMet && onsetMet && assocCount >= 2;
   if (!criteriaMet) return { criteriaMet: false, answered: true, subtype: null, assocCount };
@@ -1512,8 +1515,10 @@ const gi  = (s) => (s.secNorm && s.secNorm.GI != null) ? s.secNorm.GI : null;
 const av  = (a, id) => (a && typeof a[id] === 'number') ? a[id] : null;
 
 // Rome IV as a corroborating signal only — never gates firing, just adds to coverage.
-const romeSignal = (ex, s, wantSubtype) => {
-  const r = classifyRomeIV((ex && ex.rome) || {}, (s && s.clusterNorm) || {});
+// a: sx_duration answer, passed through so classifyRomeIV can fall back to it
+// for onset (see romeiv.js comment) — every eval calling this must declare `a`.
+const romeSignal = (ex, s, wantSubtype, a) => {
+  const r = classifyRomeIV((ex && ex.rome) || {}, (s && s.clusterNorm) || {}, a && a.sx_duration);
   return { a: r.answered, t: r.criteriaMet && r.subtype === wantSubtype };
 };
 
@@ -1522,12 +1527,12 @@ const PATTERNS = [
     id: 'constipation_dominant', axis: 'symptom',
     label: 'Constipation-dominant pattern',
     desc: 'Bowel-movement burden weighted toward slow transit. Fibre, hydration, and movement are usually the first lever; rule out other causes with your clinician.',
-    eval: (s, ex) => {
+    eval: (s, ex, a) => {
       const sub = bowelSubtype(s.clusterNorm);             // shared source of truth (also drives Rome IV)
       const constipCluster = ge(clu(s, 'Constipation'), 0.3); // matches bowelSubtype's threshold, so coverage is honest
       const slowStool      = le(ex.bristol, 2);
       const diarrCluster   = ge(clu(s, 'Diarrhoea'), 0.3); // confidence coverage only
-      const romeIBSC       = romeSignal(ex, s, 'IBS-C');
+      const romeIBSC       = romeSignal(ex, s, 'IBS-C', a);
       const signals = [constipCluster, slowStool, diarrCluster, romeIBSC];
       // Fires on a clear constipation subtype, or a slow stool when clusters are silent.
       return { fires: sub === 'IBS-C' || (slowStool.t && sub === 'IBS-U'), signals };
@@ -1537,12 +1542,12 @@ const PATTERNS = [
     id: 'diarrhoea_dominant', axis: 'symptom',
     label: 'Loose-stool / urgency pattern',
     desc: 'Bowel-movement burden weighted toward urgency or loose stools. Worth screening with your clinician for triggers and infection.',
-    eval: (s, ex) => {
+    eval: (s, ex, a) => {
       const sub = bowelSubtype(s.clusterNorm);             // shared source of truth (also drives Rome IV)
       const diarrCluster   = ge(clu(s, 'Diarrhoea'), 0.3); // matches bowelSubtype's threshold
       const fastStool      = ge(ex.bristol, 6);
       const constipCluster = ge(clu(s, 'Constipation'), 0.3); // confidence coverage only
-      const romeIBSD        = romeSignal(ex, s, 'IBS-D');
+      const romeIBSD        = romeSignal(ex, s, 'IBS-D', a);
       const signals = [diarrCluster, fastStool, constipCluster, romeIBSD];
       // Mirror constipation_dominant: fire on a clear IBS-D subtype, or a fast
       // stool when clusters are silent. Same shared threshold, so it can't
@@ -1554,11 +1559,11 @@ const PATTERNS = [
     id: 'mixed_bowel', axis: 'symptom',
     label: 'Mixed / alternating bowel pattern',
     desc: 'Symptoms swing between constipation and loose stools (an alternating, IBS-mixed-type picture). This needs a different approach from a single-direction bowel problem — worth mapping the triggers with your clinician.',
-    eval: (s, ex) => {
+    eval: (s, ex, a) => {
       const constip = ge(clu(s, 'Constipation'), 0.3);
       const diarr   = ge(clu(s, 'Diarrhoea'), 0.3);
       const urgency = ge(clu(s, 'Pain'), 0.3); // pain/cramping often accompanies alternating bowel
-      const romeIBSM = romeSignal(ex, s, 'IBS-M');
+      const romeIBSM = romeSignal(ex, s, 'IBS-M', a);
       const signals = [constip, diarr, urgency, romeIBSM];
       return { fires: constip.t && diarr.t, signals }; // exactly the case the single-direction patterns suppress
     },
@@ -1588,7 +1593,7 @@ const PATTERNS = [
       const paradox   = d.fibreParadox === 1 ? { a: true, t: true } : (d.fibreParadox == null ? { a: false, t: false } : { a: true, t: false });
       const triggers  = ge((d.foodTriggers || []).length, 2); // ≥2 fermentable triggers
       const signals = [indig, bloating, foodReact, gasFoul, paradox, triggers];
-      return { fires: indig.t || bloating.t || gasFoul.t || paradox.t, signals };
+      return { fires: indig.t || bloating.t || gasFoul.t || paradox.t || foodReact.t || triggers.t, signals };
     },
   },
   {
@@ -1647,8 +1652,10 @@ const PATTERNS = [
       const giPresent = ge(gi(s), 0.25);
       const signals = [imHigh, knownDx, histamine, skin, giPresent];
       // Fires on a diagnosed condition OR a high immune domain OR a clear
-      // histamine signal, with GI present.
-      return { fires: (knownDx.t || imHigh.t || histamine.t) && giPresent.t, signals };
+      // histamine signal OR significant skin involvement, with GI present —
+      // the desc explicitly names "skin involvement" as a qualifying feature,
+      // so skin.t must gate firing, not just contribute to confidence.
+      return { fires: (knownDx.t || imHigh.t || histamine.t || skin.t) && giPresent.t, signals };
     },
   },
   {
@@ -1800,11 +1807,19 @@ function triage(score, patterns, firedFlags, dys, opts) {
   // Family-history-driven candidacy (e.g. bowel-cancer family history → screening).
   (o.family && o.family.tierReasons || []).forEach(r => add(r.tier, r.text, r.axis));
   // Orphan pattern, now wired: inflammatory_immune spans a wide specificity range
-  // (clear histamine/diagnosed signal vs. a high-but-noisy IM mean) — route by confidence.
+  // (clear histamine/diagnosed signal vs. a high-but-noisy IM mean) — route by
+  // signalHits (how many of its 5 signals corroborate), NOT confidence, which
+  // is pure data-completeness (answered/total) and carries zero information
+  // about specificity — a patient with a diagnosed condition but a couple of
+  // unanswered follow-ups previously scored "Low confidence" and got routed to
+  // Tier 3 despite having the single most specific trigger; conversely a
+  // fully-answered-but-barely-over-threshold IM mean scored "High confidence"
+  // and got routed to Tier 2. signalHits >= 3 (of 5) requires at least one
+  // corroborating signal beyond the bare fires-minimum of 2.
   const infl = (patterns || []).find(p => p.id === 'inflammatory_immune');
   if (infl) {
-    if (infl.confidence === 'High') add(2, 'Inflammatory / immune-leaning pattern (high confidence) — consider a structured elimination trial', 'inflammatory');
-    else add(3, 'Inflammatory / immune-leaning pattern (lower confidence) — monitor alongside microbiome support', 'inflammatory');
+    if (infl.signalHits >= 3) add(2, 'Inflammatory / immune-leaning pattern (multiple corroborating signals) — consider a structured elimination trial', 'inflammatory');
+    else add(3, 'Inflammatory / immune-leaning pattern (single corroborating signal) — monitor alongside microbiome support', 'inflammatory');
   }
 
   // Tier 3 — microbiome-support candidacy
@@ -2101,13 +2116,13 @@ function pilotExportCSV(db) {
   d.patients.forEach((p, pi) => {
     (p.visits || []).forEach(v => {
       const a = v.answers || {}, ex = v.extras || {}, meds = ex.meds || null, pss = ex.pss4 || [];
-      const score = computeScores(a, { bristol: ex.bristol });
+      const score = computeScores(a, { bristol: ex.bristol, clusterFreq: ex.clusterFreq, romePainFreq: ex.rome && ex.rome.painFreq });
       const ps = pss4Score(pss);
       const drv = { pss4Score: ps, bgAnxiety: a.bg_anxiety, bgMood: a.bg_mood, dietFibre: ex.dietFibre, dietProcessed: ex.dietProcessed,
                     bristol: ex.bristol, meds, alcohol: ex.alcohol, activity: ex.activity, abxCourses: ex.abxCourses, dys: ex.dys, rome: ex.rome };
       const fired = new Set(detectPatterns(score, drv, a).map(p => p.id));
       const rm = ex.rome || {};
-      const romeResult = classifyRomeIV(rm, score.clusterNorm);
+      const romeResult = classifyRomeIV(rm, score.clusterNorm, a.sx_duration);
       rows.push([
         'P' + (pi + 1), cell(v.id), v.date ? new Date(v.date).toISOString().slice(0, 10) : '',
         score.completeness, score.index, score.severity.label, score.severity.capped ? 1 : 0,
@@ -2153,7 +2168,8 @@ const { computeScores, scoreConfidence, axisProfile, headlineOutputs, bandForPct
 // itself as the iteration order (not a separately-maintained id list).
 const GI_CLUSTER_FREQ_LABELS = {
   Reflux: 'Heartburn or acid reflux',
-  Pain: 'Abdominal pain',
+  Pain: 'Abdominal pain', // not rendered by clusterFreqCard() — Rome IV's painFreq
+                          // already asks this; kept here only to document the mapping.
   Indigestion: 'Bloating, gas, or fullness',
   Diarrhoea: 'Loose or urgent stools',
   Constipation: 'Constipation or hard stools',
@@ -2797,10 +2813,16 @@ function clusterFreqCard() {
   const body = el('div', { class: 'sec-body' });
   body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' },
     "Thinking about your usual pattern over the last 2–3 months (not just the last 2 weeks) — how many days a week do you typically get each of these? Gently feeds the matching part of your gut-core score (capped so it can't dominate)."));
-  GI_CLUSTERS.forEach(k => {
+  // Pain excluded here — Rome IV (romeCard) already asks "how often do you get
+  // abdominal pain" and its answer feeds the Pain cluster's frequency nudge
+  // directly (see scoring.js clusterFreqSignal). Asking again here would be a
+  // near-exact duplicate for pain-positive patients.
+  GI_CLUSTERS.filter(k => k !== 'Pain').forEach(k => {
     body.appendChild(segRow(GI_CLUSTER_FREQ_LABELS[k], CLUSTER_FREQ_LEVELS,
       () => extras.clusterFreq[k], v => extras.clusterFreq[k] = v));
   });
+  body.appendChild(el('div', { class: 'q-sub', style: 'font-style:italic' },
+    'Abdominal pain frequency is asked separately, alongside the Rome IV bowel-pain questions below.'));
   card.appendChild(body);
   return card;
 }
@@ -3134,7 +3156,7 @@ function dysCard() {
 // Rome IV-informed bowel-pain pattern (frequency + chronicity + defecation-
 // association). Extras-only — never enters coreNorms/screenNorms.
 function romeCard() {
-  const { ROME_FREQ, ROME_ONSET, ROME_ASSOC } = __req('romeiv.js');
+  const { ROME_FREQ, ROME_ASSOC } = __req('romeiv.js');
   const card = el('div', { class: 'sec-card' });
   card.appendChild(el('div', { class: 'sec-head', style: 'background:#5A5A7A' }, 'Bowel-pain pattern (Rome IV-informed)'));
   const body = el('div', { class: 'sec-body' });
@@ -3142,8 +3164,10 @@ function romeCard() {
     'Optional — helps classify a constipation/diarrhoea/mixed pattern. Skip if unsure; not part of the GI score.'));
   body.appendChild(chipRow('On average, how often do you get abdominal pain?', ROME_FREQ,
     () => extras.rome.painFreq, v => extras.rome.painFreq = v));
-  body.appendChild(chipRow('When did this pattern first start?', ROME_ONSET,
-    () => extras.rome.onset, v => extras.rome.onset = v));
+  // No separate onset question here — it duplicated sx_duration (identical
+  // recall bands, asked of every patient already). Rome IV classification and
+  // this card's own print/display fall back to sx_duration when rome.onset
+  // is unanswered (see classifyRomeIV()'s sxDuration param).
   const aRow = el('div', { class: 'q' });
   aRow.appendChild(el('div', { class: 'q-txt', style: 'font-weight:500' }, 'Does the pain relate to bowel movements? (select all that apply)'));
   const aChips = el('div', { class: 'chips' });
@@ -3274,7 +3298,7 @@ function questionRow(q) {
 // regenerate results without re-running the render pipeline.
 function computeAll() {
   const answerArr = QUESTIONS.map(q => (answers[q.id] == null ? null : answers[q.id]));
-  const score = computeScores(answerArr, { bristol: extras.bristol, clusterFreq: extras.clusterFreq });
+  const score = computeScores(answerArr, { bristol: extras.bristol, clusterFreq: extras.clusterFreq, romePainFreq: extras.rome.painFreq });
   const sv = score.severity;
   const conf = scoreConfidence(score);
   const ps = pss4Score(extras.pss4);
@@ -3294,7 +3318,7 @@ function computeAll() {
   const patterns = detectPatterns(score, driverExtras, answers);
   const fired = firedRedFlags(redflags);
   const lens = dysbiosisLens(extras);
-  const rome = classifyRomeIV(extras.rome, score.clusterNorm);
+  const rome = classifyRomeIV(extras.rome, score.clusterNorm, answers.sx_duration);
   const profile = axisProfile(score, driverExtras, lens);
   const heads = headlineOutputs(score, driverExtras, lens);
   const conditions = knownConditions(extras);
@@ -3371,7 +3395,8 @@ function domainBarsCard(score, withClusters) {
     // the edge case where each independently saturates the per-cluster cap
     // while the combined nudge is clearly nonzero (see scoring.js comment).
     const hasBristol = score.bristolSignal != null;
-    const hasFreq = extras.clusterFreq && Object.values(extras.clusterFreq).some(v => typeof v === 'number');
+    const hasFreq = (extras.clusterFreq && Object.values(extras.clusterFreq).some(v => typeof v === 'number'))
+      || typeof extras.rome?.painFreq === 'number';
     if (hasBristol || hasFreq) {
       const addPts = score.nudgeAddPts || 0;
       const bt = BRISTOL_TYPES.find(t => t.n === extras.bristol);
@@ -3656,9 +3681,13 @@ function clinicianDetailCard(c) {
   card.appendChild(chead('Rome IV-informed criteria'));
   const { ROME_FREQ, ROME_ONSET, ROME_ASSOC } = __req('romeiv.js');
   const r = extras.rome || {};
+  // Onset falls back to sx_duration (see classifyRomeIV's own fallback) — the
+  // Rome card no longer asks a separate onset question, so r.onset is null
+  // for every new visit; sx_duration is the actual source of truth.
+  const onsetIdx = r.onset != null ? r.onset : (typeof answers.sx_duration === 'number' ? answers.sx_duration : null);
   const rRows = [
     ['Pain frequency', r.painFreq != null ? `${r.painFreq} — ${esc(ROME_FREQ[r.painFreq] || '')}` : '—'],
-    ['Onset', r.onset != null ? `${r.onset} — ${esc(ROME_ONSET[r.onset] || '')}` : '—'],
+    ['Onset', onsetIdx != null ? `${onsetIdx} — ${esc(ROME_ONSET[onsetIdx] || '')}` : '—'],
     ...ROME_ASSOC.map(a => [esc(a.label), r[a.id] ? '<b>Yes</b>' : 'No']),
     ['Result', rome.criteriaMet
       ? `<b style="color:#185FA5">Criteria met — ${esc(rome.subtype || '')}</b>`
@@ -4031,11 +4060,15 @@ function buildClinicianPrint(c) {
   // Rome IV — full criteria table only when answered; otherwise a single line, so
   // an unanswered Rome IV doesn't print five empty rows.
   const r = extras.rome || {};
+  // Onset falls back to sx_duration (see classifyRomeIV's own fallback) — the
+  // Rome card no longer asks a separate onset question, so r.onset is null
+  // for every new visit; sx_duration is the actual source of truth.
+  const onsetIdx = r.onset != null ? r.onset : (typeof answers.sx_duration === 'number' ? answers.sx_duration : null);
   if (rome.answered) {
     h += `<div class="pr-section"><div class="pr-sh">Rome IV-informed bowel-pain pattern</div>
       <table class="pr-tbl"><tbody>
         <tr><td>Pain frequency</td><td>${r.painFreq != null ? `${r.painFreq} — ${esc(ROME_FREQ[r.painFreq] || '')}` : '—'}</td></tr>
-        <tr><td>Onset</td><td>${r.onset != null ? `${r.onset} — ${esc(ROME_ONSET[r.onset] || '')}` : '—'}</td></tr>
+        <tr><td>Onset</td><td>${onsetIdx != null ? `${onsetIdx} — ${esc(ROME_ONSET[onsetIdx] || '')}` : '—'}</td></tr>
         ${ROME_ASSOC.map(a => `<tr><td>${esc(a.label)}</td><td>${r[a.id] ? '<b>Yes</b>' : 'No'}</td></tr>`).join('')}
         <tr><td><b>Result</b></td><td><b>${rome.criteriaMet ? `Criteria met — ${esc(rome.subtype)}` : 'Criteria not met'}</b></td></tr>
       </tbody></table>
@@ -4258,7 +4291,7 @@ function renderClinician() {
 
 function init(c) { nav = c || {}; }
 __e.init = init; __e.reset = reset; __e.render = render; __e.newVisitFor = newVisitFor;
-__e.loadVisit = loadVisit; __e.renderClinician = renderClinician; __e.hasResult = () => !!lastCalc;
+__e.loadVisit = loadVisit; __e.renderClinician = renderClinician;
 __e.clearPatient = clearPatient;
 return __e;
 };

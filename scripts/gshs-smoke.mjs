@@ -520,5 +520,72 @@ ok(/CLUSTER_FREQ_LEVELS/.test(html) && /clusterFreqCard/.test(html), 'clusterFre
 ok(/clusterFreq: extras\.clusterFreq/.test(html), 'computeAll() passes extras.clusterFreq into computeScores()');
 ok(/clusterFreq: \{ Reflux: null/.test(html), 'blankExtras() initialises clusterFreq for all 5 clusters');
 
+// 34. Code-review fix pass: pattern-eval bugs, triage routing, dead code,
+// duplications (Pain-frequency vs Rome, sx_duration vs Rome onset).
+
+// 34a. bloating_fermentation fires on im_food_react/foodTriggers alone (were
+// computed into signals but silently excluded from the fires OR-chain).
+const r34a = run(0, { im_food_react: 3 }, { dys: { foodTriggers: [] } });
+ok(r34a.pat.some(p => p.id === 'bloating_fermentation'), 'bloating_fermentation now fires on im_food_react alone');
+const r34a2 = run(0, { im_food_react: 0 }, { dys: { foodTriggers: ['a', 'b'] } });
+ok(r34a2.pat.some(p => p.id === 'bloating_fermentation'), 'bloating_fermentation now fires on >=2 fermentable-food triggers alone');
+
+// 34b. inflammatory_immune fires on sk_skin alone (with GI present) — was
+// computed into signals but silently excluded from the fires condition.
+const r34b = run(1, { sk_skin: 3, im_food_react: 0, im_histamine: 0, im_infections: 0, im_allergies: 0, im_joint: 0 });
+ok(r34b.pat.some(p => p.id === 'inflammatory_immune'), 'inflammatory_immune now fires on sk_skin alone (GI present)');
+
+// 34c. Triage routes inflammatory_immune by signalHits, not confidence.
+ok(/infl\.signalHits/.test(html) && !/infl\.confidence === 'High'/.test(html),
+  'triage.js routes inflammatory_immune by signalHits, not confidence');
+
+// 34d. Stale "Foul / excessive gas" label fixed; no "excessive" language left
+// on the gasFoul signal (it's scoped to quality, not frequency — gsrs_gas
+// already owns frequency).
+ok(!/Foul \/ excessive gas/.test(html), 'stale "Foul / excessive gas" dysbiosisLens signal label removed');
+ok(/Foul-smelling gas/.test(html), 'dysbiosisLens signal now reads "Foul-smelling gas"');
+
+// 34e. Dead code removed: gutHealthIndex/GHI_WEIGHTS, pss4Band, QTOTAL, hasResult.
+ok(!/function gutHealthIndex/.test(html) && !/GHI_WEIGHTS/.test(html), 'gutHealthIndex()/GHI_WEIGHTS removed');
+ok(!/function pss4Band/.test(html), 'pss4Band() removed');
+ok(!/const QTOTAL/.test(html), 'QTOTAL removed');
+ok(!/__e\.hasResult/.test(html), 'Patient.hasResult removed');
+
+// 34f. rf_vomiting split into two red flags (persistent vomiting vs hematemesis).
+ok(RF.some(f => f.id === 'rf_vomiting') && RF.some(f => f.id === 'rf_hematemesis'),
+  'rf_vomiting split into rf_vomiting + rf_hematemesis');
+
+// 34g. Duplication fix — Pain cluster frequency now comes from Rome's
+// painFreq, not a second "how often do you get abdominal pain" question.
+// clusterFreqCard no longer renders a Pain row.
+ok(!/GI_CLUSTERS\.forEach\(k => \{\s*body\.appendChild\(segRow\(GI_CLUSTER_FREQ_LABELS\[k\]/.test(html),
+  'clusterFreqCard no longer iterates all 5 clusters unconditionally');
+ok(/GI_CLUSTERS\.filter\(k => k !== 'Pain'\)/.test(html), 'clusterFreqCard explicitly excludes Pain');
+// Frequency-only nudge on Pain driven by romePainFreq (0-5 Rome scale), not clusterFreq.Pain.
+const painMild = { gsrs_pain: 1, gsrs_hunger: 1, gsrs_nausea: 1 };
+const painNoFreq = scoring.computeScores(painMild, {});
+const painWithRomeFreq = scoring.computeScores(painMild, { romePainFreq: 5 });
+ok(painWithRomeFreq.index > painNoFreq.index, 'Pain cluster nudged by romePainFreq');
+ok(painWithRomeFreq.index === painNoFreq.index + 15, 'Pain romePainFreq nudge matches FREQUENCY_ALPHA magnitude (+15)');
+const painStaleClusterFreq = scoring.computeScores(painMild, { clusterFreq: { Pain: 3 } });
+ok(painStaleClusterFreq.index === painNoFreq.index, 'clusterFreq.Pain is ignored — Pain frequency only comes from romePainFreq');
+
+// 34h. Duplication fix — Rome IV onset question removed from romeCard();
+// classifyRomeIV() falls back to sx_duration when rome.onset is unanswered.
+ok(!/When did this pattern first start/.test(html), 'romeCard no longer asks a separate onset question');
+const rome34h_fallback = rome.classifyRomeIV({ painFreq: 5, onset: null, rm_assoc_defecation: true, rm_assoc_freqchange: true }, {}, 2);
+ok(rome34h_fallback.answered === true && rome34h_fallback.criteriaMet === true,
+  'classifyRomeIV falls back to sx_duration (index 2 = onset met) when rome.onset is unanswered');
+const rome34h_toorecent = rome.classifyRomeIV({ painFreq: 5, onset: null, rm_assoc_defecation: true, rm_assoc_freqchange: true }, {}, 0);
+ok(rome34h_toorecent.criteriaMet === false, 'classifyRomeIV onset-not-met correctly derived from sx_duration index 0 (<3mo)');
+const rome34h_explicit = rome.classifyRomeIV({ painFreq: 5, onset: 4, rm_assoc_defecation: true, rm_assoc_freqchange: true }, {}, 0);
+ok(rome34h_explicit.criteriaMet === true, 'explicit rome.onset still takes priority over sx_duration fallback when both present');
+
+// 34i. CSV export now passes clusterFreq + romePainFreq into computeScores()
+// (previously silently dropped, so exported index could disagree with the
+// on-screen index for any patient with frequency answers).
+ok(/computeScores\(a, \{ bristol: ex\.bristol, clusterFreq: ex\.clusterFreq, romePainFreq: ex\.rome/.test(html),
+  'CSV export computeScores() call includes clusterFreq + romePainFreq');
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);
