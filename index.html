@@ -805,7 +805,7 @@ const KNOWN_CONDITIONS = [
   { id: 'thyroid',    label: 'Thyroid disorder', clinNote: 'Known thyroid disorder — can drive constipation (under-active) or loose stool (over-active); factor into the bowel-habit read.' },
   { id: 'diabetes',   label: 'Diabetes', clinNote: 'Known diabetes — consider gastroparesis / autonomic neuropathy if early satiety, nausea, or erratic bowel habit.' },
   { id: 'pcos',       label: 'PCOS', clinNote: 'Known PCOS — metabolic / hormonal overlap; relevant to bloating and bowel-habit interpretation.' },
-  { id: 'endo',       label: 'Endometriosis' },
+  { id: 'endo',       label: 'Endometriosis', clinNote: 'Known endometriosis — pelvic adhesion risk; consider alongside pelvic-floor/visceral findings.' },
   { id: 'lactose',    label: 'Lactose intolerance' },
   { id: 'foodallergy',label: 'Food allergy / intolerance', clinNote: 'Known food allergy/intolerance — factor into the food-reaction / IM read.' },
   { id: 'mood',       label: 'Diagnosed anxiety or depression' },
@@ -875,7 +875,7 @@ const FAMILY_HISTORY = [
   { id: 'fh_cancer', label: 'Bowel cancer', tier: 2, axis: 'history',
     reason: 'Family history of bowel/colorectal cancer — discuss colorectal screening (e.g. colonoscopy) per guidelines',
     note: 'Family history of bowel cancer — discuss colorectal screening per guidelines (esp. first-degree / under 50).',
-    invest: 'Colorectal screening / colonoscopy per guidelines' },
+    invest: 'FIT (faecal immunochemical test) or colorectal screening / colonoscopy per guidelines' },
 ];
 function familyHistory(extras) {
   const ids = new Set(((extras || {}).familyHistory) || []);
@@ -1079,7 +1079,7 @@ const RED_FLAGS = [
   { id: 'rf_nocturnal',  label: 'Gut symptoms that wake you from sleep at night' },
   // Threshold lowered to 45 and reframed around persistence (≥6 weeks) — early-onset
   // colorectal cancer is rising and a sustained change warrants review at any age.
-  { id: 'rf_newonset50', label: 'A new, persistent change in your bowel habit lasting 6 weeks or more (especially if you are over 45)' },
+  { id: 'rf_newonset50', label: 'A new, persistent change in your bowel habit lasting 6 weeks or more. This applies at any age, but is especially important if you are over 45.' },
   { id: 'rf_mass',       label: 'A lump or mass you (or a doctor) can feel in your abdomen' },
   // (Family history moved out of acute red flags — it's a risk factor, not an acute
   // alarm. Captured as a Family-history chip set and wired in triage instead.)
@@ -1348,7 +1348,13 @@ function axisProfile(score, ex, dys) {
   return {
     symptom:      { axis: 'symptom',      label: 'Symptom (gut)',          value: score.index,
                     band: score.severity && score.severity.label, validated: true,
-                    note: 'GSRS-based, validated instrument.' },
+                    // The underlying 15-item/5-cluster structure IS the
+                    // validated GSRS instrument (validated:true stays), but
+                    // this tool uses a MODIFIED 4-point scale (GSRS proper is
+                    // 7-point) and the displayed index is further adjusted by
+                    // stool-form/frequency nudges — the note must say so, not
+                    // claim an unmodified validated score.
+                    note: 'GSRS-based (modified 4-point scale); index includes stool-form/frequency adjustments — provisional.' },
     inflammatory: { axis: 'inflammatory', label: 'Inflammatory / immune',  value: n('IM'), band: bl('IM'),
                     validated: false, note: 'Investigator-built domain, draft pending pilot validation.' },
     nutrient:     { axis: 'nutrient',     label: 'Nutrient / absorption',  value: n('NU'), band: bl('NU'),
@@ -1453,12 +1459,27 @@ const ROME_ASSOC = [
   { id: 'rm_assoc_formchange', label: 'Pain comes with a change in stool consistency/appearance' },
 ];
 
-// ── ONE source of truth for bowel subtype ──────────────────────────────────
-// Both Rome IV classification AND the pattern engine derive bowel direction from
-// THIS function (off the GSRS Constipation/Diarrhoea cluster norms), so they can
-// never disagree on the same patient. Previously Rome IV used its own 0.3
-// thresholds while the patterns used 0.4 — a latent contradiction. Lives in
-// romeiv.js (loaded before patterns.js, which already requires this module).
+// ── ONE source of truth for bowel subtype (PATTERN FIRING) ─────────────────
+// constipation_dominant/diarrhoea_dominant (patterns.js) BOTH derive bowel
+// direction from THIS function (off the GSRS Constipation/Diarrhoea cluster
+// norms), so they can never disagree with each other. Previously Rome IV used
+// its own 0.3 thresholds while the patterns used 0.4 — a latent contradiction.
+// Lives in romeiv.js (loaded before patterns.js, which already requires this
+// module).
+//
+// Rome IV's DISPLAYED subtype label (below, romeDisplaySubtype) is a
+// SEPARATE function that layers Bristol stool form on top for THAT LABEL
+// ONLY — Bristol is the true Rome IV subtyping criterion, but must never
+// reach this function: constipation_dominant/diarrhoea_dominant firing (and
+// therefore triage tier) must stay driven by symptom-severity cluster norms
+// alone, not a single driver-card stool-form answer (same principle as the
+// nudge/pattern-firing separation in scoring.js's coreMean vs secNorm.GI) —
+// otherwise a Bristol answer could flip which of two mutually-exclusive
+// patterns fires. This means the Rome-IV-criteria label and the
+// constipation/diarrhoea PATTERN can occasionally disagree for a patient
+// whose Bristol answer contradicts their GSRS cluster pattern; that is
+// accepted as correct, not a bug — they measure different things (Rome IV's
+// own methodology vs this tool's severity-weighted symptom scoring).
 const BOWEL_HI = 0.3; // cluster-norm threshold for "this direction is prominent"
 function bowelSubtype(clusterNorm) {
   const cn = clusterNorm || {};
@@ -1468,6 +1489,21 @@ function bowelSubtype(clusterNorm) {
   if (c) return 'IBS-C';
   if (d) return 'IBS-D';
   return 'IBS-U';
+}
+
+// Rome IV's own subtyping criterion is predominant stool FORM (Bristol 1–2 vs
+// 6–7), not symptom severity — using cluster norms for the displayed Rome
+// subtype over-called IBS-M whenever both clusters carried some burden. A
+// single visit only records one Bristol observation (not the diary Rome IV
+// was validated against), so it can decisively resolve IBS-C/IBS-D but not
+// IBS-M — Bristol 3–5 (indeterminate) or unanswered falls back to the
+// cluster-norm read, which is the only route that can surface IBS-M.
+function romeDisplaySubtype(clusterNorm, bristol) {
+  if (typeof bristol === 'number') {
+    if (bristol <= 2) return 'IBS-C';
+    if (bristol >= 6) return 'IBS-D';
+  }
+  return bowelSubtype(clusterNorm);
 }
 
 // Single cross-sectional pass, NOT the prospective diary Rome IV was validated
@@ -1480,7 +1516,7 @@ function bowelSubtype(clusterNorm) {
 // patients — a near-exact duplicate of sx_duration, which every patient
 // already answers. Only fall back when rome.onset itself is unanswered
 // (preserves any historical visit that explicitly answered both).
-function classifyRomeIV(rome, clusterNorm, sxDuration) {
+function classifyRomeIV(rome, clusterNorm, sxDuration, bristol) {
   const r = rome || {};
   const onset = typeof r.onset === 'number' ? r.onset : (typeof sxDuration === 'number' ? sxDuration : null);
   const freqMet = typeof r.painFreq === 'number' && r.painFreq >= ROME_FREQ_MET;
@@ -1490,11 +1526,11 @@ function classifyRomeIV(rome, clusterNorm, sxDuration) {
   if (!answered) return { criteriaMet: false, answered: false, subtype: null, assocCount };
   const criteriaMet = freqMet && onsetMet && assocCount >= 2;
   if (!criteriaMet) return { criteriaMet: false, answered: true, subtype: null, assocCount };
-  return { criteriaMet: true, answered: true, subtype: bowelSubtype(clusterNorm), assocCount };
+  return { criteriaMet: true, answered: true, subtype: romeDisplaySubtype(clusterNorm, bristol), assocCount };
 }
 __e.ROME_FREQ = ROME_FREQ; __e.ROME_ONSET = ROME_ONSET; __e.ROME_ASSOC = ROME_ASSOC;
 __e.ROME_FREQ_MET = ROME_FREQ_MET; __e.ROME_ONSET_MET = ROME_ONSET_MET;
-__e.classifyRomeIV = classifyRomeIV; __e.bowelSubtype = bowelSubtype;
+__e.classifyRomeIV = classifyRomeIV; __e.bowelSubtype = bowelSubtype; __e.romeDisplaySubtype = romeDisplaySubtype;
 return __e;
 };
 
@@ -1524,6 +1560,11 @@ const av  = (a, id) => (a && typeof a[id] === 'number') ? a[id] : null;
 // a: sx_duration answer, passed through so classifyRomeIV can fall back to it
 // for onset (see romeiv.js comment) — every eval calling this must declare `a`.
 const romeSignal = (ex, s, wantSubtype, a) => {
+  // Deliberately omits `bristol` here — this read feeds pattern CONFIDENCE
+  // (coverage/corroboration), not the displayed Rome label, and must stay on
+  // the same cluster-norm-only subtype the pattern's own firing logic uses
+  // (see bowelSubtype()'s header comment) to avoid a driver-card Bristol
+  // answer shifting confidence math independent of what actually fired.
   const r = classifyRomeIV((ex && ex.rome) || {}, (s && s.clusterNorm) || {}, a && a.sx_duration);
   return { a: r.answered, t: r.criteriaMet && r.subtype === wantSubtype };
 };
@@ -1612,17 +1653,27 @@ const PATTERNS = [
       const iron   = ge(av(a, 'nu_iron'), 2);
       const mouth  = ge(av(a, 'nu_mouth'), 2);
       const giPresent = ge(gi(s), 0.2);
+      // D1: two more objective known-tier signals, same standing as
+      // nu_known_def — low BMI and a diagnosed EPI/bariatric-surgery history
+      // are themselves malabsorption risk factors, independent of a lab
+      // result the patient may not have had drawn yet. `a: true` for the
+      // condition/surgery flag since an empty selection is a complete answer
+      // (no conditions ticked), not missing data — unlike nu_known_def, which
+      // is a genuinely optional single item.
+      const lowBMI = { a: !!(ex.anthro && ex.anthro.bmi != null), t: !!(ex.anthro && ex.anthro.bmi != null && ex.anthro.bmi < 18.5) };
+      const epiOrBariatric = { a: true, t: (ex.conditions || []).includes('pancreas') || (ex.surgeries || []).includes('bariatric') };
       const proxyCount = [hair, iron, mouth].filter(x => x.t).length;
-      const signals = [known, hair, iron, mouth, giPresent];
-      // A lab-confirmed deficiency fires this pattern on its own, regardless
-      // of CURRENT GI symptom severity — a documented unexplained deficiency
-      // (e.g. post-coeliac-treatment, post-bariatric) still warrants review
-      // even when today's gut symptoms are mild; gating it behind giPresent
-      // would silently drop the referral-grade signal this pattern exists to
-      // catch. The lower-specificity symptom-proxy route (≥2 of 3) keeps the
-      // giPresent requirement, since those proxies are only meaningful
-      // alongside concurrent GI symptoms.
-      return { fires: known.t || (proxyCount >= 2 && giPresent.t), signals };
+      const signals = [known, hair, iron, mouth, giPresent, lowBMI, epiOrBariatric];
+      // A lab-confirmed deficiency, low BMI, or a diagnosed EPI/bariatric
+      // history each fire this pattern on their own, regardless of CURRENT GI
+      // symptom severity — a documented unexplained deficiency (e.g.
+      // post-coeliac-treatment) or an objective malabsorption risk factor
+      // still warrants review even when today's gut symptoms are mild; gating
+      // it behind giPresent would silently drop the referral-grade signal
+      // this pattern exists to catch. The lower-specificity symptom-proxy
+      // route (≥2 of 3) keeps the giPresent requirement, since those proxies
+      // are only meaningful alongside concurrent GI symptoms.
+      return { fires: known.t || lowBMI.t || epiOrBariatric.t || (proxyCount >= 2 && giPresent.t), signals };
     },
   },
   {
@@ -1681,8 +1732,15 @@ const PATTERNS = [
       const strain   = ge(av(a, 'ar_straining'), 2);
       const blockage = ge(av(a, 'ar_blockage'), 2);
       const maneuv   = ge(av(a, 'ar_maneuvers'), 1);
+      // Corroborating signal only — NOT a firing requirement. gsrs_incomplete
+      // (core, always-scored GI item) is a Rome IV dyssynergic-defecation
+      // corroborator; adding it to `signals` sharpens confidence for patients
+      // who already fire on the ar_* items, without loosening which patients
+      // fire (keeps the original incontinence-OR-(straining+blockage/maneuvers)
+      // specificity intact).
+      const incomplete = ge(av(a, 'gsrs_incomplete'), 2);
       const incont   = urge.t || passive.t || flatus.t; // any faecal-incontinence subtype
-      const signals = [urge, passive, flatus, strain, blockage, maneuv];
+      const signals = [urge, passive, flatus, strain, blockage, maneuv, incomplete];
       return { fires: incont || (strain.t && (blockage.t || maneuv.t)), signals };
     },
   },
@@ -1913,6 +1971,24 @@ function triage(score, patterns, firedFlags, dys, opts) {
   result.restrictionNote = restrictiveTried
     ? 'Low-FODMAP / elimination diet reported — if this was not dietitian-supervised, or has continued beyond ~4–8 weeks without structured reintroduction, flag for dietitian review (risk of nutritional inadequacy with unsupervised long-term restriction).'
     : null;
+  // Referred musculoskeletal/visceral pain (D3). A reported pain location that
+  // overlaps common referred-pain sites for gut pathology (low back, abdomen
+  // itself), alongside a prominent Pain cluster, is worth flagging as a
+  // possible referred/overlap presentation — same threshold (>=0.5) as the
+  // existing Tier-2 "Prominent abdominal-pain cluster" candidacy above.
+  // Context note only, never a Tier trigger on its own.
+  result.referredPainNote = (o.painRegion === 'low_back' || o.painRegion === 'abdomen') && pain != null && pain >= 0.5
+    ? `Reported ${o.painRegion === 'low_back' ? 'low back' : 'abdominal'} pain alongside a prominent abdominal-pain cluster — consider referred musculoskeletal/visceral overlap.`
+    : null;
+  // Disordered-eating / ARFID screening cue (D6). Significant food restriction
+  // (imp_food) reported alongside EITHER a restrictive diet history or a low
+  // BMI is worth a screening conversation before recommending further dietary
+  // restriction — a wiring-only note from data already collected, not a new
+  // screening instrument. Context note only, never a Tier trigger.
+  const lowBMI = !!(o.anthro && o.anthro.bmi != null && o.anthro.bmi < 18.5);
+  result.restrictionScreenNote = (typeof o.impFood === 'number' && o.impFood >= 2) && (restrictiveTried || lowBMI)
+    ? 'Significant food restriction reported alongside a restrictive diet history/low BMI — consider screening for disordered eating before recommending further dietary restriction.'
+    : null;
   // Management/interpretation guidance from diagnosed conditions (IBS, gallstones…).
   result.conditionGuidance = (o.conditionNotes && o.conditionNotes.length) ? o.conditionNotes.slice() : [];
   // Coeliac-serology timing (B3). Whenever a coeliac work-up is plausible —
@@ -1956,7 +2032,7 @@ function triage(score, patterns, firedFlags, dys, opts) {
     reflux_upper_gi: ['Empirical PPI trial (4–8 weeks)', 'GI referral if refractory, dysphagia, or unintentional weight loss', 'Review NSAID / aspirin / alcohol intake'],
     post_disruptor: ['Stool PCR if acutely symptomatic', 'C. difficile PCR if antibiotics in past 3 months', 'Consider a clinician-supervised probiotic trial (strain selection per indication; evidence is strain- and condition-specific)'],
     bloating_fermentation: ['SIBO breath test (lactulose or glucose H₂/CH₄)', 'Low-FODMAP dietitian referral', 'Note fibre/prebiotic paradox response if present'],
-    diarrhoea_dominant: ['Stool calprotectin + stool PCR', 'Coeliac screen (anti-tTG IgA, total IgA)', 'Consider bile acid malabsorption (empirical trial or SeHCAT)'],
+    diarrhoea_dominant: ['Stool calprotectin + stool PCR', 'Coeliac screen (anti-tTG IgA, total IgA)', 'FIT (faecal immunochemical test)', 'Consider bile acid malabsorption (empirical trial or SeHCAT)'],
     constipation_dominant: ['Dietary fibre and fluid intake assessment', 'Pelvic floor physiotherapy referral', 'Exclude hypothyroidism (TSH), hypercalcaemia'],
     mixed_bowel: ['Low-FODMAP dietitian referral', 'Visceral/pelvic manual therapy assessment', 'Gut-brain axis psychological assessment'],
     gut_brain: ['Consider PHQ-9 / GAD-7 if PSS-4 ≥ 10', 'Gut-directed hypnotherapy or CBT referral', 'Mind-body approach to symptom management'],
@@ -1997,21 +2073,23 @@ return __e;
 __modules['trend.js'] = function(__e){
 const { computeScores } = __req('scoring.js');
 const { detectPatterns } = __req('patterns.js');
-const { pss4Score } = __req('scales.js');
+const { pss4Score, anthropometrics } = __req('scales.js');
 
 function visitScore(v) {
   const a = v.answers || {}, ex = v.extras || {};
   // Must mirror the live computeAll()/computeScores() call and the CSV export's
   // drv object exactly (clusterFreq/romePainFreq feed the Index; rome feeds
-  // pattern confidence) — otherwise this recomputation silently disagrees with
-  // the index/band shown on the results screen and in the pilot CSV for the
-  // very same visit (A2 regression: previously omitted, up to ~15pt drift).
+  // pattern confidence; conditions/surgeries/anthro feed nutrient_malabsorption's
+  // D1 signals) — otherwise this recomputation silently disagrees with the
+  // index/band/patterns shown on the results screen and in the pilot CSV for
+  // the very same visit (A2 regression: previously omitted, up to ~15pt drift).
   const sc = computeScores(a, { bristol: ex.bristol, clusterFreq: ex.clusterFreq, romePainFreq: ex.rome && ex.rome.painFreq });
   const drv = {
     pss4Score: pss4Score(ex.pss4), bgAnxiety: a.bg_anxiety, bgMood: a.bg_mood,
     dietFibre: ex.dietFibre, dietProcessed: ex.dietProcessed,
     bristol: ex.bristol, meds: ex.meds, alcohol: ex.alcohol, activity: ex.activity,
     abxCourses: ex.abxCourses, dys: ex.dys, rome: ex.rome, // Dys-R + Rome inputs (keep trend patterns in sync with live)
+    conditions: ex.conditions, surgeries: ex.surgeries, anthro: anthropometrics(ex, {}),
   };
   const patterns = detectPatterns(sc, drv, a).map(p => p.id);
   return {
@@ -2140,7 +2218,7 @@ __e.blankDB = blankDB; __e.loadDB = loadDB; __e.saveDB = saveDB; __e.uid = uid; 
 function pilotExportCSV(db) {
   const { SECTIONS, QUESTIONS } = __req('schema.js');
   const { computeScores } = __req('scoring.js');
-  const { pss4Score, psychLoadScore, dietBurden, sleepBurden, dysbiosisLens, surgicalFlags } = __req('scales.js');
+  const { pss4Score, psychLoadScore, dietBurden, sleepBurden, dysbiosisLens, surgicalFlags, anthropometrics } = __req('scales.js');
   const { PATTERNS, detectPatterns } = __req('patterns.js');
   const { classifyRomeIV } = __req('romeiv.js');
   const d = normalise(db);
@@ -2186,10 +2264,11 @@ function pilotExportCSV(db) {
       const score = computeScores(a, { bristol: ex.bristol, clusterFreq: ex.clusterFreq, romePainFreq: ex.rome && ex.rome.painFreq });
       const ps = pss4Score(pss);
       const drv = { pss4Score: ps, bgAnxiety: a.bg_anxiety, bgMood: a.bg_mood, dietFibre: ex.dietFibre, dietProcessed: ex.dietProcessed,
-                    bristol: ex.bristol, meds, alcohol: ex.alcohol, activity: ex.activity, abxCourses: ex.abxCourses, dys: ex.dys, rome: ex.rome };
+                    bristol: ex.bristol, meds, alcohol: ex.alcohol, activity: ex.activity, abxCourses: ex.abxCourses, dys: ex.dys, rome: ex.rome,
+                    conditions: ex.conditions, surgeries: ex.surgeries, anthro: anthropometrics(ex, {}) };
       const fired = new Set(detectPatterns(score, drv, a).map(p => p.id));
       const rm = ex.rome || {};
-      const romeResult = classifyRomeIV(rm, score.clusterNorm, a.sx_duration);
+      const romeResult = classifyRomeIV(rm, score.clusterNorm, a.sx_duration, ex.bristol);
       const cf = ex.clusterFreq || {};
       const tried = (ex.treatmentsTried || []);
       rows.push([
@@ -2777,10 +2856,15 @@ function targetedSymptomsArea() {
 }
 
 // Card-level reveal gates (the only cards behind revealIf): pain + Rome both need
-// recurrent abdominal pain to be worth asking. Keyed by holder id.
+// recurrent abdominal pain to be worth asking. Also reveal on chronic symptom
+// duration (sx_duration >= the same ≥6-months band Rome IV's own onset
+// criterion uses, ROME_ONSET_MET) — a patient whose pain wasn't bothersome in
+// the last 2 weeks (gsrs_pain=0) but has a long-standing recurrent pattern
+// should still reach these cards, not be silently excluded from Rome
+// classification. Keyed by holder id.
 const CARD_REVEAL = {
-  'reveal-card-pain': { type: 'item', id: 'gsrs_pain', min: 1 },
-  'reveal-card-rome': { type: 'item', id: 'gsrs_pain', min: 1 },
+  'reveal-card-pain': { any: [{ type: 'item', id: 'gsrs_pain', min: 1 }, { type: 'item', id: 'sx_duration', min: 2 }] },
+  'reveal-card-rome': { any: [{ type: 'item', id: 'gsrs_pain', min: 1 }, { type: 'item', id: 'sx_duration', min: 2 }] },
 };
 
 // ONE reveal pass for sections, cards and items — all off the same revealMet()
@@ -2789,7 +2873,13 @@ const CARD_REVEAL = {
 // just don't clutter the form. The manual toggle forces everything visible.
 function refreshReveals() {
   const live = computeScores(QUESTIONS.map(q => (answers[q.id] == null ? null : answers[q.id])), { bristol: extras.bristol });
-  const ctx = { answers, clusterNorm: live.clusterNorm, flags: { pelvicRisk: obstetricHistory(extras).risk } };
+  // pelvicRisk also folds in prior adhesion-risk surgery and a reported
+  // endometriosis diagnosis (both independent pelvic-floor/visceral risk
+  // factors) — not just obstetric history — so the AR (bowel-control /
+  // evacuation) section auto-reveals for those patients too.
+  const pelvicRisk = obstetricHistory(extras).risk || surgicalFlags(extras).adhesion
+    || (extras.conditions || []).includes('endo');
+  const ctx = { answers, clusterNorm: live.clusterNorm, flags: { pelvicRisk } };
   const wrap = document.getElementById('targeted-wrap');
   const manual = !!(wrap && wrap.dataset.manual === '1');
   // Conditional sections
@@ -3001,6 +3091,7 @@ function conditionsCard() {
       const list = sel(); const i = list.indexOf(cnd.id);
       if (i >= 0) list.splice(i, 1); else { list.push(cnd.id); extras.conditionsNone = false; noneBtn.classList.remove('sel'); }
       b.classList.toggle('sel');
+      refreshReveals(); // D2: endo (pelvicRisk) can gate the AR section reveal
     };
     chips.appendChild(b);
   });
@@ -3008,6 +3099,7 @@ function conditionsCard() {
     extras.conditionsNone = !extras.conditionsNone;
     if (extras.conditionsNone) { extras.conditions = []; chips.querySelectorAll('.chip-opt').forEach(x => { if (x !== noneBtn) x.classList.remove('sel'); }); }
     noneBtn.classList.toggle('sel', extras.conditionsNone);
+    refreshReveals();
   };
   chips.appendChild(noneBtn);
   body.appendChild(chips); card.appendChild(body);
@@ -3237,7 +3329,7 @@ function romeCard() {
   const body = el('div', { class: 'sec-body' });
   body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' },
     'Optional — helps classify a constipation/diarrhoea/mixed pattern. Skip if unsure; not part of the GI score.'));
-  body.appendChild(chipRow('On average, how often do you get abdominal pain?', ROME_FREQ,
+  body.appendChild(chipRow('Over the last 3 months, on average, how often do you get abdominal pain?', ROME_FREQ,
     () => extras.rome.painFreq, v => extras.rome.painFreq = v));
   // No separate onset question here — it duplicated sx_duration (identical
   // recall bands, asked of every patient already). Rome IV classification and
@@ -3379,6 +3471,9 @@ function computeAll() {
   const sv = score.severity;
   const conf = scoreConfidence(score);
   const ps = pss4Score(extras.pss4);
+  // Computed before driverExtras (below) so nutrient_malabsorption's low-BMI
+  // signal (patterns.js) can read it via ex.anthro.
+  const anthro = anthropometrics(extras, session);
   const driverExtras = {
     pss4Score: ps, nrsPain: extras.nrsPain, bristol: extras.bristol,
     bgAnxiety: answers.bg_anxiety, bgMood: answers.bg_mood,
@@ -3391,18 +3486,18 @@ function computeAll() {
     rome: extras.rome,
     medsOther: extras.medsOther,
     conditions: extras.conditions,
+    anthro,
   };
   const patterns = detectPatterns(score, driverExtras, answers);
   const fired = firedRedFlags(redflags);
   const lens = dysbiosisLens(extras);
-  const rome = classifyRomeIV(extras.rome, score.clusterNorm, answers.sx_duration);
+  const rome = classifyRomeIV(extras.rome, score.clusterNorm, answers.sx_duration, extras.bristol);
   const profile = axisProfile(score, driverExtras, lens);
   const heads = headlineOutputs(score, driverExtras, lens);
   const conditions = knownConditions(extras);
   const meds = medConfounders(extras);
   const famhx = familyHistory(extras);
   const obstetric = obstetricHistory(extras);
-  const anthro = anthropometrics(extras, session);
   const autonomicFlag = (typeof answers.sy_orthostatic === 'number' && answers.sy_orthostatic >= 2)
     || (typeof answers.sy_palpitations === 'number' && answers.sy_palpitations >= 2);
   // Gynaecological / endometriosis overlap: cyclical flare (≥ moderate) with
@@ -3447,6 +3542,8 @@ function computeAll() {
     immuneKnownDx,
     obstetric,
     anthro,
+    painRegion: extras.painRegion,
+    impFood: answers.imp_food,
   });
   return { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, correlateLoad, meds, famhx, obstetric, anthro };
 }
@@ -3698,6 +3795,10 @@ function triageCard(tri, rome, showInvestigations) {
     '🌾 ' + esc(tri.coeliacTimingNote)));
   if (tri.restrictionNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
     '🥗 ' + esc(tri.restrictionNote)));
+  if (tri.referredPainNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
+    '🦴 ' + esc(tri.referredPainNote)));
+  if (tri.restrictionScreenNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
+    '⚠️ ' + esc(tri.restrictionScreenNote)));
   // Patient view (showInvestigations=false) suppresses "Also worth noting" at
   // Tier 1 — a refer instruction should not sit beside "self-management" or
   // "probiotic trial" framing. Clinician view keeps the full tier landscape.
@@ -3830,7 +3931,7 @@ function printSummary(mode) {
 // Plain-language, patient-facing one-liners for each headline output. Keep these
 // jargon-free — no "axis", "norm", "GSRS"; the clinician print carries the detail.
 const PT_HEAD_DESC = {
-  gut_symptom_burden: 'How heavy your gut symptoms feel overall, from a validated questionnaire.',
+  gut_symptom_burden: 'How heavy your gut symptoms feel overall, based on a widely-used symptom questionnaire.',
   nutrient_malabsorption_risk: 'An estimate of whether gut symptoms may be affecting how well you absorb nutrients.',
   disruption_load: 'Medications or history that can upset the balance of gut bacteria.',
   dysbiosis_correlate_load: 'Symptom patterns often seen alongside changes in gut bacteria.',
@@ -3912,7 +4013,8 @@ function buildPatientPrint(c) {
     tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : [],
     tri.durationNote ? [tri.durationNote] : [], tri.bowelFreqNote ? [tri.bowelFreqNote] : [],
     tri.smokingNote ? [tri.smokingNote] : [], tri.treatmentsTriedNote ? [tri.treatmentsTriedNote] : [],
-    tri.coeliacTimingNote ? [tri.coeliacTimingNote] : [], tri.restrictionNote ? [tri.restrictionNote] : []);
+    tri.coeliacTimingNote ? [tri.coeliacTimingNote] : [], tri.restrictionNote ? [tri.restrictionNote] : [],
+    tri.referredPainNote ? [tri.referredPainNote] : [], tri.restrictionScreenNote ? [tri.restrictionScreenNote] : []);
   h += `<div class="pr-section"><div class="pr-sh">What this means for you</div>
     <div class="pr-triage ${tierCls}">
       <div style="font-weight:700;font-size:12px">Suggested next step: Tier ${tri.level} — ${esc(tri.label)}</div>
@@ -4068,7 +4170,7 @@ function buildClinicianPrint(c) {
       <div style="margin-top:3px;font-size:11px">${esc(tri.action)}</div>
       ${tri.reasons.length ? `<div style="font-size:10.5px;margin-top:4px">Reasons: ${tri.reasons.map(r => esc(r.text)).join(' · ')}</div>` : ''}
       ${tri.alsoConsider.length ? `<div style="font-size:10.5px;margin-top:3px">Also consider: ${tri.alsoConsider.map(a => `${esc(a.label)} (${a.reasons.map(r => esc(r.text)).join('; ')})`).join(' / ')}</div>` : ''}
-      ${[].concat(tri.conditionGuidance || [], tri.familyNotes || [], tri.conditionNote ? [tri.conditionNote] : [], tri.autonomicNote ? [tri.autonomicNote] : [], tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [], tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : [], tri.durationNote ? [tri.durationNote] : [], tri.bowelFreqNote ? [tri.bowelFreqNote] : [], tri.smokingNote ? [tri.smokingNote] : [], tri.treatmentsTriedNote ? [tri.treatmentsTriedNote] : [], tri.coeliacTimingNote ? [tri.coeliacTimingNote] : [], tri.restrictionNote ? [tri.restrictionNote] : []).map(n => `<div style="font-size:10.5px;margin-top:3px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
+      ${[].concat(tri.conditionGuidance || [], tri.familyNotes || [], tri.conditionNote ? [tri.conditionNote] : [], tri.autonomicNote ? [tri.autonomicNote] : [], tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [], tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : [], tri.durationNote ? [tri.durationNote] : [], tri.bowelFreqNote ? [tri.bowelFreqNote] : [], tri.smokingNote ? [tri.smokingNote] : [], tri.treatmentsTriedNote ? [tri.treatmentsTriedNote] : [], tri.coeliacTimingNote ? [tri.coeliacTimingNote] : [], tri.restrictionNote ? [tri.restrictionNote] : [], tri.referredPainNote ? [tri.referredPainNote] : [], tri.restrictionScreenNote ? [tri.restrictionScreenNote] : []).map(n => `<div style="font-size:10.5px;margin-top:3px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
     </div>
     ${tri.investigations && tri.investigations.length ? `
       <div style="font-weight:600;font-size:11px;margin:6px 0 3px">Suggested investigations / management:</div>

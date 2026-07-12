@@ -820,5 +820,197 @@ ok(b4TriNone.restrictionNote === null, 'restrictionNote is null when no restrict
 ok(/tri\.restrictionNote/.test(ptSrc) && /tri\.restrictionNote/.test(clSrc),
   'restrictionNote wired into both print builders');
 
+// C1 regression. romeDisplaySubtype() layers Bristol on top of bowelSubtype()
+// for the DISPLAYED Rome subtype only — bowelSubtype() itself (pattern-firing
+// source of truth) must stay untouched (2-arg, cluster-norm-only).
+ok(rome.bowelSubtype.length === 1, 'bowelSubtype() unchanged — still cluster-norm-only, no bristol param (C1)');
+ok(rome.romeDisplaySubtype({}, 1) === 'IBS-C', 'romeDisplaySubtype: Bristol type 1 (no cluster signal) → IBS-C');
+ok(rome.romeDisplaySubtype({}, 2) === 'IBS-C', 'romeDisplaySubtype: Bristol type 2 → IBS-C');
+ok(rome.romeDisplaySubtype({}, 6) === 'IBS-D', 'romeDisplaySubtype: Bristol type 6 → IBS-D');
+ok(rome.romeDisplaySubtype({}, 7) === 'IBS-D', 'romeDisplaySubtype: Bristol type 7 → IBS-D');
+const c1BothProminent = { Constipation: 0.5, Diarrhoea: 0.5 };
+ok(rome.romeDisplaySubtype(c1BothProminent, null) === 'IBS-M', 'romeDisplaySubtype: Bristol unanswered, both clusters prominent → falls back to IBS-M (unchanged pre-change behaviour)');
+ok(rome.romeDisplaySubtype(c1BothProminent, 4) === 'IBS-M', 'romeDisplaySubtype: Bristol indeterminate (3-5) → falls back to cluster-norm read, not forced to a single direction');
+ok(rome.romeDisplaySubtype(c1BothProminent, null) === rome.bowelSubtype(c1BothProminent),
+  'romeDisplaySubtype fallback matches bowelSubtype exactly when Bristol is unanswered (no behaviour change for that case)');
+
+// C1: classifyRomeIV's 4th param threads through to the displayed subtype.
+const c1Rome = { painFreq: 5, onset: 4, rm_assoc_defecation: true, rm_assoc_freqchange: true };
+const c1Result = rome.classifyRomeIV(c1Rome, {}, null, 1);
+ok(c1Result.criteriaMet === true && c1Result.subtype === 'IBS-C', 'classifyRomeIV(...,bristol=1) surfaces Bristol-driven IBS-C subtype end-to-end');
+const c1ResultNoBristol = rome.classifyRomeIV(c1Rome, {}, null);
+ok(c1ResultNoBristol.subtype === 'IBS-U', 'classifyRomeIV without bristol arg is unchanged (backward compatible, falls back to cluster norms)');
+
+// C1 anti-regression: pattern firing (constipation_dominant/diarrhoea_dominant)
+// must NOT flip based on Bristol contradicting the cluster-norm direction —
+// this is the exact bug class A1 fixed; C1 must not reintroduce it via a
+// different path. romeSignal() (patterns.js) deliberately omits bristol.
+const c1PatFixture = { gsrs_diarrhoea: 3, gsrs_urgency: 3, gsrs_loose: 3 }; // Diarrhoea cluster prominent
+const c1PatScoreNoBristol = scoring.computeScores(c1PatFixture, {});
+const c1PatScoreWithBristol = scoring.computeScores(c1PatFixture, { bristol: 1 }); // Bristol says constipated
+const c1PatsNoBristol = patterns.detectPatterns(c1PatScoreNoBristol, {}, c1PatFixture);
+const c1PatsWithBristol = patterns.detectPatterns(c1PatScoreWithBristol, { bristol: 1 }, c1PatFixture);
+ok(c1PatsNoBristol.some(p => p.id === 'diarrhoea_dominant') === c1PatsWithBristol.some(p => p.id === 'diarrhoea_dominant'),
+  'diarrhoea_dominant firing is unchanged by a contradicting Bristol answer (C1 does not leak into pattern firing)');
+ok(!c1PatsWithBristol.some(p => p.id === 'constipation_dominant'),
+  'constipation_dominant does NOT fire purely because Bristol contradicts the cluster-norm direction (anti-regression for the A1 bug class)');
+
+// C2 regression. The Symptom axis note no longer overclaims an unmodified
+// validated instrument.
+ok(!/'GSRS-based, validated instrument\.'/.test(html), 'old overreaching "validated instrument" note string removed (C2)');
+ok(/'GSRS-based \(modified 4-point scale\); index includes stool-form\/frequency adjustments — provisional\.'/.test(html),
+  'new accurate provisional note string present (C2)');
+ok(/symptom:\s*\{ axis: 'symptom',[\s\S]{0,300}validated: true,/.test(html),
+  'validated:true is unchanged — the underlying GSRS structure itself is still the validated instrument (C2)');
+
+// C4 regression checks.
+ok(/Over the last 3 months, on average, how often do you get abdominal pain\?/.test(html),
+  'Rome pain-frequency stem carries the "last 3 months" time anchor (C4)');
+ok(!/'On average, how often do you get abdominal pain\?'/.test(html),
+  'old Rome pain-frequency stem (without the time anchor) is gone (C4)');
+
+// Pain/Rome card reveal now fires on chronicity too, even when gsrs_pain===0.
+ok(schema.revealMet(schema.CARD_REVEAL ? schema.CARD_REVEAL['reveal-card-pain'] : { any: [{ type: 'item', id: 'gsrs_pain', min: 1 }, { type: 'item', id: 'sx_duration', min: 2 }] },
+  { answers: { gsrs_pain: 0, sx_duration: 2 } }) === true,
+  'pain/Rome card reveals on chronic sx_duration even when gsrs_pain is 0 (C4)');
+ok(schema.revealMet({ any: [{ type: 'item', id: 'gsrs_pain', min: 1 }, { type: 'item', id: 'sx_duration', min: 2 }] },
+  { answers: { gsrs_pain: 1, sx_duration: 0 } }) === true,
+  'pain/Rome card still reveals on gsrs_pain alone (unchanged behaviour, C4)');
+ok(schema.revealMet({ any: [{ type: 'item', id: 'gsrs_pain', min: 1 }, { type: 'item', id: 'sx_duration', min: 2 }] },
+  { answers: { gsrs_pain: 0, sx_duration: 0 } }) === false,
+  'pain/Rome card stays hidden when neither pain nor chronicity is present (C4)');
+ok(/'reveal-card-pain': \{ any: \[/.test(html) && /'reveal-card-rome': \{ any: \[/.test(html),
+  'CARD_REVEAL wires the any-branch for both pain and Rome cards (source check, C4)');
+
+// rf_newonset50 wording split — age cue is its own sentence, same firing logic.
+const rfNewonset50 = req('redflags.js').RED_FLAGS.find(f => f.id === 'rf_newonset50');
+ok(/This applies at any age, but is especially important if you are over 45\./.test(rfNewonset50.label),
+  'rf_newonset50 age cue is its own sentence, not a parenthetical qualifier (C4)');
+ok(/lasting 6 weeks or more\./.test(rfNewonset50.label), 'rf_newonset50 still states the 6-week persistence threshold (C4)');
+
+// De-jargon: gut_symptom_burden patient copy no longer claims an unqualified
+// "validated questionnaire" (same overclaim as C2, different string).
+ok(!/'How heavy your gut symptoms feel overall, from a validated questionnaire\.'/.test(html),
+  'gut_symptom_burden patient-copy overclaim removed (C4)');
+ok(/'How heavy your gut symptoms feel overall, based on a widely-used symptom questionnaire\.'/.test(html),
+  'gut_symptom_burden patient copy uses accurate wording (C4)');
+ok(/dysbiosis_correlate_load: 'Symptom patterns often seen alongside changes in gut bacteria\.'/.test(html),
+  'dysbiosis_correlate_load patient copy stays plain-language (C4, confirmed already jargon-free)');
+
+// D5 regression. FIT added to both the family-cancer-history investigation and
+// diarrhoea_dominant's investigation list.
+const fhCancer = scales.FAMILY_HISTORY.find(f => f.id === 'fh_cancer');
+ok(/FIT \(faecal immunochemical test\)/.test(fhCancer.invest), 'FIT added to fh_cancer investigation text (D5)');
+ok(/FIT \(faecal immunochemical test\)/.test(html.match(/diarrhoea_dominant: \[[^\]]*\]/)[0]),
+  'FIT added to diarrhoea_dominant investigation list (D5)');
+
+// D2 regression. endo now carries a clinNote (surfaces via
+// knownConditions().notes → triage.conditionGuidance, already-wired
+// mechanism — no triage.js change needed).
+const d2Endo = scales.KNOWN_CONDITIONS.find(c => c.id === 'endo');
+ok(!!d2Endo.clinNote && /pelvic adhesion risk/.test(d2Endo.clinNote), 'endo now has a clinNote (D2)');
+const d2Conditions = scales.knownConditions({ conditions: ['endo'] });
+ok(d2Conditions.notes.some(n => /pelvic adhesion risk/.test(n)), 'endo clinNote surfaces via knownConditions().notes end-to-end (D2)');
+
+// pelvicRisk composition — each of the three OR'd sources independently true.
+ok(scales.surgicalFlags({ surgeries: ['adhesion_surgery'] }).adhesion !== undefined,
+  'sanity: surgicalFlags().adhesion is a real field on the returned object');
+const d2AdhesionSurgeryId = scales.SURGERIES.find(s => s.adhesion) && scales.SURGERIES.find(s => s.adhesion).id;
+ok(!!d2AdhesionSurgeryId, 'sanity: at least one SURGERIES entry is flagged adhesion:true');
+ok(scales.surgicalFlags({ surgeries: [d2AdhesionSurgeryId] }).adhesion === true,
+  'an adhesion-flagged surgery sets surgicalFlags().adhesion (one of pelvicRisk\'s three OR sources, D2)');
+ok(/pelvicRisk = obstetricHistory\(extras\)\.risk \|\| surgicalFlags\(extras\)\.adhesion\s*\n\s*\|\| \(extras\.conditions \|\| \[\]\)\.includes\('endo'\)/.test(html),
+  'pelvicRisk composes obstetric history OR adhesion surgery OR endo condition (source check, D2)');
+
+// D4 regression. gsrs_incomplete is a corroborating signal for pelvic_floor,
+// not a firing requirement — existing firing fixtures must be unchanged
+// (regression guard), and the new signal appears in the pattern's output.
+const d4Fixture = { ar_incont_urge: 3, ar_straining: 3, ar_blockage: 3 };
+const d4Score = scoring.computeScores(Object.assign({}, d4Fixture), {});
+const d4Pats = patterns.detectPatterns(d4Score, {}, d4Fixture);
+const d4PF = d4Pats.find(p => p.id === 'pelvic_floor');
+ok(!!d4PF, 'pelvic_floor still fires on the existing incontinence fixture unchanged (D4 regression guard)');
+ok(d4PF.signalTotal === 7, 'pelvic_floor now carries 7 signals (was 6) — gsrs_incomplete added (D4)');
+// Firing logic itself (incont || (strain && (blockage||maneuv))) is untouched —
+// a strain-only fixture without incontinence, blockage, or maneuvers must NOT fire
+// merely because gsrs_incomplete is high.
+const d4NoFire = { ar_straining: 3, gsrs_incomplete: 3 };
+const d4NoFireScore = scoring.computeScores(d4NoFire, {});
+const d4NoFirePats = patterns.detectPatterns(d4NoFireScore, {}, d4NoFire);
+ok(!d4NoFirePats.some(p => p.id === 'pelvic_floor'),
+  'pelvic_floor does NOT fire on gsrs_incomplete alone (still not a firing requirement, D4)');
+
+// D1 regression. Low BMI or a diagnosed EPI/bariatric history fires
+// nutrient_malabsorption on its own, independent of giPresent — mirrors the
+// nu_known_def standalone-fire logic from the prior tranche.
+const d1BaseAnswers = { gsrs_heartburn: 0 }; // GI absent → giPresent false
+const d1BaseScore = scoring.computeScores(d1BaseAnswers, {});
+ok((d1BaseScore.secNorm.GI || 0) < 0.2, 'sanity: d1BaseAnswers fixture keeps giPresent false');
+
+const d1LowBMI = scales.anthropometrics({ heightCm: 170, weightKg: 50 }, {});
+ok(d1LowBMI.bmi < 18.5, 'sanity: d1LowBMI fixture is actually under the 18.5 threshold');
+const d1PatsLowBMI = patterns.detectPatterns(d1BaseScore, { anthro: d1LowBMI }, d1BaseAnswers);
+ok(d1PatsLowBMI.some(p => p.id === 'nutrient_malabsorption'), 'nutrient_malabsorption fires on low BMI alone, GI absent (D1)');
+
+const d1PatsPancreas = patterns.detectPatterns(d1BaseScore, { conditions: ['pancreas'] }, d1BaseAnswers);
+ok(d1PatsPancreas.some(p => p.id === 'nutrient_malabsorption'), 'nutrient_malabsorption fires on a diagnosed pancreatic/EPI condition alone (D1)');
+
+const d1PatsBariatric = patterns.detectPatterns(d1BaseScore, { surgeries: ['bariatric'] }, d1BaseAnswers);
+ok(d1PatsBariatric.some(p => p.id === 'nutrient_malabsorption'), 'nutrient_malabsorption fires on bariatric-surgery history alone (D1)');
+
+const d1PatsNone = patterns.detectPatterns(d1BaseScore, { anthro: scales.anthropometrics({}, {}), conditions: [], surgeries: [] }, d1BaseAnswers);
+ok(!d1PatsNone.some(p => p.id === 'nutrient_malabsorption'), 'nutrient_malabsorption does not fire with none of the known-tier signals present (D1 regression guard)');
+
+// driverExtras carries anthro end-to-end (source check on computeAll()).
+ok(/const anthro = anthropometrics\(extras, session\);/.test(html) && /driverExtras = \{[\s\S]{0,900}anthro,/.test(html),
+  'computeAll() computes anthro before driverExtras and includes it (D1)');
+const d1DrvSiteMatches = html.match(/conditions: ex\.conditions, surgeries: ex\.surgeries, anthro: anthropometrics\(ex, \{\}\)/g) || [];
+ok(d1DrvSiteMatches.length === 2,
+  'both CSV export AND trend.js visitScore() drv objects carry conditions/surgeries/anthro for pattern-firing parity (D1)');
+
+// D3 regression. referredPainNote fires on low-back/abdominal pain location +
+// a prominent Pain cluster (>=0.5), same threshold as the existing Tier-2
+// "Prominent abdominal-pain cluster" check. Context note only, never a Tier
+// trigger on its own.
+const d3PainAnswers = { gsrs_pain: 3 }; // Pain cluster prominent (norm >= 0.5)
+const d3PainScore = scoring.computeScores(d3PainAnswers, {});
+ok((d3PainScore.clusterNorm.Pain || 0) >= 0.5, 'sanity: d3PainAnswers fixture keeps the Pain cluster >= 0.5');
+const d3TriLowBack = triage(d3PainScore, [], [], { count: 0 }, { painRegion: 'low_back' });
+ok(!!d3TriLowBack.referredPainNote && /low back/.test(d3TriLowBack.referredPainNote), 'referredPainNote fires for low_back painRegion + prominent Pain cluster (D3)');
+const d3TriAbdomen = triage(d3PainScore, [], [], { count: 0 }, { painRegion: 'abdomen' });
+ok(!!d3TriAbdomen.referredPainNote && /abdominal/.test(d3TriAbdomen.referredPainNote), 'referredPainNote fires for abdomen painRegion + prominent Pain cluster (D3)');
+const d3TriOther = triage(d3PainScore, [], [], { count: 0 }, { painRegion: 'joints' });
+ok(d3TriOther.referredPainNote === null, 'referredPainNote does not fire for a non-referred-pain region (joints) (D3)');
+const d3TriNoRegion = triage(d3PainScore, [], [], { count: 0 }, {});
+ok(d3TriNoRegion.referredPainNote === null, 'referredPainNote does not fire when painRegion is unset (D3)');
+const d3MildPainAnswers = { gsrs_pain: 1 }; // Pain cluster below 0.5
+const d3MildPainScore = scoring.computeScores(d3MildPainAnswers, {});
+ok((d3MildPainScore.clusterNorm.Pain || 0) < 0.5, 'sanity: d3MildPainAnswers fixture keeps the Pain cluster below 0.5');
+const d3TriMild = triage(d3MildPainScore, [], [], { count: 0 }, { painRegion: 'low_back' });
+ok(d3TriMild.referredPainNote === null, 'referredPainNote does not fire on painRegion alone without a prominent Pain cluster (D3)');
+ok(/tri\.referredPainNote/.test(ptSrc) && /tri\.referredPainNote/.test(clSrc),
+  'referredPainNote wired into both print builders (D3)');
+
+// D6 regression. restrictionScreenNote fires on imp_food>=2 AND (a restrictive
+// diet history OR low BMI) — a wiring-only note, not a new screening instrument.
+const d6Base = triage(scoring.computeScores({ gsrs_heartburn: 1 }, {}), [], [], { count: 0 }, { impFood: 2, treatmentsTried: ['Low-FODMAP diet'] });
+ok(!!d6Base.restrictionScreenNote, 'restrictionScreenNote fires on imp_food>=2 + Low-FODMAP diet history (D6)');
+const d6LowBMI = triage(scoring.computeScores({ gsrs_heartburn: 1 }, {}), [], [], { count: 0 }, { impFood: 2, anthro: { bmi: 17 } });
+ok(!!d6LowBMI.restrictionScreenNote, 'restrictionScreenNote fires on imp_food>=2 + low BMI alone (D6)');
+const d6ImpFoodOnly = triage(scoring.computeScores({ gsrs_heartburn: 1 }, {}), [], [], { count: 0 }, { impFood: 2 });
+ok(d6ImpFoodOnly.restrictionScreenNote === null, 'restrictionScreenNote is null when imp_food>=2 alone (no restrictive history/low BMI) (D6)');
+const d6RestrictOnly = triage(scoring.computeScores({ gsrs_heartburn: 1 }, {}), [], [], { count: 0 }, { treatmentsTried: ['Low-FODMAP diet'] });
+ok(d6RestrictOnly.restrictionScreenNote === null, 'restrictionScreenNote is null when restrictive history alone (no imp_food>=2) (D6)');
+ok(/tri\.restrictionScreenNote/.test(ptSrc) && /tri\.restrictionScreenNote/.test(clSrc),
+  'restrictionScreenNote wired into both print builders (D6)');
+
+// D2 follow-up (browser-caught). conditionsCard()'s chip toggle must call
+// refreshReveals() — pelvicRisk now depends on extras.conditions (endo), so
+// without this the AR section silently stayed hidden after selecting
+// Endometriosis until some unrelated answer triggered a refresh.
+const conditionsCardFn = html.match(/function conditionsCard\(\)\s*\{[\s\S]*?\n\}/);
+ok(!!conditionsCardFn && (conditionsCardFn[0].match(/refreshReveals\(\)/g) || []).length === 2,
+  'conditionsCard() chip toggle AND "None of these" toggle both call refreshReveals() (D2 browser-caught fix)');
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);
