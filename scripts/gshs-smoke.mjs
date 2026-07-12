@@ -32,6 +32,7 @@ const patterns = req('patterns.js');
 const triage = req('triage.js').triage;
 const rome = req('romeiv.js');
 const storage = req('storage.js');
+const trend = req('trend.js');
 
 let failed = 0;
 const ok = (cond, label) => { console.log(`${cond ? 'ok  ' : 'FAIL'} - ${label}`); if (!cond) failed++; };
@@ -301,6 +302,23 @@ ok(/column-count:2/.test(clSrc), 'clinician: item-level responses use two column
 ok(/function clinicalImpression\(c\)/.test(html) && /function physioCandidacy\(tri\)/.test(html), 'clinician: impression + physio helpers defined');
 ok(/function prBandPill\(band\)/.test(html) && /function prProv\(validated\)/.test(html), 'clinician: print band-pill + provenance helpers defined');
 
+// A4 regression. physioCandidacy()'s regex must not match the bare word
+// "visceral" (used as GI-motility jargon in constipation_dominant's label,
+// NOT a manual-therapy signal) — previously this mis-flagged plain IBS-C as
+// physiotherapy candidacy. Extract the function body and check the regex
+// literal directly, plus confirm the constipation label no longer uses the
+// ambiguous word at all.
+const physioFnMatch = html.match(/function physioCandidacy\(tri\) \{[\s\S]*?\n\}/);
+const physioSrc = physioFnMatch ? physioFnMatch[0] : '';
+ok(!!physioSrc, 'physioCandidacy function body extracted for regex check');
+const regexLiteralMatch = physioSrc.match(/\/[^/]*manual[^/]*\/i/);
+ok(!!regexLiteralMatch && !/\bvisceral\b/.test(regexLiteralMatch[0]),
+  'physioCandidacy regex no longer matches bare "visceral" (A4: no IBS-C mis-flag)');
+ok(!/'Constipation-dominant \(visceral/.test(html), 'constipation_dominant label no longer contains "visceral"');
+ok(/'Constipation-dominant \(slow-transit\) pattern'/.test(html), 'constipation_dominant relabelled to slow-transit');
+// Adhesion-surgery candidacy (a genuine manual-therapy signal) still matches.
+ok(/manual\[- \]therapy|pelvic-floor/.test(physioSrc), 'physioCandidacy regex still matches genuine manual-therapy/pelvic-floor wording');
+
 // 29. Clinician TAB (on-screen) parity — source-level (DOM renderer not loadable).
 const rcFn = html.match(/function renderClinician\(\)\s*\{[\s\S]*?\n\}\n/);
 ok(!!rcFn, 'renderClinician present');
@@ -509,6 +527,63 @@ const pat33Freq = patterns.detectPatterns(refluxWithFreq, { dys: {} }, refluxMil
 ok(JSON.stringify(pat33.map(p => p.id)) === JSON.stringify(pat33Freq.map(p => p.id)),
   'pattern firing is identical with/without the frequency nudge (only the Index moved)');
 
+// 33d2 (A1 regression). secNorm.GI itself — which patterns.gi() reads directly
+// — must be the UN-NUDGED cluster mean. Construct a fixture whose raw GI mean
+// sits just under the giPresent threshold (0.2) used by nutrient_malabsorption,
+// diarrhoea_dominant-adjacent, gut_brain and inflammatory_immune, but which a
+// full frequency nudge alone would push over 0.2 if the bug were present.
+// Reflux only, sum=1/6 ≈ 0.167 raw; nudge alone can add up to +0.15 → 0.317 if
+// (bug) secNorm.GI were nudged. Pair with nu_known_def (lab-confirmed
+// deficiency) so nutrient_malabsorption's only remaining gate is giPresent.
+// Uses the proxyCount>=2 route (hair+iron, no lab-confirmed nu_known_def),
+// which still requires giPresent — B2 made nu_known_def alone fire
+// regardless of giPresent, so it can no longer isolate this gate.
+const giGateAnswers = { gsrs_heartburn: 1, gsrs_regurg: 0, nu_hair: 2, nu_iron: 2 };
+const giGateNoFreq = scoring.computeScores(giGateAnswers, {});
+const giGateWithFreq = scoring.computeScores(giGateAnswers, { clusterFreq: { Reflux: 3 } });
+ok(giGateNoFreq.secNorm.GI < 0.2 && giGateWithFreq.secNorm.GI < 0.2,
+  'secNorm.GI stays UN-NUDGED (below giPresent threshold) regardless of frequency answers — A1 regression');
+ok(giGateWithFreq.index > giGateNoFreq.index,
+  'the Index itself still rises with the frequency nudge (nudge still reaches score.index)');
+const patGateNoFreq = patterns.detectPatterns(giGateNoFreq, { dys: {} }, giGateAnswers);
+const patGateWithFreq = patterns.detectPatterns(giGateWithFreq, { dys: {} }, giGateAnswers);
+ok(!patGateNoFreq.some(p => p.id === 'nutrient_malabsorption') && !patGateWithFreq.some(p => p.id === 'nutrient_malabsorption'),
+  'nutrient_malabsorption does not fire on driver-only frequency answers alone (A1: no Tier-4-to-Tier-1 flip via secNorm.GI leak)');
+
+// A2 regression. trend.js's visitScore() must recompute the SAME index as the
+// live computeAll()/CSV path for the same visit — previously it dropped
+// clusterFreq/romePainFreq and could disagree by up to ~15 points (the hero
+// card showing one number, the progress/trend view showing another).
+const a2Answers = { gsrs_heartburn: 2, gsrs_regurg: 2 };
+const a2Extras = { bristol: null, clusterFreq: { Reflux: 3 }, rome: { painFreq: null } };
+const a2Live = scoring.computeScores(a2Answers, { bristol: a2Extras.bristol, clusterFreq: a2Extras.clusterFreq, romePainFreq: a2Extras.rome.painFreq });
+const a2Trend = trend.visitScore({ id: 'v1', date: 1, answers: a2Answers, extras: a2Extras });
+ok(a2Trend.index === a2Live.index, `trend visitScore().index (${a2Trend.index}) matches live computeScores().index (${a2Live.index})`);
+ok(a2Trend.index > 0, 'sanity: the frequency nudge is actually present in this fixture (index > un-nudged baseline)');
+
+// A3 regression. A Tier-1 (refer) result must not carry reassuring lower-tier
+// framing for the PATIENT — but the underlying candidacy data must still be
+// present (clinician view keeps it). Two checks: (a) the tri object itself
+// still computes alsoConsider (data intact for clinicians), gated by a
+// separate suppressAlsoConsiderForPatient flag; (b) the flag is true only
+// when primary === Tier 1.
+const a3Severe = { gsrs_heartburn: 3, gsrs_regurg: 3, gsrs_pain: 3, gsrs_bloating: 3, gsrs_burping: 3,
+  gsrs_constip: 3, gsrs_hard: 3, gsrs_incomplete: 3, gsrs_diarrhoea: 3, gsrs_urgency: 3, gsrs_loose: 3,
+  gsrs_gas: 3, gsrs_nausea: 3, gsrs_rumbling: 3, gsrs_abdpain: 3,
+  lifestyle_modifiable: 0 };
+const a3SevereScore = scoring.computeScores(a3Severe, {});
+ok(a3SevereScore.severity.label === 'Severe', 'sanity: a3Severe fixture actually bands Severe');
+const a3SeverePats = patterns.detectPatterns(a3SevereScore, {}, a3Severe);
+const a3TriSevere = triage(a3SevereScore, a3SeverePats, [], { count: 0 }, {});
+ok(a3TriSevere.level === 1, 'sanity: Severe burden routes to Tier 1');
+ok(a3TriSevere.suppressAlsoConsiderForPatient === true, 'Tier 1 (Severe) sets suppressAlsoConsiderForPatient');
+const a3Minimal = { gsrs_heartburn: 0 };
+const a3MinimalScore = scoring.computeScores(a3Minimal, {});
+const a3TriMinimal = triage(a3MinimalScore, [], [], { count: 0 }, {});
+ok(a3TriMinimal.suppressAlsoConsiderForPatient === false, 'Tier 4 (Minimal) does not set suppressAlsoConsiderForPatient');
+ok(typeof a3TriSevere.alsoConsider === 'object', 'alsoConsider data itself is NOT deleted from the tri object at Tier 1 (clinician view keeps the full landscape)');
+ok(/suppressAlsoConsiderForPatient/.test(code) && code.includes('showAlsoConsider'), 'triageCard() render layer references the patient-suppression gate (source check)');
+
 // 33e. Backward compatibility — clusterFreq entirely absent from opts behaves
 // identically to the pre-change Bristol-only mechanism (same fixture as the
 // earlier Bristol-scoping regression test).
@@ -586,6 +661,164 @@ ok(rome34h_explicit.criteriaMet === true, 'explicit rome.onset still takes prior
 // on-screen index for any patient with frequency answers).
 ok(/computeScores\(a, \{ bristol: ex\.bristol, clusterFreq: ex\.clusterFreq, romePainFreq: ex\.rome/.test(html),
   'CSV export computeScores() call includes clusterFreq + romePainFreq');
+
+// A5/A9 CSV regression. Header/row column-count parity, medsOther surfaced,
+// formula-injection guard, no literal "null" for a core-skipped visit, and
+// the dead `capped` column removed.
+const csvDbFull = { patients: [{ visits: [{ id: 'v1', date: Date.now(),
+  answers: { gsrs_heartburn: 2 },
+  extras: { medsOther: '=cmd|test', surgeryOther: '+injected', clusterFreq: { Reflux: 2 },
+    treatmentsTried: ['probiotic', 'ppi'], bowelFreq: 1, smoking: 2, caffeine: 1, hydration: 2,
+    heightCm: 170, weightKg: 70, waistCm: 90, rome: {} },
+}] }] };
+const csvText = storage.pilotExportCSV(csvDbFull);
+const csvLines = csvText.split('\n');
+const csvHeaderCols = csvLines[0].split(',').length;
+function splitCSVLine(line) {
+  const re = /(?:^|,)("(?:[^"]|"")*"|[^,]*)/g;
+  const out = []; let mm;
+  while ((mm = re.exec(line))) { if (mm[0] === '' && mm.index === line.length) break; out.push(mm[1]); if (re.lastIndex >= line.length) break; }
+  return out;
+}
+const csvRowCols = splitCSVLine(csvLines[1]).length;
+ok(csvHeaderCols === csvRowCols, `CSV header (${csvHeaderCols}) and row (${csvRowCols}) column counts match`);
+ok(csvLines[0].includes('ex_medsOther'), 'CSV header includes ex_medsOther (A5)');
+ok(csvLines[1].includes('cmd|test'), 'medsOther value present in exported row (formula-guard prefix does not corrupt the value)');
+ok(!/^=|,=/.test(csvLines[1].replace(/"[^"]*"/g, '')), 'no un-neutralised leading = outside quoted cells (formula-injection guard, A9)');
+ok(!csvLines[0].includes('capped') && !csvLines[0].includes(',capped,'), 'CSV header no longer has the dead capped column (A9)');
+
+// A6/A9 — a core-skipped visit exports no literal "null" for index/band.
+const csvDbEmpty = { patients: [{ visits: [{ id: 'v2', date: Date.now(), answers: {}, extras: {} }] }] };
+const csvEmptyText = storage.pilotExportCSV(csvDbEmpty);
+const csvEmptyRow = csvEmptyText.split('\n')[1];
+ok(!/(^|,)null(,|$)/.test(csvEmptyRow), 'core-skipped visit does not export the literal string "null" (A6)');
+
+// A5/A7 print regressions. Both prints must surface tri.autonomicNote and
+// tri.conditionNote (previously present in the on-screen triageCard but
+// silently dropped from both print builders' note concats). Clinician print
+// must also surface driverExtras.medsOther.
+ok(/tri\.autonomicNote/.test(ptSrc) && /tri\.conditionNote/.test(ptSrc), 'patient print includes autonomicNote + conditionNote (A7)');
+ok(/tri\.autonomicNote/.test(clSrc) && /tri\.conditionNote/.test(clSrc), 'clinician print includes autonomicNote + conditionNote (A7)');
+ok(/medsOther/.test(clSrc), 'clinician print surfaces driverExtras.medsOther (A5)');
+
+// A6 regression. deltaLabel() must null-guard BOTH curr and prev — a null
+// index (core GI section not completed on a visit) must never coerce to 0
+// and produce a false "Improved"/"Worsened" label.
+ok(trend.deltaLabel(50, null) === null, 'deltaLabel: null prev → null (first visit)');
+ok(trend.deltaLabel(null, 50) === null, 'deltaLabel: null curr → null (A6, was previously coerced to 0-50=-50 "Improved")');
+ok(trend.deltaLabel(null, null) === null, 'deltaLabel: both null → null');
+ok(trend.deltaLabel(60, 50) !== null && trend.deltaLabel(60, 50).dir === 'worsened', 'deltaLabel: sane non-null case unaffected');
+
+// A6 render-site regressions (source-level — these are DOM renderers).
+ok(/p\.index != null \? `\$\{p\.index\}%` : '—'/.test(html) || /idxTxt/.test(html), 'clinician-print progression table null-guards the index cell');
+ok(/bandCls\(label\)/.test(html) && /sev-unknown/.test(html), 'bandCls() has a distinct fallback class for a null/unknown band (not silently Minimal)');
+ok(/latest && latest\.index != null/.test(html), 'ui-record patient-card null-guards latest.index');
+
+// A8 regression. Pregnancy is now a PER-VISIT applicability flag: captured
+// into currentVisit() and restored by loadVisit() from the saved visit
+// (previously loadVisit() unconditionally blanked it, so the Pregnant
+// banner/caveat vanished on any saved-visit reload/print).
+ok(/pregnant: session\.pregnant \|\| ''/.test(html), 'currentVisit() captures session.pregnant per visit (A8)');
+ok(/session\.pregnant = v\.pregnant \|\| ''/.test(html), 'loadVisit() restores session.pregnant from the saved visit, not blanked (A8)');
+
+// A9 regression. The "Not applicable" button must re-run updateProgress()/
+// refreshReveals() like every other answer control — otherwise a revealed
+// follow-up item (e.g. im_known_dx_which) stays visible after its parent is
+// set N/A, since the reveal gate is never re-evaluated.
+const naBtnMatch = html.match(/naBtn\.onclick = \(\) => \{[\s\S]*?\};/);
+ok(!!naBtnMatch && /updateProgress\(\)/.test(naBtnMatch[0]) && /refreshReveals\(\)/.test(naBtnMatch[0]),
+  'N/A button handler calls updateProgress() + refreshReveals() (A9)');
+
+// A9 regression. loadVisit() deep-merges clusterFreq like meds/dys/rome —
+// previously inconsistent hardening left a latent TypeError on a partial
+// imported backup missing the clusterFreq key.
+ok(/extras\.clusterFreq = Object\.assign\(blankExtras\(\)\.clusterFreq, saved\.clusterFreq \|\| \{\}\)/.test(html),
+  'loadVisit() deep-merges clusterFreq (A9)');
+
+// Resolve which tier a candidacy reason with the given text fragment is filed
+// under: tri.level if it's the primary reason, otherwise look it up in
+// alsoConsider (whose entries carry { label, reasons }, label == TIERS[lvl].label).
+const TIERS = req('triage.js').TIERS;
+function tierLevelForLabel(label) {
+  for (const lvl of Object.keys(TIERS)) if (TIERS[lvl].label === label) return Number(lvl);
+  return null;
+}
+function candidacyTier(tri, textFragment) {
+  const re = new RegExp(textFragment);
+  if (tri.reasons.some(r => re.test(r.text))) return tri.level;
+  for (const a of tri.alsoConsider) if (a.reasons.some(r => re.test(r.text))) return tierLevelForLabel(a.label);
+  return null;
+}
+
+// B1 regression. diarrhoea_dominant must route to Tier 2 ("exclude organic
+// causes first"), not Tier 3 ("microbiome-support candidate") — chronic
+// diarrhoea mandates calprotectin/coeliac serology before a probiotic frame.
+const b1Answers = { gsrs_diarrhoea: 3, gsrs_urgency: 3, gsrs_loose: 3 };
+const b1Score = scoring.computeScores(b1Answers, {});
+const b1Pats = patterns.detectPatterns(b1Score, {}, b1Answers);
+ok(b1Pats.some(p => p.id === 'diarrhoea_dominant'), 'sanity: diarrhoea_dominant pattern fires on this fixture');
+const b1Tri = triage(b1Score, b1Pats, [], { count: 0 }, {});
+ok(candidacyTier(b1Tri, 'Loose-stool') === 2, 'diarrhoea_dominant candidacy is filed under Tier 2, not Tier 3 (B1)');
+
+// B2 regression. A lab-confirmed deficiency (nu_known_def) fires
+// nutrient_malabsorption on its own, even when current GI symptoms are mild
+// (giPresent false) — previously gated out, silently dropping a
+// referral-grade signal for exactly the patient it targets.
+const b2Answers = { gsrs_heartburn: 0, nu_known_def: 1 };
+const b2Score = scoring.computeScores(b2Answers, {});
+ok((b2Score.secNorm.GI || 0) < 0.2, 'sanity: b2Answers fixture keeps secNorm.GI below the 0.2 giPresent gate');
+const b2Pats = patterns.detectPatterns(b2Score, {}, b2Answers);
+ok(b2Pats.some(p => p.id === 'nutrient_malabsorption'), 'nutrient_malabsorption fires on lab-confirmed deficiency alone, independent of giPresent (B2)');
+const b2Tri = triage(b2Score, b2Pats, [], { count: 0 }, {});
+ok(b2Tri.level === 1, 'lab-confirmed deficiency alone reaches Tier 1 even with mild current GI symptoms (B2)');
+
+// B5 regression. inflammatory_immune with a diagnosed condition
+// (im_known_dx) as the only specific signal reaches Tier 2, not Tier 3 —
+// previously signalHits=2 (<3) routed it to Tier 3 despite the routing
+// comment's stated intent that a diagnosed condition should reach Tier 2.
+const b5Answers = { gsrs_heartburn: 2, im_known_dx: 1 };
+const b5Score = scoring.computeScores(b5Answers, {});
+const b5Pats = patterns.detectPatterns(b5Score, {}, b5Answers);
+const b5Infl = b5Pats.find(p => p.id === 'inflammatory_immune');
+ok(!!b5Infl, 'sanity: inflammatory_immune fires on im_known_dx alone (GI present)');
+ok(b5Infl.signalHits < 3, 'sanity: this fixture has signalHits < 3 (the case that was previously mis-routed)');
+const b5Tri = triage(b5Score, b5Pats, [], { count: 0 }, { immuneKnownDx: true });
+ok(candidacyTier(b5Tri, 'Inflammatory') === 2, 'diagnosed condition (im_known_dx) alone routes inflammatory_immune to Tier 2, not Tier 3 (B5)');
+const b5TriNoDx = triage(b5Score, b5Pats, [], { count: 0 }, { immuneKnownDx: false });
+ok(candidacyTier(b5TriNoDx, 'Inflammatory') === 3, 'sanity: without immuneKnownDx, low-signalHits inflammatory_immune still routes Tier 3 as before');
+ok(/immuneKnownDx/.test(html), 'immuneKnownDx opt wired through computeAll() → triage() (source check)');
+
+// B3 regression. Coeliac-serology timing note fires whenever a coeliac
+// work-up is plausible: nutrient_malabsorption/inflammatory_immune firing,
+// OR coeliac already flagged via reported condition or family history — and
+// is null otherwise.
+ok(b2Tri.coeliacTimingNote && /keep eating gluten/.test(b2Tri.coeliacTimingNote),
+  'coeliacTimingNote fires when nutrient_malabsorption fires (B3)');
+const b3TriNone = triage(scoring.computeScores({ gsrs_heartburn: 1 }, {}), [], [], { count: 0 }, {});
+ok(b3TriNone.coeliacTimingNote === null, 'coeliacTimingNote is null with no malabsorption/inflammatory pattern and no coeliac flag');
+const b3TriFamily = triage(scoring.computeScores({ gsrs_heartburn: 1 }, {}), [], [], { count: 0 },
+  { knownConditions: { list: [] }, family: { list: ['Coeliac disease'] } });
+ok(b3TriFamily.coeliacTimingNote && /keep eating gluten/.test(b3TriFamily.coeliacTimingNote),
+  'coeliacTimingNote fires from family-history coeliac flag alone, even with no pattern firing (B3)');
+ok(/tri\.coeliacTimingNote/.test(ptSrc) && /tri\.coeliacTimingNote/.test(clSrc) && /tri\.coeliacTimingNote/.test(html.match(/function triageCard\(tri, rome, showInvestigations\)[\s\S]*?\n\}/)[0]),
+  'coeliacTimingNote wired into all three render sites (triageCard, patient print, clinician print)');
+
+// B4 regression. Unsupervised-restriction note fires when Low-FODMAP or
+// Elimination diet is in the resolved treatmentsTried label list — a
+// standing dietitian-review caution, independent of tier/severity.
+const b4TriRestrict = triage(scoring.computeScores({ gsrs_heartburn: 1 }, {}), [], [], { count: 0 },
+  { treatmentsTried: ['Low-FODMAP diet'] });
+ok(b4TriRestrict.restrictionNote && /dietitian/.test(b4TriRestrict.restrictionNote),
+  'restrictionNote fires when Low-FODMAP diet is in treatmentsTried (B4)');
+const b4TriElim = triage(scoring.computeScores({ gsrs_heartburn: 1 }, {}), [], [], { count: 0 },
+  { treatmentsTried: ['Elimination diet'] });
+ok(b4TriElim.restrictionNote && /dietitian/.test(b4TriElim.restrictionNote),
+  'restrictionNote fires when Elimination diet is in treatmentsTried (B4)');
+const b4TriNone = triage(scoring.computeScores({ gsrs_heartburn: 1 }, {}), [], [], { count: 0 },
+  { treatmentsTried: ['Probiotic', 'PPI / acid suppressant'] });
+ok(b4TriNone.restrictionNote === null, 'restrictionNote is null when no restrictive diet is in treatmentsTried');
+ok(/tri\.restrictionNote/.test(ptSrc) && /tri\.restrictionNote/.test(clSrc),
+  'restrictionNote wired into both print builders');
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

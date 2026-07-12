@@ -49,6 +49,7 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 .pill{display:inline-block;padding:3px 11px;border-radius:20px;font-size:12px;font-weight:700}
 .sev-min{background:var(--gp);color:#085041}.sev-mod{background:var(--ap);color:#7A5800}
 .sev-sig{background:var(--cop,#FAECE7);color:#7A3410}.sev-sev{background:var(--rp);color:#7A1515}
+.sev-unknown{background:#E5E5E5;color:#555}
 
 .intro{background:var(--gf);border:1px solid var(--gl);border-radius:var(--r12);padding:14px 16px;margin-bottom:14px;font-size:13px;color:var(--inks)}
 .sec-card{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r12);margin-bottom:12px;overflow:hidden}
@@ -1239,14 +1240,19 @@ function computeScores(answers, opts) {
   // identical per-symptom severity in different clusters land in different
   // bands purely because one cluster happens to have more items. Giving every
   // cluster equal say removes that bias. secNorm.GI is overwritten below with
-  // this cluster-balanced value so it stays the single source of truth every
-  // downstream reader (patterns.gi(), the domain bar, axisProfile) relies on.
+  // this cluster-balanced value (un-nudged — see note below) so it stays the
+  // single source of truth every downstream reader (patterns.gi(), the domain
+  // bar) relies on. axisProfile reads score.index (the nudged value) separately.
   //
   // Nudges (Bristol + frequency) are applied HERE, to a cluster mean used ONLY
-  // for this Index — never to the raw `clusterNorm` object returned below,
-  // which patterns.js's clu()/gi() read directly. That separation is what
-  // keeps an external driver signal from silently shifting pattern-firing
-  // thresholds; it must hold for every future nudge added here, not just these two.
+  // for the Index number — never to the raw `clusterNorm` object returned below,
+  // and never to `secNorm.GI`. patterns.js reads BOTH clu() (raw clusterNorm)
+  // AND gi() (secNorm.GI), so `secNorm.GI` must stay the UN-NUDGED cluster mean:
+  // otherwise a driver-card frequency/Bristol answer silently lifts secNorm.GI
+  // across a giPresent gate (0.2/0.25) and flips pattern firing — a Tier-4
+  // patient can become a Tier-1 referral on driver answers alone. The nudge
+  // reaches only `index` (and axisProfile.symptom, which reads score.index).
+  // This separation must hold for every future nudge added here.
   const clusterFreq = (opts && opts.clusterFreq) || {};
   // Pain's frequency signal comes from Rome IV's painFreq (opts.romePainFreq,
   // 0–5), NOT clusterFreqCard()'s clusterFreq.Pain — that would duplicate
@@ -1273,8 +1279,9 @@ function computeScores(answers, opts) {
     }).filter(v => v != null);
     return norms.length ? norms.reduce((a, b) => a + b, 0) / norms.length : null;
   }
-  const coreMean = coreMeanWith(true, true);
-  if (secNorm.GI !== undefined) secNorm.GI = coreMean; // GI is the sole 'core' section (schema.js)
+  const coreMean = coreMeanWith(true, true);           // nudged — feeds the Index number ONLY
+  const coreMeanRaw = coreMeanWith(false, false);      // un-nudged cluster mean — patterns.gi() + domain bar
+  if (secNorm.GI !== undefined) secNorm.GI = coreMeanRaw; // GI is the sole 'core' section (schema.js)
   const index = coreMean != null ? Math.round(coreMean * 100) : null;
 
   // Nudge transparency for the UI. Two related but different numbers:
@@ -1293,8 +1300,7 @@ function computeScores(answers, opts) {
   let nudgeAddPts = 0;
   const hasFreq = GI_CLUSTERS.some(k => clusterFreqSignal(k) != null);
   if (bristolSignal != null || hasFreq) {
-    const withoutEither = coreMeanWith(false, false);
-    if (coreMean != null && withoutEither != null) nudgeAddPts = Math.round((coreMean - withoutEither) * 100);
+    if (coreMean != null && coreMeanRaw != null) nudgeAddPts = Math.round((coreMean - coreMeanRaw) * 100);
   }
   let bristolAddPts = 0;
   if (bristolSignal != null) {
@@ -1608,9 +1614,15 @@ const PATTERNS = [
       const giPresent = ge(gi(s), 0.2);
       const proxyCount = [hair, iron, mouth].filter(x => x.t).length;
       const signals = [known, hair, iron, mouth, giPresent];
-      // Lab-confirmed deficiency alone is sufficient on this referral-grade
-      // trigger; otherwise need ≥2 of 3 lower-specificity symptom proxies.
-      return { fires: (known.t || proxyCount >= 2) && giPresent.t, signals };
+      // A lab-confirmed deficiency fires this pattern on its own, regardless
+      // of CURRENT GI symptom severity — a documented unexplained deficiency
+      // (e.g. post-coeliac-treatment, post-bariatric) still warrants review
+      // even when today's gut symptoms are mild; gating it behind giPresent
+      // would silently drop the referral-grade signal this pattern exists to
+      // catch. The lower-specificity symptom-proxy route (≥2 of 3) keeps the
+      // giPresent requirement, since those proxies are only meaningful
+      // alongside concurrent GI symptoms.
+      return { fires: known.t || (proxyCount >= 2 && giPresent.t), signals };
     },
   },
   {
@@ -1788,9 +1800,14 @@ function triage(score, patterns, firedFlags, dys, opts) {
 
   // Tier 2 — clinician-led / manual-therapy candidacy
   if (band === 'Significant') add(2, 'Significant GI symptom burden', 'symptom');
-  if (has('constipation_dominant')) add(2, 'Constipation-dominant (visceral / motility) pattern', 'symptom');
+  if (has('constipation_dominant')) add(2, 'Constipation-dominant (slow-transit) pattern', 'symptom');
   if (has('mixed_bowel')) add(2, 'Mixed / alternating bowel pattern', 'symptom');
   if (has('reflux_upper_gi')) add(2, 'Reflux / upper-GI pattern', 'symptom');
+  // Chronic diarrhoea/urgency warrants organic exclusion (calprotectin, coeliac
+  // serology, bile-acid malabsorption — see PI.diarrhoea_dominant) BEFORE any
+  // microbiome-support framing; a probiotic-trial tier for this pattern alone
+  // could read as licence to self-manage ahead of that workup.
+  if (has('diarrhoea_dominant')) add(2, 'Loose-stool / urgency pattern — exclude organic causes (calprotectin, coeliac serology) before considering microbiome support', 'symptom');
   if (pain != null && pain >= 0.5) add(2, 'Prominent abdominal-pain cluster', 'symptom');
   if (o.adhesionSurgery) add(2, 'Prior abdominal/pelvic surgery (adhesions — visceral / fascial manual-therapy candidacy, as an adjunct after medical assessment)', 'symptom');
   if (o.romeResult && o.romeResult.criteriaMet) add(2, `Meets Rome IV-informed criteria for ${o.romeResult.subtype}`, 'symptom');
@@ -1815,17 +1832,20 @@ function triage(score, patterns, firedFlags, dys, opts) {
   // Tier 3 despite having the single most specific trigger; conversely a
   // fully-answered-but-barely-over-threshold IM mean scored "High confidence"
   // and got routed to Tier 2. signalHits >= 3 (of 5) requires at least one
-  // corroborating signal beyond the bare fires-minimum of 2.
+  // corroborating signal beyond the bare fires-minimum of 2. A diagnosed
+  // condition (o.immuneKnownDx) is ALSO sufficient on its own — otherwise it
+  // can be out-ranked to Tier 3 by a lack of corroboration even though it is
+  // the single most specific trigger this pattern can carry (the exact case
+  // this signalHits routing was built to fix, but previously missed).
   const infl = (patterns || []).find(p => p.id === 'inflammatory_immune');
   if (infl) {
-    if (infl.signalHits >= 3) add(2, 'Inflammatory / immune-leaning pattern (multiple corroborating signals) — consider a structured elimination trial', 'inflammatory');
+    if (o.immuneKnownDx || infl.signalHits >= 3) add(2, 'Inflammatory / immune-leaning pattern (diagnosed condition or multiple corroborating signals) — consider a structured elimination trial', 'inflammatory');
     else add(3, 'Inflammatory / immune-leaning pattern (single corroborating signal) — monitor alongside microbiome support', 'inflammatory');
   }
 
   // Tier 3 — microbiome-support candidacy
   if (has('post_disruptor')) add(3, 'Recent gut-disruptor exposure (strongest probiotic-trial rationale)', 'microbiome');
   if (has('bloating_fermentation')) add(3, 'Bloating / fermentation pattern', 'symptom');
-  if (has('diarrhoea_dominant')) add(3, 'Loose-stool / urgency pattern', 'symptom');
   if (dysCount >= 2) add(3, dysCount + ' dysbiosis-correlate signals (see Dysbiosis Correlate Load)', 'microbiome');
 
   // Tier 4 — self-management / monitor
@@ -1838,10 +1858,17 @@ function triage(score, patterns, firedFlags, dys, opts) {
 
   const result = Object.assign({}, TIERS[primary], { reasons: candidacy[primary].slice() });
   // Secondary candidacies worth flagging (lower-urgency tiers that still apply).
+  // Kept in full here — clinicians should see the whole tier landscape — but
+  // patient-facing render sites (triageCard's patient call, buildPatientPrint)
+  // suppress this list at Tier 1 (see result.suppressAlsoConsiderForPatient):
+  // showing "Also consider: self-management / microbiome-support / probiotic
+  // trial" beneath a refer instruction dilutes the single most important
+  // message a safety-netting screen must send.
   result.alsoConsider = [];
   for (const lvl of [2, 3, 4]) {
     if (lvl > primary && candidacy[lvl].length) result.alsoConsider.push({ label: TIERS[lvl].label, reasons: candidacy[lvl] });
   }
+  result.suppressAlsoConsiderForPatient = primary === 1;
   // §7a — known diagnosed conditions to factor into interpretation. A NOTE only:
   // it does not by itself change the Tier, but a clinician should see it.
   result.conditionNote = (o.knownConditions && o.knownConditions.referList && o.knownConditions.referList.length)
@@ -1877,8 +1904,30 @@ function triage(score, patterns, firedFlags, dys, opts) {
   result.treatmentsTriedNote = ((o.treatmentsTried && o.treatmentsTried.length) || o.treatmentsTriedOther)
     ? `Already tried: ${[...(o.treatmentsTried || []), o.treatmentsTriedOther].filter(Boolean).join(', ')}.`
     : null;
+  // Unsupervised restriction (B4). Low-FODMAP and elimination diets carry real
+  // risks (nutritional inadequacy, disordered eating, microbiome harm) when
+  // run long-term without a dietitian and structured reintroduction. This
+  // fires whenever either is reported tried, regardless of tier — restriction
+  // risk is independent of current symptom severity.
+  const restrictiveTried = (o.treatmentsTried || []).some(t => t === 'Low-FODMAP diet' || t === 'Elimination diet');
+  result.restrictionNote = restrictiveTried
+    ? 'Low-FODMAP / elimination diet reported — if this was not dietitian-supervised, or has continued beyond ~4–8 weeks without structured reintroduction, flag for dietitian review (risk of nutritional inadequacy with unsupervised long-term restriction).'
+    : null;
   // Management/interpretation guidance from diagnosed conditions (IBS, gallstones…).
   result.conditionGuidance = (o.conditionNotes && o.conditionNotes.length) ? o.conditionNotes.slice() : [];
+  // Coeliac-serology timing (B3). Whenever a coeliac work-up is plausible —
+  // malabsorption/inflammatory patterns fire, or coeliac is already flagged
+  // (reported condition or family history) — the elimination/low-FODMAP
+  // guidance elsewhere in this same report can otherwise be read as "cut out
+  // wheat," which produces a false-negative coeliac serology if gluten is
+  // removed before testing. This note is deliberately independent of which
+  // specific pathway triggered it, since the failure mode (early gluten
+  // removal) is identical regardless of the reason serology is being considered.
+  const coeliacFlagged = (o.knownConditions && (o.knownConditions.list || []).includes('Coeliac disease'))
+    || (o.family && (o.family.list || []).includes('Coeliac disease'));
+  result.coeliacTimingNote = (has('nutrient_malabsorption') || has('inflammatory_immune') || coeliacFlagged)
+    ? 'If coeliac serology is being considered, keep eating gluten as normal until it is done — removing it beforehand can produce a false-negative result.'
+    : null;
   // Family-history notes (coeliac serology nudge, IBD calprotectin, cancer screening).
   result.familyNotes = (o.family && o.family.notes && o.family.notes.length) ? o.family.notes.slice() : [];
   // Gynaecological / endometriosis overlap — cyclical flare alongside abdominal pain.
@@ -1952,24 +2001,31 @@ const { pss4Score } = __req('scales.js');
 
 function visitScore(v) {
   const a = v.answers || {}, ex = v.extras || {};
-  const sc = computeScores(a, { bristol: ex.bristol });
+  // Must mirror the live computeAll()/computeScores() call and the CSV export's
+  // drv object exactly (clusterFreq/romePainFreq feed the Index; rome feeds
+  // pattern confidence) — otherwise this recomputation silently disagrees with
+  // the index/band shown on the results screen and in the pilot CSV for the
+  // very same visit (A2 regression: previously omitted, up to ~15pt drift).
+  const sc = computeScores(a, { bristol: ex.bristol, clusterFreq: ex.clusterFreq, romePainFreq: ex.rome && ex.rome.painFreq });
   const drv = {
     pss4Score: pss4Score(ex.pss4), bgAnxiety: a.bg_anxiety, bgMood: a.bg_mood,
     dietFibre: ex.dietFibre, dietProcessed: ex.dietProcessed,
     bristol: ex.bristol, meds: ex.meds, alcohol: ex.alcohol, activity: ex.activity,
-    abxCourses: ex.abxCourses, dys: ex.dys,           // Dys-R inputs (keep trend patterns in sync with live)
+    abxCourses: ex.abxCourses, dys: ex.dys, rome: ex.rome, // Dys-R + Rome inputs (keep trend patterns in sync with live)
   };
   const patterns = detectPatterns(sc, drv, a).map(p => p.id);
   return {
     id: v.id, date: v.date || 0, followup: !!v.followup,
-    index: sc.index, band: sc.severity.label, capped: sc.severity.capped,
+    index: sc.index, band: sc.severity.label,
     completeness: sc.completeness, clusterNorm: sc.clusterNorm, patterns,
   };
 }
 
-// Lower burden = improvement. Returns null for the first visit (no prior).
+// Lower burden = improvement. Returns null for the first visit (no prior),
+// or when either index is unavailable (core GI section not completed on
+// that visit) — a null index must never coerce to 0 and read as "Improved".
 function deltaLabel(curr, prev) {
-  if (prev == null) return null;
+  if (prev == null || curr == null) return null;
   const d = curr - prev, ad = Math.abs(d);
   if (ad < 5) return { dir: 'stable', label: 'Stable', delta: d, color: '#999' };
   const meaningful = ad >= 10;
@@ -2092,23 +2148,34 @@ function pilotExportCSV(db) {
   const cell = (v) => (v == null ? '' : String(v));            // number | 'na' | ''
   const num  = (n) => (n == null ? '' : (Math.round(n * 1000) / 1000)); // normalised 0–1
   const bool = (b, present) => (present ? (b ? 1 : 0) : '');
-  const csv  = (s) => /[",\n]/.test(String(s)) ? `"${String(s).replace(/"/g, '""')}"` : String(s);
+  const csv  = (s) => {
+    let str = String(s);
+    // Neutralise spreadsheet formula injection: a leading =, +, -, or @ in a
+    // free-text cell (e.g. surgeryOther, medsOther) can execute as a formula
+    // when the CSV is opened in Excel/Sheets. Prefix with a literal quote —
+    // standard CSV-injection mitigation, does not change the visible value.
+    if (/^[=+\-@]/.test(str)) str = "'" + str;
+    return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+  };
 
   const CLUSTERS = ['Reflux', 'Pain', 'Indigestion', 'Diarrhoea', 'Constipation'];
   const header = [
-    'patient', 'visit', 'date_iso', 'completeness', 'index', 'band', 'capped',
+    'patient', 'visit', 'date_iso', 'completeness', 'index', 'band',
     ...SECTIONS.map(s => 'norm_' + s.id),
     ...CLUSTERS.map(c => 'cluster_' + c.toLowerCase()),
     ...QUESTIONS.map(q => 'q_' + q.id),
     'ex_pss4_1', 'ex_pss4_2', 'ex_pss4_3', 'ex_pss4_4', 'ex_pss4Score', 'ex_psychLoad',
     'ex_bristol', 'ex_bristolSignal', 'ex_nrsPain', 'ex_painRegion',
-    'ex_med_abx', 'ex_med_ppi', 'ex_med_nsaid',
+    'ex_med_abx', 'ex_med_ppi', 'ex_med_nsaid', 'ex_medsOther',
     'ex_dietFibre', 'ex_dietProcessed', 'ex_dietBurden', 'ex_alcohol', 'ex_activity',
     'ex_sleep_1', 'ex_sleep_2', 'ex_sleep_3', 'ex_sleep_4', 'ex_sleepBurden',
     'ex_abxCourses', 'ex_dys_stoolVar', 'ex_dys_postInfectious', 'ex_dys_gasFoul', 'ex_dys_fibreParadox', 'ex_dys_foodTriggers', 'ex_dysLensCount',
     'ex_surgeryCount', 'ex_surgeryOther',
     'ex_rome_painFreq', 'ex_rome_onset', 'ex_rome_assoc_defecation', 'ex_rome_assoc_freqchange', 'ex_rome_assoc_formchange',
     'ex_romeCriteriaMet', 'ex_romeSubtype',
+    ...CLUSTERS.map(c => 'ex_clusterFreq_' + c.toLowerCase()),
+    'ex_bowelFreq', 'ex_smoking', 'ex_caffeine', 'ex_hydration', 'ex_treatmentsTried', 'ex_treatmentsTriedOther',
+    'ex_heightCm', 'ex_weightKg', 'ex_waistCm',
     ...PATTERNS.map(p => 'pat_' + p.id),
   ];
   const rows = [header];
@@ -2123,21 +2190,26 @@ function pilotExportCSV(db) {
       const fired = new Set(detectPatterns(score, drv, a).map(p => p.id));
       const rm = ex.rome || {};
       const romeResult = classifyRomeIV(rm, score.clusterNorm, a.sx_duration);
+      const cf = ex.clusterFreq || {};
+      const tried = (ex.treatmentsTried || []);
       rows.push([
         'P' + (pi + 1), cell(v.id), v.date ? new Date(v.date).toISOString().slice(0, 10) : '',
-        score.completeness, score.index, score.severity.label, score.severity.capped ? 1 : 0,
+        score.completeness, cell(score.index), cell(score.severity.label),
         ...SECTIONS.map(s => num(score.secNorm[s.id])),
         ...CLUSTERS.map(c => num(score.clusterNorm && score.clusterNorm[c])),
         ...QUESTIONS.map(q => cell(a[q.id])),
         cell(pss[0]), cell(pss[1]), cell(pss[2]), cell(pss[3]), cell(ps), cell(psychLoadScore(drv)),
         cell(ex.bristol), num(score.bristolSignal), cell(ex.nrsPain), cell(ex.painRegion),
-        bool(meds && meds.abx, !!meds), bool(meds && meds.ppi, !!meds), bool(meds && meds.nsaid, !!meds),
+        bool(meds && meds.abx, !!meds), bool(meds && meds.ppi, !!meds), bool(meds && meds.nsaid, !!meds), cell(ex.medsOther || ''),
         cell(ex.dietFibre), cell(ex.dietProcessed), num(dietBurden(drv)), cell(ex.alcohol), cell(ex.activity),
         cell((ex.sleep || [])[0]), cell((ex.sleep || [])[1]), cell((ex.sleep || [])[2]), cell((ex.sleep || [])[3]), num(sleepBurden(ex.sleep)),
         cell(ex.abxCourses), cell((ex.dys || {}).stoolVar), cell((ex.dys || {}).postInfectious), cell((ex.dys || {}).gasFoul), cell((ex.dys || {}).fibreParadox), cell(((ex.dys || {}).foodTriggers || []).length), cell(dysbiosisLens(ex).count),
         cell(surgicalFlags(ex).count), cell(ex.surgeryOther || ''),
         cell(rm.painFreq), cell(rm.onset), bool(rm.rm_assoc_defecation, true), bool(rm.rm_assoc_freqchange, true), bool(rm.rm_assoc_formchange, true),
         romeResult.criteriaMet ? 1 : 0, cell(romeResult.subtype),
+        ...CLUSTERS.map(c => cell(cf[c])),
+        cell(ex.bowelFreq), cell(ex.smoking), cell(ex.caffeine), cell(ex.hydration), cell(tried.join('|')), cell(ex.treatmentsTriedOther || ''),
+        cell(ex.heightCm), cell(ex.weightKg), cell(ex.waistCm),
         ...PATTERNS.map(p => fired.has(p.id) ? 1 : 0),
       ]);
     });
@@ -2241,6 +2313,7 @@ function currentVisit() {
     id: Store.uid(),
     date: Date.now(),
     followup: !!session.followup,
+    pregnant: session.pregnant || '',              // per-visit applicability flag — pregnancy can change between visits
     answers: { ...answers },                       // includes 'na' values as-is
     extras: JSON.parse(JSON.stringify(extras)),    // deep-clone (pss4 array, meds object)
     redflags: { ...redflags },
@@ -2523,8 +2596,10 @@ function trendCard(visits, markLastUnsaved) {
     const tag = (isLast && markLastUnsaved) ? ' <span class="opt-tag">current · unsaved</span>'
       : (p.followup ? ' <span class="opt-tag">follow-up</span>' : ' <span class="opt-tag">baseline</span>');
     const deltaTxt = p.delta ? `<span style="color:${p.delta.color};font-weight:600">${esc(p.delta.label)}</span>` : '<span class="muted">—</span>';
+    const indexTxt = p.index != null ? `${p.index}%` : '—';
+    const bandTxt = p.band != null ? esc(p.band) : 'Not completed';
     tbl.appendChild(el('div', { class: 'bar-row', style: 'display:flex;justify-content:space-between;gap:10px;padding:4px 0' },
-      `<span>${esc(dateStr)}${tag}</span><span><b>${p.index}%</b> <span class="muted">${esc(p.band)}</span> · ${deltaTxt}</span>`));
+      `<span>${esc(dateStr)}${tag}</span><span><b>${indexTxt}</b> <span class="muted">${bandTxt}</span> · ${deltaTxt}</span>`));
   });
   card.appendChild(tbl);
 
@@ -3286,6 +3361,8 @@ function questionRow(q) {
       answers[q.id] = 'na';
       opts.querySelectorAll('.opt').forEach(o => o.classList.remove('sel'));
       naBtn.classList.add('sel');
+      updateProgress();
+      refreshReveals();
     };
     const naWrap = el('div', { class: 'na-wrap' });
     naWrap.appendChild(naBtn);
@@ -3332,6 +3409,11 @@ function computeAll() {
   // abdominal pain present. gy_cyclical is already female-gated in the schema.
   const gynOverlap = (typeof answers.gy_cyclical === 'number' && answers.gy_cyclical >= 2)
     && (typeof answers.gsrs_pain === 'number' && answers.gsrs_pain >= 2);
+  // A diagnosed autoimmune/inflammatory condition (§7b lab-like anchor) is the
+  // single most specific signal inflammatory_immune can carry — triage.js
+  // routes it to Tier 2 on its own, independent of signalHits, so it can't be
+  // out-ranked by a noisy-but-fully-answered IM mean.
+  const immuneKnownDx = typeof answers.im_known_dx === 'number' && answers.im_known_dx >= 1;
   // Universal duration/chronicity item — resolved to its label here so triage.js
   // stays pure (no scales.js dependency for one lookup).
   const durationLabel = typeof answers.sx_duration === 'number' ? scaleFor('DURATION')[answers.sx_duration] : null;
@@ -3362,6 +3444,7 @@ function computeAll() {
     autonomicFlag,
     family: famhx,
     gynOverlap,
+    immuneKnownDx,
     obstetric,
     anthro,
   });
@@ -3611,7 +3694,15 @@ function triageCard(tri, rome, showInvestigations) {
     '🚬 ' + esc(tri.smokingNote)));
   if (tri.treatmentsTriedNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
     '💉 ' + esc(tri.treatmentsTriedNote)));
-  if (tri.alsoConsider.length) {
+  if (tri.coeliacTimingNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
+    '🌾 ' + esc(tri.coeliacTimingNote)));
+  if (tri.restrictionNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
+    '🥗 ' + esc(tri.restrictionNote)));
+  // Patient view (showInvestigations=false) suppresses "Also worth noting" at
+  // Tier 1 — a refer instruction should not sit beside "self-management" or
+  // "probiotic trial" framing. Clinician view keeps the full tier landscape.
+  const showAlsoConsider = tri.alsoConsider.length && !(!showInvestigations && tri.suppressAlsoConsiderForPatient);
+  if (showAlsoConsider) {
     tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-weight:600' }, 'Also worth noting:'));
     tri.alsoConsider.forEach(a => tcard.appendChild(el('div', { class: 'q-sub', style: 'padding-left:4px' },
       `• ${esc(a.label)} — ${a.reasons.map(r => esc(r.text)).join('; ')}`)));
@@ -3816,10 +3907,12 @@ function buildPatientPrint(c) {
   const tierCls = ['', 't1', 't2', 't3', 't4'][tri.level] || 't4';
   const ptNotes = [].concat(
     tri.conditionGuidance || [], tri.familyNotes || [],
+    tri.conditionNote ? [tri.conditionNote] : [], tri.autonomicNote ? [tri.autonomicNote] : [],
     tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [],
     tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : [],
     tri.durationNote ? [tri.durationNote] : [], tri.bowelFreqNote ? [tri.bowelFreqNote] : [],
-    tri.smokingNote ? [tri.smokingNote] : [], tri.treatmentsTriedNote ? [tri.treatmentsTriedNote] : []);
+    tri.smokingNote ? [tri.smokingNote] : [], tri.treatmentsTriedNote ? [tri.treatmentsTriedNote] : [],
+    tri.coeliacTimingNote ? [tri.coeliacTimingNote] : [], tri.restrictionNote ? [tri.restrictionNote] : []);
   h += `<div class="pr-section"><div class="pr-sh">What this means for you</div>
     <div class="pr-triage ${tierCls}">
       <div style="font-weight:700;font-size:12px">Suggested next step: Tier ${tri.level} — ${esc(tri.label)}</div>
@@ -3925,7 +4018,13 @@ function clinicalImpression(c) {
 function physioCandidacy(tri) {
   const all = [].concat(tri.reasons || [], ...((tri.alsoConsider || []).map(a => a.reasons || [])));
   const seen = new Set();
-  return all.filter(r => (r.axis === 'pelvic') || /manual-therapy|visceral|fascial|pelvic-floor/i.test(r.text || ''))
+  // axis:'pelvic' is the true manual-therapy signal. The text regex is a
+  // fallback for reasons that name manual therapy explicitly without a
+  // 'pelvic' axis tag (e.g. adhesion-surgery candidacy, axis:'symptom') — it
+  // must NOT match "visceral" as a bare word, since constipation_dominant's
+  // label uses "visceral" as GI motility jargon (not manual therapy) and would
+  // otherwise mis-flag ordinary constipation as a physio candidate.
+  return all.filter(r => (r.axis === 'pelvic') || /manual[- ]therapy|fascial manual|pelvic-floor/i.test(r.text || ''))
     .filter(r => { if (seen.has(r.text)) return false; seen.add(r.text); return true; });
 }
 
@@ -3969,7 +4068,7 @@ function buildClinicianPrint(c) {
       <div style="margin-top:3px;font-size:11px">${esc(tri.action)}</div>
       ${tri.reasons.length ? `<div style="font-size:10.5px;margin-top:4px">Reasons: ${tri.reasons.map(r => esc(r.text)).join(' · ')}</div>` : ''}
       ${tri.alsoConsider.length ? `<div style="font-size:10.5px;margin-top:3px">Also consider: ${tri.alsoConsider.map(a => `${esc(a.label)} (${a.reasons.map(r => esc(r.text)).join('; ')})`).join(' / ')}</div>` : ''}
-      ${[].concat(tri.conditionGuidance || [], tri.familyNotes || [], tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [], tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : [], tri.durationNote ? [tri.durationNote] : [], tri.bowelFreqNote ? [tri.bowelFreqNote] : [], tri.smokingNote ? [tri.smokingNote] : [], tri.treatmentsTriedNote ? [tri.treatmentsTriedNote] : []).map(n => `<div style="font-size:10.5px;margin-top:3px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
+      ${[].concat(tri.conditionGuidance || [], tri.familyNotes || [], tri.conditionNote ? [tri.conditionNote] : [], tri.autonomicNote ? [tri.autonomicNote] : [], tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [], tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : [], tri.durationNote ? [tri.durationNote] : [], tri.bowelFreqNote ? [tri.bowelFreqNote] : [], tri.smokingNote ? [tri.smokingNote] : [], tri.treatmentsTriedNote ? [tri.treatmentsTriedNote] : [], tri.coeliacTimingNote ? [tri.coeliacTimingNote] : [], tri.restrictionNote ? [tri.restrictionNote] : []).map(n => `<div style="font-size:10.5px;margin-top:3px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
     </div>
     ${tri.investigations && tri.investigations.length ? `
       <div style="font-weight:600;font-size:11px;margin:6px 0 3px">Suggested investigations / management:</div>
@@ -4030,9 +4129,12 @@ function buildClinicianPrint(c) {
     h += `<div class="pr-section"><div class="pr-sh">Anthropometrics</div>
       <div style="font-size:10.5px">${esc([bmiTxt, whtrTxt].filter(Boolean).join(' · '))}${anthro.caveat ? `<br><i>${esc(anthro.caveat)}</i>` : ''}</div></div>`;
   }
-  if (meds && meds.list && meds.list.length) {
-    h += `<div class="pr-section"><div class="pr-sh">Medication confounders</div>
-      <div style="font-size:10.5px">${esc(meds.list.map(m => m.label + (m.effect ? ` (${m.effect})` : '')).join('; '))}</div></div>`;
+  const medsOtherTxt = (driverExtras && driverExtras.medsOther || '').trim();
+  if ((meds && meds.list && meds.list.length) || medsOtherTxt) {
+    h += `<div class="pr-section"><div class="pr-sh">Medication confounders</div>`;
+    if (meds && meds.list && meds.list.length) h += `<div style="font-size:10.5px">${esc(meds.list.map(m => m.label + (m.effect ? ` (${m.effect})` : '')).join('; '))}</div>`;
+    if (medsOtherTxt) h += `<div style="font-size:10.5px${meds && meds.list && meds.list.length ? ';margin-top:2px' : ''}">Other reported medications: ${esc(medsOtherTxt)}</div>`;
+    h += `</div>`;
   }
 
   // GSRS domain breakdown — % cell colour-coded by band so high domains stand out.
@@ -4127,7 +4229,9 @@ function buildClinicianPrint(c) {
         ${trend.points.map((p, i) => {
           const d = p.date ? new Date(p.date).toISOString().slice(0, 10) : '—';
           const dTxt = p.delta ? `${p.delta.delta > 0 ? '+' : ''}${p.delta.delta} (${esc(p.delta.label)})` : '—';
-          return `<tr><td>${i + 1}</td><td>${esc(d)}</td><td>${p.followup ? 'Follow-up' : 'Baseline'}</td><td>${p.index}%</td><td>${esc(p.band)}</td><td>${dTxt}</td></tr>`;
+          const idxTxt = p.index != null ? `${p.index}%` : '—';
+          const bandTxt = p.band != null ? esc(p.band) : 'Not completed';
+          return `<tr><td>${i + 1}</td><td>${esc(d)}</td><td>${p.followup ? 'Follow-up' : 'Baseline'}</td><td>${idxTxt}</td><td>${bandTxt}</td><td>${dTxt}</td></tr>`;
         }).join('')}
       </tbody></table>
       ${trend.persistent.length ? `<div style="font-size:10.5px;margin-top:4px">Persistent patterns: <b>${trend.persistent.map(id => esc(id.replace(/_/g, ' '))).join(', ')}</b></div>` : ''}
@@ -4170,11 +4274,16 @@ function loadVisit(identity, visit, showResults) {
   extras.meds  = Object.assign(blankExtras().meds, saved.meds || {});
   extras.dys   = Object.assign(blankExtras().dys,  saved.dys  || {});
   extras.rome  = Object.assign(blankExtras().rome, saved.rome || {});
+  extras.clusterFreq = Object.assign(blankExtras().clusterFreq, saved.clusterFreq || {});
   session.name = id.name || '';
   session.age = id.age || '';
   session.gender = id.gender || '';
   session.ref = id.ref || '';
-  session.pregnant = '';
+  // Restore the per-visit applicability flag so the Pregnant banner/caveat
+  // survives a saved-visit reload/print. Older visits saved before this field
+  // existed fall back to '' (unknown) — a stale patient-level guess would be
+  // worse than showing no caveat.
+  session.pregnant = v.pregnant || '';
   session.followup = !!v.followup;
   loadedVisitId = v.id || null;  // save → update this record in-place
   render();
@@ -4404,8 +4513,8 @@ function paint(db) {
        <div><div class="pt-name">${esc(patientLabel(p))}</div>
        <div class="pt-meta">${patientMeta(p) || ((p.visits || []).length + ' visit' + ((p.visits || []).length === 1 ? '' : 's'))}</div></div>`));
     card.appendChild(el('div', { class: 'pt-stats' },
-      `<div class="pt-stat"><div class="v">${latest ? latest.index + '%' : '—'}</div><div class="l">Latest index</div></div>
-       <div class="pt-stat"><div class="v" style="font-size:12px">${latest ? esc(latest.band) : '—'}</div><div class="l">${deltaHtml}</div></div>`));
+      `<div class="pt-stat"><div class="v">${latest && latest.index != null ? latest.index + '%' : '—'}</div><div class="l">Latest index</div></div>
+       <div class="pt-stat"><div class="v" style="font-size:12px">${latest && latest.band != null ? esc(latest.band) : '—'}</div><div class="l">${deltaHtml}</div></div>`));
     card.onclick = () => { view = { mode: 'detail', patientId: p.id }; render(); };
     grid.appendChild(card);
   });
@@ -4441,8 +4550,8 @@ function renderDetail(root, db) {
     card.appendChild(el('div', { class: 'visit-info' },
       `<div class="visit-date">${esc(fmtDate(pt.date))}${pt.followup ? ' <span class="opt-tag">follow-up</span>' : ' <span class="opt-tag">baseline</span>'}</div>
        <div class="visit-sub">${pt.completeness}% complete${lens.count ? ' · ' + lens.count + ' microbiome signal' + (lens.count === 1 ? '' : 's') : ''}</div>`));
-    card.appendChild(el('div', { class: 'visit-score' }, `<div class="v">${pt.index}%</div><div class="l">index</div>`));
-    card.appendChild(el('span', { class: 'pill ' + sevCls }, esc(pt.band)));
+    card.appendChild(el('div', { class: 'visit-score' }, `<div class="v">${pt.index != null ? pt.index + '%' : '—'}</div><div class="l">index</div>`));
+    card.appendChild(el('span', { class: 'pill ' + sevCls }, pt.band != null ? esc(pt.band) : 'Not completed'));
     if (pt.delta) card.appendChild(el('div', { style: `font-weight:700;color:${pt.delta.color}` }, esc(pt.delta.label)));
     const vrec = visits.find(v => v.id === pt.id);
     const identity = { name: p.name, age: p.age, gender: p.gender, ref: p.ref };
@@ -4487,6 +4596,7 @@ function progressionCard(visits) {
 }
 
 function bandCls(label) {
+  if (label == null) return 'sev-unknown'; // core GI section not completed — not a Minimal band
   return label === 'Severe' ? 'sev-sev' : label === 'Significant' ? 'sev-sig' : label === 'Mild–Moderate' ? 'sev-mod' : 'sev-min';
 }
 
