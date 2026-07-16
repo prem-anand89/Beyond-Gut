@@ -387,7 +387,8 @@ const SECTIONS = [
   { id: 'NU',  label: 'NU',  full: 'Nutrient & absorption',              role: 'standalone', axis: 'nutrient',     color: '#185FA5', bg: '#E6F1FB' },
   // New Impact axis (§7d) — functional / quality-of-life, modeled on Rome IV's own
   // impact category. Standalone; also drives an independent Tier-2 escalation.
-  { id: 'IMP', label: 'IMP', full: 'Functional / quality-of-life impact', role: 'standalone', axis: 'impact',      color: '#6B7280', bg: '#F1F2F4' },
+  { id: 'IMP', label: 'IMP', full: 'Functional / quality-of-life impact', role: 'standalone', axis: 'impact',      color: '#6B7280', bg: '#F1F2F4',
+    note: "If your symptoms are minimal, it's fine to answer ‘None’ — these questions look at impact on your life separately from how severe symptoms feel." },
   // ── Targeted symptom sections (adaptive reveal) ──────────────────────────────
   // conditional:true → hidden by default, revealed by revealIf/refreshReveals when the
   // GSRS core points that way (or via the manual clinician toggle). All items are
@@ -705,15 +706,19 @@ const DISRUPTORS = [
   { id: 'ppi',   label: 'Acid blocker (PPI/H2)' },
   { id: 'nsaid', label: 'Regular NSAID' },
 ];
-const ALCOHOL_LEVELS  = ['None', 'Light', 'Moderate', 'Heavy'];        // 0–3
-const ACTIVITY_LEVELS = ['Sedentary', 'Light', 'Moderate', 'Active'];  // 0–3
+// Anchored with concrete quantities (UK CMO / WHO guideline bands) so the
+// choice isn't purely subjective — text-only; stored value is still the
+// array index, so no scoring/pattern/triage logic is affected.
+const ALCOHOL_LEVELS  = ['None', 'Light (1–7 units/wk)', 'Moderate (8–14 units/wk)', 'Heavy (>14 units/wk)'];        // 0–3
+const ACTIVITY_LEVELS = ['Sedentary (little/none)', 'Light (<75 min/wk)', 'Moderate (75–150 min/wk)', 'Active (150+ min/wk)'];  // 0–3
 // Coverage-gap drivers (bowel frequency, smoking, hydration) — same "context
 // only, kept OUT of the Index" treatment as every other driver on this page.
 const STOOL_FREQ_LEVELS = ['<3 times/week', '3–6 times/week', '1–3 times/day', '>3 times/day']; // 0–3
 const SMOKING_LEVELS    = ['Never smoked', 'Former smoker', 'Current smoker'];                   // 0–2
 // Shared with lifestyleCard()'s diet-frequency rows AND the new caffeine row —
 // module-level (not function-local) so modifiableFactors() can label it too.
-const FREQ_LEVELS = ['Rarely', 'Some days', 'Most days', 'Daily']; // 0–3
+// Anchored to days/week so the bands are concrete rather than purely subjective.
+const FREQ_LEVELS = ['Rarely (<1 day/wk)', 'Some days (1–3 days/wk)', 'Most days (4–6 days/wk)', 'Daily']; // 0–3
 const HYDRATION_LEVELS  = ['Low (<1L/day)', 'Moderate (1–2L/day)', 'Good (2L+/day)'];             // 0–2
 // Per-GSRS-cluster symptom-occurrence frequency — deliberately a DIFFERENT
 // recall window ("usual pattern, last 2–3 months") from the validated GSRS
@@ -802,6 +807,7 @@ const KNOWN_CONDITIONS = [
   { id: 'pancreas',   label: 'Pancreatitis / pancreatic insufficiency', clinNote: 'Known pancreatic disease / EPI — factor into the malabsorption read.' },
   { id: 'liver',      label: 'Liver disease / fatty liver', clinNote: 'Known liver disease — factor into interpretation.' },
   { id: 'hpylori',    label: 'H. pylori', clinNote: 'Known H. pylori — relevant to the upper-GI / dyspepsia read.' },
+  { id: 'pud',        label: 'Stomach or duodenal (peptic) ulcer', clinNote: 'Known peptic ulcer disease — relevant to the upper-GI / dyspepsia read; review NSAID use and H. pylori status.' },
   { id: 'thyroid',    label: 'Thyroid disorder', clinNote: 'Known thyroid disorder — can drive constipation (under-active) or loose stool (over-active); factor into the bowel-habit read.' },
   { id: 'diabetes',   label: 'Diabetes', clinNote: 'Known diabetes — consider gastroparesis / autonomic neuropathy if early satiety, nausea, or erratic bowel habit.' },
   { id: 'pcos',       label: 'PCOS', clinNote: 'Known PCOS — metabolic / hormonal overlap; relevant to bloating and bowel-habit interpretation.' },
@@ -2819,6 +2825,7 @@ function sectionCard(sec) {
     `${esc(sec.full || sec.label)} <span style="opacity:.8;font-weight:500">${baseCount} items</span>`));
   const body = el('div', { class: 'sec-body' });
   if (!sec.noRecall) body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, esc(recallNote())));
+  if (sec.note) body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:4px;font-style:italic' }, esc(sec.note)));
   items.forEach(q => {
     if (q.revealIf) {
       // reveal-on-positive follow-up item: hidden until refreshReveals() shows it.
