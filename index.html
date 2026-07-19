@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Beyond Mechanics · Gut & Systemic Health Screen (GSHS)</title>
+<title>Enterro360 · Gut & Systemic Health Screen</title>
 <style>/* ============================================================================
    gut_screen.html (v2) — clean-slate rebuild. Questionnaire + scoring only.
    Single self-contained offline file. Palette ported from BM_Gut_Suite v7.
@@ -203,7 +203,7 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 </head>
 <body>
 <header class="app-bar">
-  <div class="app-logo"><span class="dot"></span><span class="app-name-wrap">Gut &amp; Systemic Health Screen<span class="app-sub">Beyond Mechanics · GSHS</span></span></div>
+  <div class="app-logo"><span class="dot"></span><span class="app-name-wrap">Enterro360<span class="app-sub">Gut &amp; Systemic Health Screen</span></span></div>
   <div class="app-spacer"></div>
   <div class="mode-switch" id="modeSwitch">
     <button class="mode-btn active" data-mode="patient" type="button">Questionnaire</button>
@@ -2819,7 +2819,7 @@ function render() {
   const root = document.getElementById('mode-patient');
   root.innerHTML = '';
   root.appendChild(el('div', { class: 'intro' },
-    `<b>Gut &amp; Systemic Health Screen (GSHS).</b> A multi-axis screening instrument for chronic gut and related systemic symptoms. ` +
+    `<b>Enterro360 — Gut &amp; Systemic Health Screen.</b> A multi-axis screening instrument for chronic gut and related systemic symptoms. ` +
     `This is a screening aid to support clinical assessment — not a diagnosis.`));
 
   // How long this takes — the headline count/time is the mandatory questions only.
@@ -4143,7 +4143,7 @@ function buildPatientPrint(c) {
   const COUNT_LOADS = new Set(['disruption_load', 'dysbiosis_correlate_load']);
 
   const div = document.createElement('div');
-  let h = `<div class="pr-logo">Beyond Mechanics</div>
+  let h = `<div class="pr-logo">Enterro360</div>
     <div class="pr-title">Gut &amp; Systemic Health Screen</div>
     <div class="pr-meta">Prepared for: <b>${esc(patName)}</b>${session.followup ? ' · Follow-up visit' : ' · Baseline screen'}<br>Date: ${esc(dateStr)}</div>
     <hr class="pr-divider">`;
@@ -4254,7 +4254,7 @@ function buildPatientPrint(c) {
       <table class="pr-tbl"><tbody>${mf.map(f => `<tr><td style="color:#000">${factorIcon(f)}${esc(f.label)}</td><td style="color:#000"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${f.color};margin-right:6px;vertical-align:middle"></span><b>${esc(f.band)}</b>${f.score ? ` <span style="color:#555">· ${esc(f.score)}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
-  h += `<div class="pr-footer">This is a screening tool — it is not a diagnosis. Please discuss your results with your clinician. For the full clinical detail, ask for the clinician summary.<br>Beyond Mechanics · Gut & Systemic Health Screen (GSHS) · ${esc(dateStr)}</div>`;
+  h += `<div class="pr-footer">This is a screening tool — it is not a diagnosis. Please discuss your results with your clinician. For the full clinical detail, ask for the clinician summary.<br>Enterro360 · Gut & Systemic Health Screen · ${esc(dateStr)}</div>`;
   div.innerHTML = h;
   return div;
 }
@@ -4327,7 +4327,7 @@ function buildClinicianPrint(c) {
   const isMinor = !isNaN(ageNum) && ageNum < 18;
 
   const div = document.createElement('div');
-  let h = `<div class="pr-logo">Beyond Mechanics · Gut & Systemic Health Screen (GSHS)</div>
+  let h = `<div class="pr-logo">Enterro360 · Gut & Systemic Health Screen</div>
     <div class="pr-title">Clinical Summary</div>
     <div class="pr-meta">
       Patient: <b>${esc(patName)}</b>${session.ref ? ` · Ref: ${esc(session.ref)}` : ''}<br>
@@ -4524,7 +4524,7 @@ function buildClinicianPrint(c) {
     </div>`;
   }
 
-  h += `<div class="pr-footer">Clinical summary — Gut & Systemic Health Screen (GSHS) · Beyond Mechanics · ${esc(dateStr)}<br>Screening tool only — not a diagnosis or prescription. Apply clinical judgement.</div>`;
+  h += `<div class="pr-footer">Clinical summary — Enterro360 · Gut & Systemic Health Screen · ${esc(dateStr)}<br>Screening tool only — not a diagnosis or prescription. Apply clinical judgement.</div>`;
   div.innerHTML = h;
   return div;
 }
