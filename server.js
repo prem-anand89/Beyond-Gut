@@ -20,7 +20,19 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(clerkMiddleware());
+
+// Clerk middleware - only use if secret key is configured
+if (process.env.CLERK_SECRET_KEY) {
+  app.use(clerkMiddleware());
+  console.log('✓ Clerk authentication enabled');
+} else {
+  console.log('⚠️  CLERK_SECRET_KEY not set. Auth is disabled.');
+  // Fallback middleware that provides dummy auth
+  app.use((req, res, next) => {
+    req.auth = { userId: null, orgId: null };
+    next();
+  });
+}
 
 // Initialize database (optional)
 async function initializeDatabase() {
@@ -63,6 +75,24 @@ async function initializeDatabase() {
   }
 }
 
+// Middleware: require authentication (if Clerk is configured)
+function requireAuthIfConfigured(req, res, next) {
+  if (!process.env.CLERK_SECRET_KEY) {
+    // Clerk not configured, allow anyway
+    next();
+    return;
+  }
+
+  if (!req.auth || !req.auth.userId) {
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: 'Please sign in to access this endpoint'
+    });
+  }
+
+  next();
+}
+
 // Middleware: check if database is available for API calls
 function requireDatabase(req, res, next) {
   if (!pool) {
@@ -86,7 +116,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Protected API endpoints
-app.post('/api/visits', requireAuth(), requireDatabase, async (req, res) => {
+app.post('/api/visits', requireAuthIfConfigured, requireDatabase, async (req, res) => {
   try {
     const { answers, extras, scoreSnapshot, patientName } = req.body;
     const userId = req.auth.userId;
