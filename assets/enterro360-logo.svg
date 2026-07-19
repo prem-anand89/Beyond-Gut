@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 96" width="380" height="96" role="img" aria-label="Enterro360 logo">
+  <!-- Wordmark only — placeholder brand lockup. The logo mark is deliberately
+       deferred; this carries just the name until a mark is chosen. -->
+  <g font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+    <text x="0" y="46" font-size="44" font-weight="700" fill="#123">Enterro<tspan fill="#0F6E56">360</tspan></text>
+    <text x="2" y="74" font-size="15" font-weight="500" fill="#5A6B66" letter-spacing="0.5">Gut &amp; Systemic Health Screen</text>
+  </g>
+</svg>
