@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Enterro360 icon">
+  <defs>
+    <linearGradient id="i360ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0F6E56"/>
+      <stop offset="1" stop-color="#17A67E"/>
+    </linearGradient>
+    <linearGradient id="i360gut" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17A67E"/>
+      <stop offset="1" stop-color="#3FBF9A"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="120" height="120" rx="26" fill="#F2FBF8"/>
+  <g transform="translate(60 60)">
+    <path d="M 40 -20 A 46 46 0 1 1 20 -42"
+          fill="none" stroke="url(#i360ring)" stroke-width="9" stroke-linecap="round"/>
+    <path d="M 20 -42 l 14 -3 l -6 13 z" fill="#0F6E56"/>
+    <path d="M -22 16
+             C -30 2 -14 -6 -4 2
+             C 6 10 -6 20 2 24
+             C 12 29 22 16 18 4
+             C 15 -6 2 -14 -8 -18"
+          fill="none" stroke="url(#i360gut)" stroke-width="8"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

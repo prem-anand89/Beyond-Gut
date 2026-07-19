@@ -57,9 +57,11 @@ function run(gi, sys = {}, extra = {}, romeIn = {}) {
   const obstetric = scales.obstetricHistory(ex);
   const gynOverlap = (typeof a.gy_cyclical === 'number' && a.gy_cyclical >= 2) && (typeof a.gsrs_pain === 'number' && a.gsrs_pain >= 2);
   const anthro = scales.anthropometrics(ex, {});
+  const labs = scales.knownLabs(ex);
   const tri = triage(score, pat, [], correlateLoad, {
     impactBand: prof.impact.band, romeResult: rr, adhesionSurgery: false,
-    knownConditions: conditions, conditionNotes: conditions.notes, family: famhx, gynOverlap, obstetric, anthro,
+    knownConditions: conditions, conditionNotes: conditions.notes, labResults: labs,
+    family: famhx, gynOverlap, obstetric, anthro,
   });
   return { score, prof, heads, pat, rr, tri, correlateLoad, obstetric, anthro };
 }
@@ -369,10 +371,31 @@ ok(sBowelWithBristol.index > sBowelNoBristol.index, 'Bristol nudge raises the in
 ok(run(0, { im_food_react: 3, im_infections: 3 }, { pss4Score: 16 }).heads.primary.symptom.value === 0,
   'de-blend invariant still holds after the cluster-balanced index rewrite');
 
-// 30d. Universal symptom-duration item — ungated, driverOnly, never touches
-// the Index; feeds triage.durationNote as plain context (never the Tier).
+// 30d. Symptom-duration item — driverOnly (never touches the Index), and now
+// reveal-gated so it is only asked once a gut symptom is present (Option C).
 const durQ = schema.QUESTIONS.find(q => q.id === 'sx_duration');
-ok(!!durQ && !durQ.revealIf && durQ.driverOnly === true, 'sx_duration present, ungated, driverOnly');
+ok(!!durQ && durQ.driverOnly === true, 'sx_duration present, driverOnly');
+ok(!!durQ.revealIf && Array.isArray(durQ.revealIf.any) && durQ.revealIf.any.length === 5,
+  'sx_duration reveal-gated on any GI cluster being present (Option C)');
+// Hidden for a no-symptom patient, shown once any cluster has a positive answer.
+ok(schema.revealMet(durQ.revealIf, { answers: {}, clusterNorm: {} }) === false,
+  'sx_duration hidden when no gut symptom present');
+ok(schema.revealMet(durQ.revealIf, { answers: {}, clusterNorm: cn({ gsrs_heartburn: 1 }) }) === true,
+  'sx_duration revealed once a gut symptom is present');
+// 'Not sure / it varies' (index 5) must never read as a chronic onset: it is
+// beyond the ordinal DURATION/ROME_ONSET bands, so Rome IV onset ignores it.
+ok(scales.SCALES.DURATION.length === 6 && /Not sure/.test(scales.SCALES.DURATION[5]),
+  'DURATION carries a trailing "Not sure / it varies" escape option');
+const rrUnsure = rome.classifyRomeIV({ painFreq: 3, rm_assoc_defecation: true, rm_assoc_freqchange: true }, {}, 5);
+ok(rrUnsure.answered === false, 'sx_duration "Not sure" (index 5) does NOT satisfy Rome IV onset');
+const rrChronic = rome.classifyRomeIV({ painFreq: 3, rm_assoc_defecation: true, rm_assoc_freqchange: true }, {}, 4);
+ok(rrChronic.answered === true, 'a real chronic sx_duration band (index 4) still satisfies Rome IV onset');
+// revealMet item predicate now supports an optional max bound (used so the
+// "Not sure" sentinel does not trip the pain/Rome duration-based card reveal).
+ok(schema.revealMet({ type: 'item', id: 'sx_duration', min: 2, max: 4 }, { answers: { sx_duration: 5 } }) === false,
+  'revealMet item max bound excludes the "Not sure" sentinel');
+ok(schema.revealMet({ type: 'item', id: 'sx_duration', min: 2, max: 4 }, { answers: { sx_duration: 3 } }) === true,
+  'revealMet item max bound admits a real chronic band');
 ok(scoring.computeScores({ sx_duration: 4, gsrs_pain: 0 }, {}).index === 0, 'sx_duration answer never enters the Index');
 const rNoDuration = run(1, {});
 ok(rNoDuration.tri.durationNote == null, 'durationNote absent when sx_duration unanswered');
@@ -414,8 +437,9 @@ ok(r31b.pat.some(p => p.id === 'inflammatory_immune'), 'inflammatory_immune stil
 
 // 31c. dys.gasFoul UI label no longer implies frequency ("Excessive") — that's
 // gsrs_gas's job; this field is scoped to the foul/sulfur quality signal.
-ok(/'Foul or sulfur-smelling wind'/.test(html), 'dys.gasFoul label present without "Excessive"');
+ok(/'Foul or sulfur-smelling gas'/.test(html), 'dys.gasFoul label uses patient-friendly "gas" without "Excessive"');
 ok(!/Excessive or foul/.test(html), 'old "Excessive or foul" gasFoul wording removed');
+ok(!/'Foul or sulfur-smelling wind'/.test(html), 'old British "wind" gasFoul wording removed');
 
 // 31d. secNorm.IM composition unchanged in shape — still exactly 6 scored items.
 const imScored = schema.QUESTIONS.filter(q => q.section === 'IM' && !q.optional && !q.freeText && !q.driverOnly);
@@ -1011,6 +1035,63 @@ ok(/tri\.restrictionScreenNote/.test(ptSrc) && /tri\.restrictionScreenNote/.test
 const conditionsCardFn = html.match(/function conditionsCard\(\)\s*\{[\s\S]*?\n\}/);
 ok(!!conditionsCardFn && (conditionsCardFn[0].match(/refreshReveals\(\)/g) || []).length === 2,
   'conditionsCard() chip toggle AND "None of these" toggle both call refreshReveals() (D2 browser-caught fix)');
+
+// ── M2: patient-reported known lab results (extras-only, drives triage) ──
+// Vocabulary + helper shape.
+ok(Array.isArray(scales.KNOWN_LABS) && scales.KNOWN_LABS.length === 6, 'KNOWN_LABS has 6 lab chips');
+ok(['calprotectin', 'coeliac', 'crp', 'tsh', 'hba1c', 'vitamins'].every(id => scales.KNOWN_LABS.some(L => L.id === id)),
+  'KNOWN_LABS covers calprotectin/coeliac/crp/tsh/hba1c/vitamins');
+const kl0 = scales.knownLabs({});
+ok(kl0.count === 0 && kl0.summary === '' && Array.isArray(kl0.items), 'knownLabs({}) → empty, no summary');
+const klD = scales.knownLabs({ knownLabs: ['calprotectin', 'coeliac'], knownLabsDetail: { calprotectin: '180' } });
+ok(klD.count === 2 && /calprotectin/i.test(klD.summary) && /180/.test(klD.summary),
+  'knownLabs() summary folds the free-text value into the label');
+// Never enters the Index (extras-only).
+ok(scoring.computeScores({ gsrs_heartburn: 0 }, {}).index === 0, 'M2 labs are extras-only (no Index path)');
+// Routing: calprotectin + coeliac → Tier 1 regardless of symptom burden.
+const rCal = run(0, {}, { knownLabs: ['calprotectin'] });
+ok(rCal.tri.level === 1 && reasons(rCal.tri).some(r => /calprotectin/i.test(r.text)), 'raised calprotectin → Tier 1 referral');
+const rCoe = run(0, {}, { knownLabs: ['coeliac'] });
+ok(rCoe.tri.level === 1 && reasons(rCoe.tri).some(r => /coeliac/i.test(r.text)), 'positive coeliac serology → Tier 1 referral');
+// CRP: Tier 1 only when burden is Severe, else Tier 2.
+const rCrpSevere = run(3, {}, { knownLabs: ['crp'] });
+const rCrpMild = run(0, {}, { knownLabs: ['crp'] });
+ok(rCrpSevere.tri.level === 1, 'raised CRP + Severe burden → Tier 1');
+ok(reasons(rCrpMild.tri).some(r => /inflammatory markers/i.test(r.text)), 'raised CRP alone still surfaces as a candidacy reason');
+ok(rCrpMild.tri.level !== 1, 'raised CRP without Severe burden does NOT force Tier 1');
+// TSH: Tier 1 only with a constipation-dominant pattern.
+const rTshConstip = run(0, { gsrs_constip: 3, gsrs_hard: 3, gsrs_incomplete: 3 }, { knownLabs: ['tsh'] });
+ok(rTshConstip.pat.some(p => p.id === 'constipation_dominant') && rTshConstip.tri.level === 1,
+  'abnormal TSH + constipation-dominant → Tier 1');
+// labNote summarises for the clinician; null when nothing reported.
+ok(rCal.tri.labNote && /calprotectin/i.test(rCal.tri.labNote), 'labNote summarises reported abnormal labs');
+ok(run(0, {}).tri.labNote == null, 'labNote null when no labs reported');
+// Wired into all three render sites + de-identified CSV columns.
+ok(/tri\.labNote/.test(html), 'labNote referenced in a UI render site');
+ok(/ptNotes = \[\]\.concat\([\s\S]{0,220}tri\.labNote/.test(html), 'labNote in patient-print notes concat');
+ok(/ex_lab_' \+ L\.id/.test(html) && /\(ex\.knownLabs \|\| \[\]\)\.includes\(L\.id\)/.test(html),
+  'M2 labs exported as de-identified yes/no CSV columns (free-text excluded)');
+ok(/knownLabs: \[\]/.test(html) && /knownLabsDetail: \{\}/.test(html), 'blankExtras seeds knownLabs / knownLabsDetail');
+
+// ── P2: score snapshot frozen at save-time ──
+// visitScore() reads a visit's frozen scoreSnapshot for the displayed numbers
+// (so a later engine recalibration can't change what a past visit shows), and
+// falls back to a live recompute for pre-snapshot visits.
+const snapVisit = { id: 'v1', date: 1000, answers: { gsrs_pain: 2 }, extras: {},
+  scoreSnapshot: { index: 99, severity: { label: 'Severe' }, secNorm: {}, clusterNorm: { Pain: 0.6 }, completeness: 42 } };
+const vsSnap = trend.visitScore(snapVisit);
+ok(vsSnap.index === 99 && vsSnap.band === 'Severe' && vsSnap.completeness === 42,
+  'visitScore() reads the frozen scoreSnapshot (index/band/completeness) verbatim');
+const oldVisit = { id: 'v2', date: 900, answers: { gsrs_pain: 2 }, extras: {} };
+const vsOld = trend.visitScore(oldVisit);
+ok(typeof vsOld.index === 'number' && vsOld.index !== 99,
+  'visitScore() falls back to a live recompute for pre-snapshot visits');
+// Wiring: snapshot written at save-time (both new + edit paths) and read by CSV.
+ok(/function buildScoreSnapshot\(a, ex\)/.test(html), 'buildScoreSnapshot() helper present');
+ok((html.match(/scoreSnapshot: buildScoreSnapshot\(answers, extras\)/g) || []).length === 2,
+  'scoreSnapshot written on both the new-visit and edit-in-place save paths');
+ok(/const snap = v\.scoreSnapshot \|\| null;[\s\S]{0,400}snap \? snap\.index/.test(html),
+  'pilot CSV prefers the frozen snapshot index when present');
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);
