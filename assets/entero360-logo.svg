@@ -1,0 +1,143 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1180" width="1000" height="1180" role="img" aria-label="Entero360 — Gut & Systemic Health Screen">
+  <defs>
+    <linearGradient id="gut" gradientUnits="userSpaceOnUse" x1="0" y1="-160" x2="0" y2="185">
+      <stop offset="0" stop-color="#7AC24A"/>
+      <stop offset="0.5" stop-color="#2BA8A0"/>
+      <stop offset="1" stop-color="#2E63A6"/>
+    </linearGradient>
+    <linearGradient id="ring" gradientUnits="userSpaceOnUse" x1="200" y1="220" x2="800" y2="660">
+      <stop offset="0" stop-color="#7AC24A"/>
+      <stop offset="0.55" stop-color="#2BA8A0"/>
+      <stop offset="1" stop-color="#2E63A6"/>
+    </linearGradient>
+    <linearGradient id="word360" gradientUnits="userSpaceOnUse" x1="600" y1="930" x2="930" y2="1010">
+      <stop offset="0" stop-color="#4FB05A"/>
+      <stop offset="0.6" stop-color="#2BA8A0"/>
+      <stop offset="1" stop-color="#2E63A6"/>
+    </linearGradient>
+    <linearGradient id="smallint" gradientUnits="userSpaceOnUse" x1="0" y1="-10" x2="0" y2="130">
+      <stop offset="0" stop-color="#8CCB6B"/>
+      <stop offset="1" stop-color="#4FB7A8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ================= EMBLEM ================= -->
+  <!-- connecting ring -->
+  <circle cx="500" cy="440" r="300" fill="none" stroke="url(#ring)" stroke-width="7"/>
+
+  <!-- ---- central digestive glyph ---- -->
+  <g transform="translate(500 440)">
+    <!-- liver (filled wedge, upper-left) -->
+    <path d="M -140 -108 C -78 -134 -6 -128 26 -104 L 14 -60 C -34 -50 -104 -58 -140 -84 Z"
+          fill="url(#gut)" opacity="0.95"/>
+    <!-- stomach (filled bean, upper-right) -->
+    <path d="M 30 -150 C 92 -166 128 -120 112 -74 C 104 -48 74 -44 58 -60
+             C 74 -70 78 -96 62 -110 C 44 -126 16 -122 8 -104
+             C 0 -122 12 -146 30 -150 Z"
+          fill="url(#gut)"/>
+    <!-- large intestine (colon frame) -->
+    <path d="M 132 150 L 132 -18 Q 132 -66 84 -66 L -84 -66 Q -132 -66 -132 -18 L -132 108
+             Q -132 150 -92 150 Q -52 150 -58 116 Q -62 152 -30 168"
+          fill="none" stroke="url(#gut)" stroke-width="27" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- small intestine (coil) -->
+    <path d="M -78 20 C -30 -6 -22 52 -66 60 C -22 78 -74 104 -28 116
+             C 20 128 -6 82 44 96 C 90 108 46 58 86 52
+             C 44 40 74 14 46 6 C 14 -4 40 40 4 34
+             C -30 28 -44 4 -78 20 Z"
+          fill="none" stroke="url(#smallint)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  </g>
+
+  <!-- ---- 8 systemic satellites ---- -->
+  <!-- each node: dot on ring, dotted connector, icon disc, 2-line label -->
+  <g font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="19" font-weight="700"
+     fill="#274B63" text-anchor="middle" letter-spacing="0.4">
+
+    <!-- Immune (upper-left, green) -->
+    <g stroke="none"><circle cx="385" cy="163" r="7" fill="#6DBE4A"/></g>
+    <line x1="385" y1="163" x2="349" y2="75" stroke="#6DBE4A" stroke-width="2.5" stroke-dasharray="2 6" stroke-linecap="round"/>
+    <circle cx="349" cy="75" r="41" fill="#fff" stroke="#6DBE4A" stroke-width="3"/>
+    <path d="M349 54 l17 6 v13 c0 12 -9 20 -17 24 c-8 -4 -17 -12 -17 -24 v-13 z" fill="none" stroke="#6DBE4A" stroke-width="3" stroke-linejoin="round"/>
+    <text x="349" y="140">IMMUNE</text><text x="349" y="162">BALANCE</text>
+
+    <!-- Mental & Neurological (upper-right, teal-blue) -->
+    <circle cx="615" cy="163" r="7" fill="#2E8FB8"/>
+    <line x1="615" y1="163" x2="651" y2="75" stroke="#2E8FB8" stroke-width="2.5" stroke-dasharray="2 6" stroke-linecap="round"/>
+    <circle cx="651" cy="75" r="41" fill="#fff" stroke="#2E8FB8" stroke-width="3"/>
+    <path d="M638 84 c-8 -2 -9 -14 -1 -16 c-3 -9 9 -14 14 -7 c6 -6 16 0 13 8 c7 3 5 14 -3 15 c1 8 -12 10 -14 3 c-4 5 -13 2 -9 -6 z" fill="none" stroke="#2E8FB8" stroke-width="2.6" stroke-linejoin="round"/>
+    <line x1="651" y1="61" x2="651" y2="86" stroke="#2E8FB8" stroke-width="2.6"/>
+    <text x="651" y="140">MENTAL &amp;</text><text x="651" y="162">NEUROLOGICAL</text>
+
+    <!-- Musculoskeletal (right-upper, blue) -->
+    <circle cx="777" cy="325" r="7" fill="#2E6FA8"/>
+    <line x1="777" y1="325" x2="865" y2="289" stroke="#2E6FA8" stroke-width="2.5" stroke-dasharray="2 6" stroke-linecap="round"/>
+    <circle cx="865" cy="289" r="41" fill="#fff" stroke="#2E6FA8" stroke-width="3"/>
+    <g stroke="#2E6FA8" stroke-width="3" stroke-linecap="round" fill="none">
+      <path d="M851 275 c-6 -6 -14 2 -8 8 l14 14 c6 6 14 -2 8 -8"/>
+      <path d="M879 303 c6 6 14 -2 8 -8 l-14 -14 c-6 -6 -14 2 -8 8"/>
+    </g>
+    <text x="865" y="352">MUSCULO-</text><text x="865" y="374">SKELETAL</text>
+
+    <!-- Nutrition (right-lower, green) -->
+    <circle cx="777" cy="555" r="7" fill="#59B36B"/>
+    <line x1="777" y1="555" x2="865" y2="591" stroke="#59B36B" stroke-width="2.5" stroke-dasharray="2 6" stroke-linecap="round"/>
+    <circle cx="865" cy="591" r="41" fill="#fff" stroke="#59B36B" stroke-width="3"/>
+    <path d="M851 605 c-4 -20 12 -34 30 -32 c2 18 -10 34 -30 32 z M853 603 c8 -8 16 -14 24 -18" fill="none" stroke="#59B36B" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="865" y="662">NUTRITION</text><text x="865" y="684">STATUS</text>
+
+    <!-- Hormonal (lower-right, deep blue) -->
+    <circle cx="615" cy="717" r="7" fill="#2E5F9E"/>
+    <line x1="615" y1="717" x2="651" y2="805" stroke="#2E5F9E" stroke-width="2.5" stroke-dasharray="2 6" stroke-linecap="round"/>
+    <circle cx="651" cy="805" r="41" fill="#fff" stroke="#2E5F9E" stroke-width="3"/>
+    <g stroke="#2E5F9E" stroke-width="2.6" fill="none">
+      <circle cx="651" cy="805" r="7"/>
+      <line x1="651" y1="798" x2="651" y2="786"/><circle cx="651" cy="783" r="4"/>
+      <line x1="657" y1="809" x2="668" y2="815"/><circle cx="671" cy="817" r="4"/>
+      <line x1="645" y1="809" x2="634" y2="815"/><circle cx="631" cy="817" r="4"/>
+    </g>
+    <text x="651" y="882">HORMONAL</text><text x="651" y="904">BALANCE</text>
+
+    <!-- Cellular energy (lower-left, teal) -->
+    <circle cx="385" cy="717" r="7" fill="#2E9FB0"/>
+    <line x1="385" y1="717" x2="349" y2="805" stroke="#2E9FB0" stroke-width="2.5" stroke-dasharray="2 6" stroke-linecap="round"/>
+    <circle cx="349" cy="805" r="41" fill="#fff" stroke="#2E9FB0" stroke-width="3"/>
+    <g stroke="#2E9FB0" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="349" cy="805" rx="24" ry="14"/>
+      <path d="M331 805 h6 l3 -6 4 12 3 -6 h14"/>
+    </g>
+    <text x="349" y="882">CELLULAR</text><text x="349" y="904">ENERGY</text>
+
+    <!-- Respiratory (left-lower, teal) -->
+    <circle cx="223" cy="555" r="7" fill="#2AA6A0"/>
+    <line x1="223" y1="555" x2="135" y2="591" stroke="#2AA6A0" stroke-width="2.5" stroke-dasharray="2 6" stroke-linecap="round"/>
+    <circle cx="135" cy="591" r="41" fill="#fff" stroke="#2AA6A0" stroke-width="3"/>
+    <g stroke="#2AA6A0" stroke-width="2.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="135" y1="570" x2="135" y2="583"/>
+      <path d="M135 583 c-2 -12 -18 -8 -18 4 c0 12 4 22 14 24 c6 1 4 -10 4 -16"/>
+      <path d="M135 583 c2 -12 18 -8 18 4 c0 12 -4 22 -14 24 c-6 1 -4 -10 -4 -16"/>
+    </g>
+    <text x="135" y="662">RESPIRATORY</text><text x="135" y="684">HEALTH</text>
+
+    <!-- Cardiovascular (left-upper, green-teal) -->
+    <circle cx="223" cy="325" r="7" fill="#3FA98A"/>
+    <line x1="223" y1="325" x2="135" y2="289" stroke="#3FA98A" stroke-width="2.5" stroke-dasharray="2 6" stroke-linecap="round"/>
+    <circle cx="135" cy="289" r="41" fill="#fff" stroke="#3FA98A" stroke-width="3"/>
+    <path d="M117 285 c0 -12 18 -14 18 -2 c0 -12 18 -10 18 2 c0 12 -18 22 -18 22 c0 0 -18 -10 -18 -22 z" fill="none" stroke="#3FA98A" stroke-width="2.8" stroke-linejoin="round"/>
+    <path d="M119 292 h8 l3 -7 4 12 3 -5 h6" fill="none" stroke="#3FA98A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="135" y="352">CARDIO-</text><text x="135" y="374">VASCULAR</text>
+  </g>
+
+  <!-- ================= WORDMARK ================= -->
+  <g font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+    <!-- "Entero36" + a circular-arrow ring that forms the final 0 (the 360° motion motif) -->
+    <text x="455" y="1002" font-size="132" font-weight="700" fill="#16324F" text-anchor="end">Entero</text>
+    <text x="459" y="1002" font-size="132" font-weight="700" fill="url(#word360)" text-anchor="start">36</text>
+    <g transform="translate(665 958)">
+      <path d="M 16 -43 A 46 46 0 1 1 -6 -45" fill="none" stroke="url(#word360)" stroke-width="16" stroke-linecap="round"/>
+      <path d="M -6 -45 l 20 -8 l 2 22 z" fill="#2E63A6"/>
+    </g>
+
+    <!-- tagline -->
+    <text x="500" y="1066" font-size="29" font-weight="600" fill="#274B63" text-anchor="middle" letter-spacing="4.5">GUT &amp; SYSTEMIC HEALTH SCREEN</text>
+    <text x="500" y="1116" font-size="30" font-weight="600" fill="#3FA98A" text-anchor="middle" letter-spacing="3">Assess. Understand. Act.</text>
+  </g>
+</svg>
