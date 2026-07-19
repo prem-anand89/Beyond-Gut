@@ -3,24 +3,33 @@ const path = require('path');
 const cors = require('cors');
 require('dotenv').config();
 const { clerkMiddleware, requireAuth } = require('@clerk/express');
-const { Pool } = require('pg');
-const { v4: uuidv4 } = require('uuid');
+
+// Optional: only load pg if DATABASE_URL is set
+let pool = null;
+if (process.env.DATABASE_URL) {
+  const { Pool } = require('pg');
+  const { v4: uuidv4 } = require('uuid');
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+  });
+}
 
 const app = express();
-
-// Database pool
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
-});
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(clerkMiddleware());
 
-// Initialize database
+// Initialize database (optional)
 async function initializeDatabase() {
+  if (!pool) {
+    console.log('⚠️  DATABASE_URL not set. Running in localStorage mode.');
+    console.log('   To enable cloud sync, set DATABASE_URL in Railway environment variables.');
+    return;
+  }
+
   try {
     // Create tables if they don't exist
     await pool.query(`
@@ -50,17 +59,34 @@ async function initializeDatabase() {
     console.log('✓ Database initialized');
   } catch (err) {
     console.error('Database initialization error:', err);
-    process.exit(1);
+    console.error('⚠️  Continuing without database. API endpoints will not be available.');
   }
+}
+
+// Middleware: check if database is available for API calls
+function requireDatabase(req, res, next) {
+  if (!pool) {
+    return res.status(503).json({
+      error: 'Database not configured',
+      message: 'Cloud visit sync is not enabled. Set DATABASE_URL in environment variables to enable it.',
+      fallback: 'Using browser localStorage for visits'
+    });
+  }
+  next();
 }
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    database: pool ? 'connected' : 'not configured',
+    auth: 'clerk enabled'
+  });
 });
 
 // Protected API endpoints
-app.post('/api/visits', requireAuth(), async (req, res) => {
+app.post('/api/visits', requireAuth(), requireDatabase, async (req, res) => {
   try {
     const { answers, extras, scoreSnapshot, patientName } = req.body;
     const userId = req.auth.userId;
@@ -102,7 +128,7 @@ app.post('/api/visits', requireAuth(), async (req, res) => {
   }
 });
 
-app.get('/api/visits', requireAuth(), async (req, res) => {
+app.get('/api/visits', requireAuth(), requireDatabase, async (req, res) => {
   try {
     const userId = req.auth.userId;
     const orgId = req.auth.orgId;
@@ -133,7 +159,7 @@ app.get('/api/visits', requireAuth(), async (req, res) => {
   }
 });
 
-app.get('/api/visits/:id', requireAuth(), async (req, res) => {
+app.get('/api/visits/:id', requireAuth(), requireDatabase, async (req, res) => {
   try {
     const userId = req.auth.userId;
     const orgId = req.auth.orgId;
@@ -162,7 +188,7 @@ app.get('/api/visits/:id', requireAuth(), async (req, res) => {
   }
 });
 
-app.put('/api/visits/:id', requireAuth(), async (req, res) => {
+app.put('/api/visits/:id', requireAuth(), requireDatabase, async (req, res) => {
   try {
     const userId = req.auth.userId;
     const orgId = req.auth.orgId;
@@ -195,7 +221,7 @@ app.put('/api/visits/:id', requireAuth(), async (req, res) => {
   }
 });
 
-app.delete('/api/visits/:id', requireAuth(), async (req, res) => {
+app.delete('/api/visits/:id', requireAuth(), requireDatabase, async (req, res) => {
   try {
     const userId = req.auth.userId;
     const orgId = req.auth.orgId;
@@ -234,14 +260,19 @@ app.get('*', (req, res) => {
 // Start server
 const PORT = process.env.PORT || 3000;
 
-initializeDatabase().then(() => {
+(async () => {
+  await initializeDatabase();
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Enterro360 server running on port ${PORT}`);
-    console.log(`Clerk auth enabled`);
+    console.log(`✓ Enterro360 server running on port ${PORT}`);
+    console.log(`✓ Clerk auth enabled`);
+    console.log(`📱 Visit: http://localhost:${PORT}/`);
   });
+})().catch((err) => {
+  console.error('Startup error:', err);
+  process.exit(1);
 });
 
-process.on('error', (err) => {
-  console.error('Server error:', err);
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
   process.exit(1);
 });
