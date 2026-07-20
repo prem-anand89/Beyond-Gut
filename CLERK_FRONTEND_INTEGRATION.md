@@ -1,5 +1,9 @@
 # Clerk Frontend Integration Guide
 
+> ⚠️ **Future-State Configuration**
+> 
+> This guide describes optional, future-state features. Clerk authentication is **disabled by default** in the current release. The GSHS tool operates without authentication and stores data in browser localStorage. These integration instructions are provided for clinics planning production deployments with multi-clinic requirements and backend synchronization.
+
 This guide shows how to integrate Clerk authentication into the Enterro360 frontend and wire visit syncing to the backend API.
 
 ## Overview

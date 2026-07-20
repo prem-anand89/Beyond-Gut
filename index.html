@@ -2840,6 +2840,11 @@ function render() {
 
   root.appendChild(patientBanner());
 
+  // Privacy warning for shared-device use
+  root.appendChild(el('div', { class: 'intro', style: 'background:#FFF3CD;border-color:#FFD699;color:#664d03' },
+    `🔒 <b>Shared device notice:</b> Patient data is stored locally in this browser's storage. If this is a shared or clinic computer, ` +
+    `always clear browser data (cookies, site data) after each patient to protect confidentiality. Do not leave this browser logged into patient records.`));
+
   // Clinical intake flow:
   //   Anthropometrics → History → Safety screen → Gut symptoms →
   //   Lifestyle & modifiable drivers → Systemic features → Adaptive deep dive.
