@@ -4092,7 +4092,7 @@ function clinicianDetailCard(c) {
        <td><span style="background:${p.confColor};color:#fff;border-radius:8px;padding:1px 6px;font-size:10px;white-space:nowrap">${esc(p.confidence)}</span></td>
        <td>${esc(p.desc)}</td></tr>`
     ).join('');
-    card.appendChild(tbl(['Pattern', 'Confidence', 'Rationale'], ptRows));
+    card.appendChild(tbl(['Pattern', 'Data completeness', 'Rationale'], ptRows));
   }
 
   // Modifiable driver raw values
@@ -4477,7 +4477,7 @@ function buildClinicianPrint(c) {
   // Patterns
   if (patterns.length) {
     h += `<div class="pr-section"><div class="pr-sh">Patterns</div>
-      <table class="pr-tbl"><thead><tr><th>Pattern</th><th>Confidence</th><th>Rationale</th></tr></thead><tbody>
+      <table class="pr-tbl"><thead><tr><th>Pattern</th><th>Data completeness</th><th>Rationale</th></tr></thead><tbody>
         ${patterns.map(p => `<tr><td><b>${esc(p.label)}</b></td><td>${esc(p.confidence)}</td><td>${esc(p.desc)}</td></tr>`).join('')}
       </tbody></table></div>`;
   }
