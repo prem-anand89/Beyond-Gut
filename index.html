@@ -2006,7 +2006,7 @@ function triage(score, patterns, firedFlags, dys, opts) {
     : null;
   // Medication confounders — drugs that can cause/aggravate the reported symptoms.
   result.medNote = (o.medConfounders && o.medConfounders.length)
-    ? `Medication(s) that can cause/aggravate GI symptoms — interpret with this in mind: ${o.medConfounders.map(m => m.label).join(', ')}.`
+    ? `Reported medication(s) can cause/aggravate GI symptoms: ${o.medConfounders.map(m => `${m.label} (${m.effect})`).join('; ')}. Symptoms may improve if discontinued (discuss with prescriber).`
     : null;
   // Autonomic overlap (orthostatic / palpitations alongside a gut-brain picture).
   result.autonomicNote = o.autonomicFlag
@@ -2244,6 +2244,24 @@ function saveDB(db) {
   }
 }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+// Check browser storage quota and warn if nearly full (>80% used).
+// Returns {percentUsed, isWarning, message} or null if API unavailable.
+async function checkStorageQuota() {
+  if (!navigator.storage?.estimate) return null;
+  try {
+    const {usage, quota} = await navigator.storage.estimate();
+    const pct = quota > 0 ? Math.round((usage / quota) * 100) : 0;
+    return {
+      percentUsed: pct,
+      isWarning: pct > 80,
+      usage, quota,
+      message: pct > 80 ? `Storage nearly full (${pct}%). Clear browser data or export visits to free space.` : null
+    };
+  } catch (e) {
+    console.warn('[gutscreen] storage quota check failed', e);
+    return null;
+  }
+}
 // Find a patient by clinician-assigned reference code (case-insensitive, trimmed).
 function patientByRef(db, ref) {
   if (!ref) return null;
@@ -2283,7 +2301,7 @@ function mergeImport(currentDb, importedRaw) {
   }
   return { db: cur, added: { patients: addedPatients, visits: addedVisits } };
 }
-__e.blankDB = blankDB; __e.loadDB = loadDB; __e.saveDB = saveDB; __e.uid = uid; __e.nextPatientCode = nextPatientCode; __e.sitePrefix = sitePrefix; __e.patientByRef = patientByRef; __e.exportDB = exportDB; __e.mergeImport = mergeImport;
+__e.blankDB = blankDB; __e.loadDB = loadDB; __e.saveDB = saveDB; __e.uid = uid; __e.nextPatientCode = nextPatientCode; __e.sitePrefix = sitePrefix; __e.patientByRef = patientByRef; __e.exportDB = exportDB; __e.mergeImport = mergeImport; __e.checkStorageQuota = checkStorageQuota;
 
 // ── PILOT / RESEARCH EXPORT ──────────────────────────────────────────────────
 // De-identified, schema-driven CSV: one row per visit, one column per item +
@@ -2845,6 +2863,14 @@ function render() {
     `🔒 <b>Shared device notice:</b> Patient data is stored locally in this browser's storage. If this is a shared or clinic computer, ` +
     `always clear browser data (cookies, site data) after each patient to protect confidentiality. Do not leave this browser logged into patient records.`));
 
+  // Check storage quota and warn if nearly full
+  Store.checkStorageQuota().then(quota => {
+    if (quota && quota.isWarning) {
+      root.appendChild(el('div', { class: 'intro', style: 'background:#FFE6E6;border-color:#FF9999;color:#8B0000' },
+        `⚠️ <b>Storage nearly full (${quota.percentUsed}% used).</b> Download visits as CSV or clear browser data to free space before more data is added.`));
+    }
+  });
+
   // Clinical intake flow:
   //   Anthropometrics → History → Safety screen → Gut symptoms →
   //   Lifestyle & modifiable drivers → Systemic features → Adaptive deep dive.
@@ -3319,7 +3345,33 @@ function familyHistoryCard() {
   return chipMultiCard('Family history', 'A first-degree relative with any of these (optional).', '#185FA5', FAMILY_HISTORY, 'familyHistory');
 }
 function medConfoundersCard() {
-  return chipMultiCard('Medications that can affect the gut', 'Current medications known to cause or worsen gut symptoms (optional, not scored).', '#7A6A1E', MED_CONFOUNDERS, 'medsConfounders');
+  const card = el('div', { class: 'sec-card' });
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:#7A6A1E' }, 'Medications that can affect the gut'));
+  const body = el('div', { class: 'sec-body' });
+  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' },
+    'Current medications known to cause or worsen gut symptoms (optional, not scored). ⚠️ <b>These may explain your symptoms</b> — discuss with your clinician.'));
+  const chips = el('div', { class: 'chips' });
+  MED_CONFOUNDERS.forEach(m => {
+    const b = el('button', { class: `chip-opt${extras.medsConfounders && extras.medsConfounders.includes(m.id) ? ' sel' : ''}`, type: 'button' }, esc(m.label));
+    b.onclick = () => {
+      if (!extras.medsConfounders) extras.medsConfounders = [];
+      const i = extras.medsConfounders.indexOf(m.id);
+      if (i >= 0) extras.medsConfounders.splice(i, 1); else extras.medsConfounders.push(m.id);
+      b.classList.toggle('sel');
+      updateProgress(); refreshReveals();
+    };
+    b.title = `Can cause: ${m.effect}`;  // Tooltip on hover
+    chips.appendChild(b);
+  });
+  body.appendChild(chips);
+  // Show selected medications' effects inline
+  const selected = MED_CONFOUNDERS.filter(m => extras.medsConfounders && extras.medsConfounders.includes(m.id));
+  if (selected.length) {
+    body.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;padding:8px 10px;background:#FFF8E1;border-radius:8px;border-left:3px solid #7A6A1E' },
+      `Selected medications may cause: <b>${selected.map(m => m.effect).join('; ')}</b>`));
+  }
+  card.appendChild(body);
+  return card;
 }
 // Management history — what's already been tried, so a clinician doesn't
 // re-suggest a failed intervention. Needs a free-text "Other" alongside the
