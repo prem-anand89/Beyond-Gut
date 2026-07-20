@@ -2006,7 +2006,7 @@ function triage(score, patterns, firedFlags, dys, opts) {
     : null;
   // Medication confounders — drugs that can cause/aggravate the reported symptoms.
   result.medNote = (o.medConfounders && o.medConfounders.length)
-    ? `Medication(s) that can cause/aggravate GI symptoms — interpret with this in mind: ${o.medConfounders.map(m => m.label).join(', ')}.`
+    ? `Reported medication(s) can cause/aggravate GI symptoms: ${o.medConfounders.map(m => `${m.label} (${m.effect})`).join('; ')}. Symptoms may improve if discontinued (discuss with prescriber).`
     : null;
   // Autonomic overlap (orthostatic / palpitations alongside a gut-brain picture).
   result.autonomicNote = o.autonomicFlag
@@ -2215,7 +2215,7 @@ __modules['storage.js'] = function(__e){
 const { SCHEMA_VERSION } = __req('schema.js');
 const KEY = 'bmgutscreen_v2';
 
-function blankDB() { return { patients: [], meta: { schemaVersion: SCHEMA_VERSION, remindEvery: 5, visitsSinceExport: 0, patientSeq: 0, siteCode: '' } }; }
+function blankDB() { return { patients: [], meta: { schemaVersion: SCHEMA_VERSION, remindEvery: 5, visitsSinceExport: 0, patientSeq: 0, siteCode: '', lastExportedAt: null } }; }
 // Human-facing patient code. Prefixed with a per-clinic SITE CODE so several
 // clinics minting automated IDs into one central dataset never collide
 // (CLINA-0001 vs CLINB-0001). The internal uid() remains the true merge key.
@@ -2244,6 +2244,24 @@ function saveDB(db) {
   }
 }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+// Check browser storage quota and warn if nearly full (>80% used).
+// Returns {percentUsed, isWarning, message} or null if API unavailable.
+async function checkStorageQuota() {
+  if (!navigator.storage?.estimate) return null;
+  try {
+    const {usage, quota} = await navigator.storage.estimate();
+    const pct = quota > 0 ? Math.round((usage / quota) * 100) : 0;
+    return {
+      percentUsed: pct,
+      isWarning: pct > 80,
+      usage, quota,
+      message: pct > 80 ? `Storage nearly full (${pct}%). Clear browser data or export visits to free space.` : null
+    };
+  } catch (e) {
+    console.warn('[gutscreen] storage quota check failed', e);
+    return null;
+  }
+}
 // Find a patient by clinician-assigned reference code (case-insensitive, trimmed).
 function patientByRef(db, ref) {
   if (!ref) return null;
@@ -2283,7 +2301,7 @@ function mergeImport(currentDb, importedRaw) {
   }
   return { db: cur, added: { patients: addedPatients, visits: addedVisits } };
 }
-__e.blankDB = blankDB; __e.loadDB = loadDB; __e.saveDB = saveDB; __e.uid = uid; __e.nextPatientCode = nextPatientCode; __e.sitePrefix = sitePrefix; __e.patientByRef = patientByRef; __e.exportDB = exportDB; __e.mergeImport = mergeImport;
+__e.blankDB = blankDB; __e.loadDB = loadDB; __e.saveDB = saveDB; __e.uid = uid; __e.nextPatientCode = nextPatientCode; __e.sitePrefix = sitePrefix; __e.patientByRef = patientByRef; __e.exportDB = exportDB; __e.mergeImport = mergeImport; __e.checkStorageQuota = checkStorageQuota;
 
 // ── PILOT / RESEARCH EXPORT ──────────────────────────────────────────────────
 // De-identified, schema-driven CSV: one row per visit, one column per item +
@@ -2496,9 +2514,11 @@ function buildScoreSnapshot(a, ex) {
 }
 
 function currentVisit() {
+  const { SCHEMA_VERSION } = __req('schema.js');
   return {
     id: Store.uid(),
     date: Date.now(),
+    visitSchemaVersion: SCHEMA_VERSION,             // track schema version at save-time for future migrations
     followup: !!session.followup,
     pregnant: session.pregnant || '',              // per-visit applicability flag — pregnancy can change between visits
     answers: { ...answers },                       // includes 'na' values as-is
@@ -2838,6 +2858,19 @@ function render() {
 
   root.appendChild(patientBanner());
 
+  // Privacy warning for shared-device use
+  root.appendChild(el('div', { class: 'intro', style: 'background:#FFF3CD;border-color:#FFD699;color:#664d03' },
+    `🔒 <b>Shared device notice:</b> Patient data is stored locally in this browser's storage. If this is a shared or clinic computer, ` +
+    `always clear browser data (cookies, site data) after each patient to protect confidentiality. Do not leave this browser logged into patient records.`));
+
+  // Check storage quota and warn if nearly full
+  Store.checkStorageQuota().then(quota => {
+    if (quota && quota.isWarning) {
+      root.appendChild(el('div', { class: 'intro', style: 'background:#FFE6E6;border-color:#FF9999;color:#8B0000' },
+        `⚠️ <b>Storage nearly full (${quota.percentUsed}% used).</b> Download visits as CSV or clear browser data to free space before more data is added.`));
+    }
+  });
+
   // Clinical intake flow:
   //   Anthropometrics → History → Safety screen → Gut symptoms →
   //   Lifestyle & modifiable drivers → Systemic features → Adaptive deep dive.
@@ -2921,7 +2954,7 @@ function wrapHidden(id, node) {
 // One section card (head + items). `femaleOnly` items are shown only when the
 // recorded gender is Female. Reused by the main loop and the adaptive area.
 function sectionCard(sec) {
-  const card = el('div', { class: 'sec-card' });
+  const card = el('div', { class: 'sec-card', 'data-section': sec.id });
   const items = questionsOf(sec.id).filter(q => !q.femaleOnly || session.gender === 'Female');
   // Count only items shown up-front (reveal-on-positive follow-ups are hidden until
   // their parent is positive, so they shouldn't inflate the header count).
@@ -3149,7 +3182,7 @@ function pss4Card() {
 }
 
 function painCard() {
-  const card = el('div', { class: 'sec-card' });
+  const card = el('div', { class: 'sec-card', 'data-card': 'pain' });
   card.appendChild(el('div', { class: 'sec-head', style: 'background:#8B3A1A' }, 'Pain (optional)'));
   const body = el('div', { class: 'sec-body' });
   body.appendChild(el('div', { class: 'q-txt', style: 'font-weight:500;padding-top:6px' }, 'Current pain level (0 = none, 10 = worst)'));
@@ -3312,7 +3345,33 @@ function familyHistoryCard() {
   return chipMultiCard('Family history', 'A first-degree relative with any of these (optional).', '#185FA5', FAMILY_HISTORY, 'familyHistory');
 }
 function medConfoundersCard() {
-  return chipMultiCard('Medications that can affect the gut', 'Current medications known to cause or worsen gut symptoms (optional, not scored).', '#7A6A1E', MED_CONFOUNDERS, 'medsConfounders');
+  const card = el('div', { class: 'sec-card' });
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:#7A6A1E' }, 'Medications that can affect the gut'));
+  const body = el('div', { class: 'sec-body' });
+  body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' },
+    'Current medications known to cause or worsen gut symptoms (optional, not scored). ⚠️ <b>These may explain your symptoms</b> — discuss with your clinician.'));
+  const chips = el('div', { class: 'chips' });
+  MED_CONFOUNDERS.forEach(m => {
+    const b = el('button', { class: `chip-opt${extras.medsConfounders && extras.medsConfounders.includes(m.id) ? ' sel' : ''}`, type: 'button' }, esc(m.label));
+    b.onclick = () => {
+      if (!extras.medsConfounders) extras.medsConfounders = [];
+      const i = extras.medsConfounders.indexOf(m.id);
+      if (i >= 0) extras.medsConfounders.splice(i, 1); else extras.medsConfounders.push(m.id);
+      b.classList.toggle('sel');
+      updateProgress(); refreshReveals();
+    };
+    b.title = `Can cause: ${m.effect}`;  // Tooltip on hover
+    chips.appendChild(b);
+  });
+  body.appendChild(chips);
+  // Show selected medications' effects inline
+  const selected = MED_CONFOUNDERS.filter(m => extras.medsConfounders && extras.medsConfounders.includes(m.id));
+  if (selected.length) {
+    body.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;padding:8px 10px;background:#FFF8E1;border-radius:8px;border-left:3px solid #7A6A1E' },
+      `Selected medications may cause: <b>${selected.map(m => m.effect).join('; ')}</b>`));
+  }
+  card.appendChild(body);
+  return card;
 }
 // Management history — what's already been tried, so a clinician doesn't
 // re-suggest a failed intervention. Needs a free-text "Other" alongside the
@@ -3574,7 +3633,7 @@ function surgicalCard() {
 }
 
 function redFlagCard() {
-  const card = el('div', { class: 'sec-card' });
+  const card = el('div', { class: 'sec-card red-flag-alert' });
   card.appendChild(el('div', { class: 'sec-head', style: 'background:#A32D2D' },
     `Important safety questions <span style="opacity:.8;font-weight:500">${RED_FLAGS.length} items</span>`));
   const body = el('div', { class: 'sec-body' });
@@ -3914,13 +3973,18 @@ function calc() {
   actions.appendChild(saveBtn);
   const dlBtn = el('button', { class: 'btn', type: 'button' }, 'Download pilot CSV');
   dlBtn.onclick = () => {
-    const csv = Store.pilotExportCSV(Store.loadDB());
+    const db = Store.loadDB();
+    const csv = Store.pilotExportCSV(db);
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `gut-screen-pilot-${new Date().toISOString().slice(0,10)}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    // Update lastExportedAt timestamp
+    db.meta = db.meta || {};
+    db.meta.lastExportedAt = Date.now();
+    Store.saveDB(db);
   };
   actions.appendChild(dlBtn);
   const ptPrintBtn = el('button', { class: 'btn btn-gh', type: 'button' }, '🖨 Patient summary');
@@ -4085,7 +4149,7 @@ function clinicianDetailCard(c) {
        <td><span style="background:${p.confColor};color:#fff;border-radius:8px;padding:1px 6px;font-size:10px;white-space:nowrap">${esc(p.confidence)}</span></td>
        <td>${esc(p.desc)}</td></tr>`
     ).join('');
-    card.appendChild(tbl(['Pattern', 'Confidence', 'Rationale'], ptRows));
+    card.appendChild(tbl(['Pattern', 'Data completeness', 'Rationale'], ptRows));
   }
 
   // Modifiable driver raw values
@@ -4470,7 +4534,7 @@ function buildClinicianPrint(c) {
   // Patterns
   if (patterns.length) {
     h += `<div class="pr-section"><div class="pr-sh">Patterns</div>
-      <table class="pr-tbl"><thead><tr><th>Pattern</th><th>Confidence</th><th>Rationale</th></tr></thead><tbody>
+      <table class="pr-tbl"><thead><tr><th>Pattern</th><th>Data completeness</th><th>Rationale</th></tr></thead><tbody>
         ${patterns.map(p => `<tr><td><b>${esc(p.label)}</b></td><td>${esc(p.confidence)}</td><td>${esc(p.desc)}</td></tr>`).join('')}
       </tbody></table></div>`;
   }

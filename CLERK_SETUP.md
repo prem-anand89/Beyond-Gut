@@ -1,5 +1,9 @@
 # Clerk Authentication Setup Guide for Enterro360
 
+> ⚠️ **Future-State Configuration**
+> 
+> This guide describes an optional, future-state feature. Clerk authentication is **disabled by default** in the current release. The GSHS tool operates without authentication and stores data in browser localStorage. Enable authentication only when deploying to production with multi-clinic requirements. For single-clinic offline use, follow the standard deployment guide instead.
+
 This guide walks you through setting up Clerk authentication and multi-clinic SaaS infrastructure for Enterro360.
 
 ## What is Clerk?
