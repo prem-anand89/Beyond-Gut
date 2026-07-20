@@ -2921,7 +2921,7 @@ function wrapHidden(id, node) {
 // One section card (head + items). `femaleOnly` items are shown only when the
 // recorded gender is Female. Reused by the main loop and the adaptive area.
 function sectionCard(sec) {
-  const card = el('div', { class: 'sec-card' });
+  const card = el('div', { class: 'sec-card', 'data-section': sec.id });
   const items = questionsOf(sec.id).filter(q => !q.femaleOnly || session.gender === 'Female');
   // Count only items shown up-front (reveal-on-positive follow-ups are hidden until
   // their parent is positive, so they shouldn't inflate the header count).
@@ -3149,7 +3149,7 @@ function pss4Card() {
 }
 
 function painCard() {
-  const card = el('div', { class: 'sec-card' });
+  const card = el('div', { class: 'sec-card', 'data-card': 'pain' });
   card.appendChild(el('div', { class: 'sec-head', style: 'background:#8B3A1A' }, 'Pain (optional)'));
   const body = el('div', { class: 'sec-body' });
   body.appendChild(el('div', { class: 'q-txt', style: 'font-weight:500;padding-top:6px' }, 'Current pain level (0 = none, 10 = worst)'));
@@ -3574,7 +3574,7 @@ function surgicalCard() {
 }
 
 function redFlagCard() {
-  const card = el('div', { class: 'sec-card' });
+  const card = el('div', { class: 'sec-card red-flag-alert' });
   card.appendChild(el('div', { class: 'sec-head', style: 'background:#A32D2D' },
     `Important safety questions <span style="opacity:.8;font-weight:500">${RED_FLAGS.length} items</span>`));
   const body = el('div', { class: 'sec-body' });
