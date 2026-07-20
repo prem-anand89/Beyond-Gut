@@ -2215,7 +2215,7 @@ __modules['storage.js'] = function(__e){
 const { SCHEMA_VERSION } = __req('schema.js');
 const KEY = 'bmgutscreen_v2';
 
-function blankDB() { return { patients: [], meta: { schemaVersion: SCHEMA_VERSION, remindEvery: 5, visitsSinceExport: 0, patientSeq: 0, siteCode: '' } }; }
+function blankDB() { return { patients: [], meta: { schemaVersion: SCHEMA_VERSION, remindEvery: 5, visitsSinceExport: 0, patientSeq: 0, siteCode: '', lastExportedAt: null } }; }
 // Human-facing patient code. Prefixed with a per-clinic SITE CODE so several
 // clinics minting automated IDs into one central dataset never collide
 // (CLINA-0001 vs CLINB-0001). The internal uid() remains the true merge key.
@@ -2496,9 +2496,11 @@ function buildScoreSnapshot(a, ex) {
 }
 
 function currentVisit() {
+  const { SCHEMA_VERSION } = __req('schema.js');
   return {
     id: Store.uid(),
     date: Date.now(),
+    visitSchemaVersion: SCHEMA_VERSION,             // track schema version at save-time for future migrations
     followup: !!session.followup,
     pregnant: session.pregnant || '',              // per-visit applicability flag — pregnancy can change between visits
     answers: { ...answers },                       // includes 'na' values as-is
@@ -3914,13 +3916,18 @@ function calc() {
   actions.appendChild(saveBtn);
   const dlBtn = el('button', { class: 'btn', type: 'button' }, 'Download pilot CSV');
   dlBtn.onclick = () => {
-    const csv = Store.pilotExportCSV(Store.loadDB());
+    const db = Store.loadDB();
+    const csv = Store.pilotExportCSV(db);
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `gut-screen-pilot-${new Date().toISOString().slice(0,10)}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    // Update lastExportedAt timestamp
+    db.meta = db.meta || {};
+    db.meta.lastExportedAt = Date.now();
+    Store.saveDB(db);
   };
   actions.appendChild(dlBtn);
   const ptPrintBtn = el('button', { class: 'btn btn-gh', type: 'button' }, '🖨 Patient summary');
