@@ -40,16 +40,24 @@ Primary-care clinicians (GPs, internal medicine), specialist referral coordinato
 
 Patients complete the questionnaire in a logical clinical order:
 
-1. **Anthropometrics** (optional, 3 items): Height, weight, waist circumference → BMI + WHtR ratio calculated for nutritional/cardiometabolic context
-2. **History** (optional, chip cards): Known conditions, surgeries, medications, family history → context for interpretation (never scored)
-3. **Red Flags** (mandatory, 10 items): Always visible, never gated. Safety screen for organic pathology alarms (haematemesis, unintentional weight loss, jaundice, new bowel-habit change >45 years, etc.)
-4. **Gut Symptoms** (mandatory, 15 GSRS core items + Bristol stool form): Validated severity (0–3 scale) + stool form classification
-5. **Lifestyle & Modifiable Drivers** (optional): Diet, activity, alcohol, sleep, stress (PSS-4), microbiome exposures (antibiotics, PPI, NSAID)
+1. **Anthropometrics** (optional, 3 items): Height (cm), weight (kg), waist circumference (cm) → BMI + Waist-to-Height Ratio (WHtR) auto-calculated for nutritional and cardiometabolic context (BMI <18.5 flags malabsorption risk; WHtR ≥0.5 flags central adiposity)
+2. **History** (optional, chip cards & free text): 
+   - Known conditions (coeliac, IBD, IBS, SIBO, gallstones, pancreatitis/EPI, liver disease, H. pylori, PCOS, anxiety/depression, food allergy) → context for interpretation
+   - Surgical history (appendix, bariatric, hysterectomy, pelvic/abdominal, hernia) → adhesion risk
+   - Regular medications (with confounders: GLP-1 agonists, opioids, SSRIs, metformin, laxatives, iron, OCPs)
+   - Family history (coeliac, IBD, bowel cancer)
+   - Free-text "other medications" field → captures complex regimens
+3. **Red Flags** (mandatory, 10 items): Always visible, never gated. Safety screen for organic pathology alarms (haematemesis, unintentional weight loss, jaundice, new bowel-habit change >45 years, fever+pain, dysphagia, etc.)
+4. **Gut Symptoms** (mandatory, 15 GSRS core items + Bristol + frequency)
+   - **Severity** (0–3 scale, 2-week recall): Validated GSRS, unchanged
+   - **Bristol stool form** (types 1–7): Single current observation
+   - **Per-cluster symptom frequency** (5 new optional rows): "Over the last 2–3 months, how many days a week do you get [Reflux/Pain/Indigestion/Diarrhoea/Constipation]?" (0–3: 1–2 days/wk → daily). Each cluster's frequency adds up to +0.15 nudge to its norm (capped total with Bristol)
+5. **Lifestyle & Modifiable Drivers** (optional): Diet quality, activity level, alcohol frequency, sleep quality, PSS-4 stress (1-month recall), bowel-movement frequency (stools/week band), smoking status, caffeine intake, hydration level, microbiome exposures (antibiotics, PPI, NSAID, post-infectious onset)
 6. **Systemic Features** (mandatory baseline, adaptive expansion): Inflammatory markers, brain-gut/mood, nutrient status, functional impact, psychosocial stress
 7. **Adaptive Deep Dive** (optional, conditional): Revealed only when GI core triggers specialist pathways:
-   - **Pelvic floor/anorectal** (AR section) — reveals on constipation/urgency/pelvic-risk flags
-   - **Upper-GI/dyspepsia** (UG section) — reveals on reflux/indigestion cluster scores
-   - **Autonomic/systemic** (SY section) — reveals on fatigue/brain-fog/pain triggers
+   - **Pelvic floor/anorectal (AR)** — reveals when: Constipation cluster ≥0.4 OR Urgency ≥2 (4 items: incontinence, straining, blockage, evacuation maneuvers)
+   - **Upper-GI/dyspepsia (UG)** — reveals when: Reflux cluster ≥0.3 OR Indigestion ≥0.3 (2 items: early satiety, post-meal fullness)
+   - **Autonomic/systemic (SY)** — reveals when: Fatigue ≥2 OR Brain-fog ≥2 (3 items: orthostatic dizziness, palpitations, cyclical flare with menstrual cycle [female only])
 
 ### Recall Windows (Why They Differ)
 
@@ -57,11 +65,12 @@ Different questions ask about different time periods because different phenomena
 
 | Window | Questions | Why |
 |--------|-----------|-----|
-| **2 weeks** | GSRS core, IM, BG, NU, IMP, AR, UG, SY | Validated recall for symptom severity; recent experience |
-| **2–3 months (typical pattern)** | Per-cluster symptom frequency | Broader window for episodic/relapsing patterns (misses in a 2-week snapshot) |
-| **1 month** | PSS-4 (stress), sleep disturbance | Stress and sleep adjust slower; 1-month standard for PSS-4 validated instrument |
-| **12 months** | Antibiotic courses, disruptor medications | Microbiome recovery timeline; drug washout periods |
-| **Lifetime** | Lab-confirmed deficiencies, surgical history, family history | Stable or historical; not time-bound |
+| **2 weeks** | GSRS core (severity), IM, BG, NU, IMP, AR, UG, SY | Validated recall for symptom severity; recent experience |
+| **2–3 months (typical pattern)** | Per-cluster symptom frequency, stress frequency | Broader window for episodic/relapsing patterns; captures true habitual pattern (one atypical week won't mislead) |
+| **1 month** | PSS-4 (stress scale, validated), sleep disturbance | Validated standard for PSS-4 instrument; stress and sleep adjust slower than acute symptoms |
+| **3–6 weeks** | Recent gut disruptors (antibiotics, PPI, GLP-1 start) | Acute microbiome perturbation window; recovery typically begins after 2–4 weeks |
+| **12 months** | Antibiotic course frequency, chronic medication exposure | Microbiome recovery & drug washout timeline |
+| **Lifetime** | Lab-confirmed deficiencies, surgical/obstetric history, family history, known conditions | Stable or historical; not time-bound; establishes baseline risk |
 
 ---
 
@@ -98,30 +107,45 @@ All items use a **0–3 severity scale** (None / Mild / Moderate / Severe). All 
 
 ### How the Index Is Calculated
 
-**Step 1: Cluster norms** (each cluster scored as a mean, 0–1 scale)
+**Step 1: Cluster norms (severity)** — Each cluster scored as a balanced mean (0–1 scale)
 ```
-Reflux norm = (heartburn + regurgitation) / (3+3) = mean of answered items
-Pain norm = (pain + hunger + nausea) / (3+3+3) = mean of answered items
-... (same for Indigestion, Diarrhoea, Constipation)
+Reflux norm = mean(heartburn, regurgitation)
+Pain norm = mean(pain, hunger, nausea)
+Indigestion norm = mean(bloating, gas, burping, rumbling)
+Diarrhoea norm = mean(loose stools, diarrhoea, urgency)
+Constipation norm = mean(constipation, hard stools, incomplete evacuation)
 ```
 
-**Why balanced?** Clusters have different numbers of items (Reflux: 2, Indigestion: 4). If we summed raw items, a patient with severe Indigestion alone would land in a higher band than one with severe Reflux alone, purely from item count. Cluster norms prevent this bias.
+**Why cluster-balanced (not item-summed)?** Clusters have different item counts (Reflux: 2, Indigestion: 4). If we summed raw items, a patient with severe Indigestion alone would score higher than one with identical per-symptom severity in Reflux, purely from item count. Cluster norms (mean per cluster) prevent this bias — each cluster contributes equally regardless of size.
 
-**Step 2: Bristol nudge** (optional, augments but never replaces)
-Abnormal stool form (Bristol type 1, 2, 6, or 7) slightly lifts the Constipation or Diarrhoea cluster norm by up to 0.15 points. This captures the form signal not reflected in the "passing stool" frequency item alone. Capped so neither signal alone can move someone from Minimal burden into a higher band.
+**Step 2: Bristol stool-form nudge** (optional, augments but never replaces)
+Abnormal stool form (Bristol type 1–2: hard, or type 6–7: loose/liquid) slightly lifts the Constipation or Diarrhoea cluster norm:
+- Bristol 1–2 adds up to +0.15 to Constipation norm
+- Bristol 6–7 adds up to +0.15 to Diarrhoea norm
+- Captures the transit-quality signal not fully reflected in the "passing stool" item alone
+- Capped so Bristol alone cannot move someone from Minimal to higher band
 
-**Step 3: Symptom-frequency nudge** (optional, per-cluster)
-How many days a week each symptom occurs (separate 2–3 month recall window) adds up to 0.15 points per cluster. Again, capped to prevent doubling.
+**Step 3: Per-cluster symptom-frequency nudge** (optional, 2–3 month recall)
+"How many days a week" each cluster's symptoms occur (separate window from the 2-week severity scale) adds up to +0.15 per cluster:
+- Frequency 0–1 (1–2 days/wk) = +0.0
+- Frequency 1–2 (3–4 days/wk) = +0.05
+- Frequency 2–3 (5–6 days/wk) = +0.10
+- Frequency 3 (daily) = +0.15
+- Combined Bristol + frequency per cluster capped at +0.15 total (so both can contribute but don't double)
+
+**Why separate recall windows?** Severity is validated to 2 weeks (recent acute experience). Frequency needs 2–3 months to capture the true habitual pattern — a patient in a good fortnight might under-report their real typical burden if asked only about the past 2 weeks.
 
 **Step 4: Final Index**
 ```
-Gut Symptom Index = mean of (Reflux norm, Pain norm, Indigestion norm, Diarrhoea norm, Constipation norm) × 100
+Gut Symptom Index = mean(Reflux nudged, Pain, Indigestion, Diarrhoea nudged, Constipation nudged) × 100
 = 0–100 scale
 ```
 
 **Worked Example:**
-- Patient answers: Reflux 1/3, Pain 2/3, Indigestion 1/3, Diarrhoea 0/3, Constipation 2/3
-- Cluster norms: [0.33, 0.67, 0.25, 0.0, 0.67] → mean 0.38 → **38%** → **Mild–Moderate band**
+- Severity answers: Reflux 1/3, Pain 2/3, Indigestion 1/3, Diarrhoea 0/3, Constipation 2/3 → clusters [0.33, 0.67, 0.25, 0.0, 0.67]
+- Bristol type: 2 (hard) → +0.15 to Constipation → Constipation becomes 0.67 + 0.15 capped = 0.82
+- Frequency: Constipation 3 (daily) → would add +0.15, but already capped at 0.15 by Bristol, so no additional nudge
+- Final: [0.33, 0.67, 0.25, 0.0, 0.82] → mean 0.41 → **41%** → **Mild–Moderate band** (nudged slightly higher by Bristol + frequency signal, reflecting true habitual constipation burden)
 
 ### The Four Bands (Clinical Severity)
 
@@ -146,22 +170,50 @@ What this means:
 
 Patterns are clinical signals detected from cluster norms, item answers, and patient history. Each pattern suggests a specific clinical pathway worth investigating. **Patterns do not diagnose; they flag hypotheses.**
 
-### Pattern Summary Table
+### The 12 Patterns — Quick Reference
 
-| Pattern | Axis | Fires When | Typical Tier | Key Investigations |
-|---------|------|-----------|--------------|-------------------|
-| Constipation-Dominant (IBS-C) | Symptom | Rome criteria met, Constipation > Diarrhoea | 2 | Fibre, activity, pelvic-floor assessment, thyroid, calcium |
-| Diarrhoea-Dominant (IBS-D) | Symptom | Rome criteria met, Diarrhoea > Constipation | 2 | Stool calprotectin, PCR, coeliac, FIT, SeHCAT if suspicious |
-| Mixed/Alternating Bowel | Symptom | Both Constipation AND Diarrhoea clusters ≥0.3 | 2 | Low-FODMAP, visceral assessment, gut-brain screening |
-| Reflux/Upper-GI | Symptom | Reflux cluster ≥0.4 | 2–3 | PPI trial, GI referral if refractory, NSAID/alcohol review |
-| Bloating/Fermentation | Symptom | Indigestion ≥0.5 OR gas/foul smelling ≥2 OR ≥2 food triggers | 2–3 | SIBO breath test, low-FODMAP trial, fibre assessment |
-| Nutrient Malabsorption | Nutrient | Lab-confirmed deficiency, OR BMI <18.5, OR EPI/bariatric surgery, OR ≥2 of [hair loss, anaemia signs, mouth changes] + GI | 1–2 | FBC, iron, B12, folate, D, Mg, coeliac, faecal elastase |
-| Gut-Brain Axis | Psychosocial | GI burden ≥0.25 AND (high stress ≥50 OR brain-fog ≥2 OR fatigue ≥2) | 2–3 | PHQ-9/GAD-7 if PSS-4 ≥10, gut-directed hypnotherapy, CBT |
-| Inflammatory/Immune | Inflammatory | GI burden ≥0.25 AND ≥1 of [diagnosed condition, IM ≥0.4, histamine pattern, skin involvement] | 2–3 | Coeliac, structured elimination trial, low-histamine diet if fit |
-| Recent Gut Disruptor | Microbiome | GI ≥0.2 AND (recent antibiotics, PPI, NSAID, OR ≥1 antibiotic course/year) | 3 | Stool PCR if recent abx, C. diff PCR if abx in past 3 months |
-| Pelvic-Floor/Anorectal | Pelvic | Urge incontinence ≥2 OR passive incontinence ≥2 OR (straining ≥2 AND blockage/maneuvers) | 2 | Anorectal exam, pelvic-floor physio, defecation diary |
-| Functional Dyspepsia | Symptom | Early satiety ≥2 OR post-meal fullness ≥2 | 2–3 | H. pylori test, PPI trial, meal pattern/caffeine/alcohol review |
-| Lifestyle-Driven | Action | ≥2 of [high diet burden, high alcohol, low activity] | 3 | Dietitian, exercise prescription |
+| # | Pattern | Axis | Fires When (Plain English) | Typical Tier | Key Investigations |
+|---|---------|------|-------------------------|--------------|-------------------|
+| 1 | Constipation-Dominant (IBS-C) | Symptom | Rome criteria met + Constipation ≥0.3 > Diarrhoea | 2 | Thyroid, calcium, pelvic-floor assessment, fibre trial, rule slow-transit if severe |
+| 2 | Diarrhoea-Dominant (IBS-D) | Symptom | Rome criteria met + Diarrhoea ≥0.3 > Constipation | 2 | Stool calprotectin, PCR, coeliac, FIT, SeHCAT or low-FODMAP trial |
+| 3 | Mixed/Alternating Bowel | Symptom | Rome criteria met + both Constipation ≥0.3 AND Diarrhoea ≥0.3 | 2 | Low-FODMAP, pelvic-floor assessment, gut-brain screening, treat worst complaint first |
+| 4 | Reflux/Upper-GI | Symptom | Reflux cluster ≥0.4 OR heartburn ≥2 | 2–3 | PPI trial, H. pylori if not done, GI referral if refractory, NSAID/alcohol/caffeine review |
+| 5 | Upper-GI Dyspepsia | Symptom | Early satiety ≥2 OR post-meal fullness ≥2 | 2–3 | H. pylori test, PPI trial, meal pattern/caffeine review, rule out delayed gastric emptying |
+| 6 | Bloating/Fermentation | Symptom | Indigestion cluster ≥0.5 OR gas/foul smelling ≥2 OR ≥2 fermentable-food triggers | 2–3 | SIBO breath test, low-FODMAP dietitian trial, fibre adjustment, stool microbiota if indicated |
+| 7 | Nutrient Malabsorption | Nutrient | Lab-confirmed deficiency documented, OR BMI <18.5, OR EPI/bariatric surgery, OR ≥2 of [hair loss, anaemia signs, mouth changes] + GI ≥0.2 | 1–2 | FBC, iron, B12, folate, 25-OH D, Mg; coeliac; faecal elastase; calorie count if underweight |
+| 8 | Gut-Brain Axis | Psychosocial | GI ≥0.2 AND (PSS-4 ≥50 OR anxiety ≥2 OR mood ≥2 OR brain-fog ≥2 OR fatigue ≥2) | 2–3 | PHQ-9/GAD-7 screen; gut-directed hypnotherapy or CBT referral; stress management |
+| 9 | Inflammatory/Immune | Inflammatory | GI ≥0.2 AND ≥1 of [diagnosed IA condition, IM axis ≥0.4, histamine pattern, skin/joint involvement] | 2–3 | Coeliac serology; structured elimination trial; low-histamine diet trial; stool PCR if indicated |
+| 10 | Recent Gut Disruptor | Microbiome | GI ≥0.2 AND (antibiotic course in last 12mo, OR current PPI/NSAID, OR microbiome-altering surgery) | 3 | Stool PCR if post-abx; C. difficile PCR if abx in past 3 months; probiotic trial; microbiome-supporting lifestyle |
+| 11 | Pelvic-Floor/Anorectal | Pelvic | Urge incontinence ≥2 OR passive incontinence ≥2 OR (straining ≥2 AND [blockage ≥2 OR maneuvers ≥1]) | 2 | Anorectal/pelvic-floor exam; defecation diary; pelvic-floor physio referral; dyssynergic-defecation screening |
+| 12 | Lifestyle-Driven Modifiable | Action | ≥2 of [high-burden diet, high alcohol frequency, low activity level] with GI present | 3 | Dietitian referral; exercise prescription (tailored to IBS subtype); sleep/stress optimisation |
+
+### Adaptive Reveal Logic — When Specialist Questions Appear
+
+The tool learns as it goes: new specialist question groups reveal only when the GI core answers suggest they're relevant. This keeps the form short for simple cases while deepening exactly where needed.
+
+**Pelvic-Floor/Anorectal (AR) Section reveals when**:
+- Constipation cluster ≥0.4 (significant constipation signal) OR
+- Urgency item ≥2 (moderate-to-severe urgency) OR
+- Pelvic-risk flag present (obstetric history, endometriosis, prior pelvic/hernia surgery)
+
+**4 items appear**: Urge incontinence, passive incontinence, straining, blockage/evacuation maneuvers
+
+**Upper-GI/Dyspepsia (UG) Section reveals when**:
+- Reflux cluster ≥0.3 (any reflux signal) OR
+- Indigestion cluster ≥0.3 (any bloating/gas signal)
+
+**2 items appear**: Early satiety ("feel full too quickly"), post-meal fullness ("uncomfortable fullness after normal meals")
+
+**Autonomic/Systemic (SY) Section reveals when**:
+- Fatigue ≥2 OR
+- Brain-fog ≥2 OR
+- Abdominal pain ≥2 AND menstrual cycle present (female)
+
+**3 items appear**: Orthostatic dizziness, palpitations, cyclical symptom flare with menstrual cycle (female-gated)
+
+**Manual override**: "Show all specialist questions" button allows clinicians to force-reveal everything regardless of GI triggers, useful if screening broadly or reviewing across multiple visits.
+
+---
 
 ### Deep Dive: Three Key Patterns
 
@@ -219,6 +271,37 @@ Patterns are clinical signals detected from cluster norms, item answers, and pat
 **Investigations**: PHQ-9 or GAD-7 if PSS-4 ≥10, gut-directed hypnotherapy or CBT referral
 
 **Why this matters**: Identifies patients who won't improve with gut-only management; stress/anxiety is a modifiable driver.
+
+---
+
+#### **4. Pelvic-Floor / Anorectal Dysfunction** (Physio-Relevant)
+
+**Fires when ANY of**:
+- Urge incontinence ≥2 (sudden need to pass stool, leaks on the way)
+- Passive incontinence ≥2 (leakage without warning)
+
+**OR when BOTH**:
+- Straining to pass stool ≥2 AND (blockage sensation ≥2 OR manual maneuvers ≥1)
+
+**Clinical meaning**: Pelvic-floor dysfunction (weak tone, poor coordination) or dyssynergic defecation (paradoxical contraction); pelvic-floor physiotherapy assessment is indicated.
+
+**Investigations**: Pelvic-floor examination (tone, coordination, proprioception), anorectal exam, defecation diary, pelvic-floor physiotherapy referral
+
+**Why this matters to physiotherapists**: One of the highest-value referral signals the tool produces. Identifies patients who need pelvic-floor assessment without being lost in a long general questionnaire.
+
+---
+
+#### **5. Functional Dyspepsia** (Upper-GI-Specific)
+
+**Fires when**:
+- Early satiety ≥2 ("feel very full very quickly when eating") OR
+- Post-meal fullness ≥2 ("uncomfortable fullness after normal-sized meals")
+
+**Clinical meaning**: Upper-GI motor/sensory dysfunction (delayed gastric emptying, visceral hypersensitivity) rather than acid-driven reflux; H. pylori exclusion and PPI trial may help, but underlying dysfunction warrants assessment.
+
+**Investigations**: H. pylori serology (if not done); PPI trial 4–8 weeks; assess meal patterns, caffeine, alcohol as triggers; gastric emptying study if severe/refractory
+
+**Why this matters**: Dyspepsia often buried under "IBS" diagnosis; explicit pattern firing ensures dyspepsia-specific workup (H. pylori, PPI effectiveness) is considered.
 
 ---
 
@@ -367,18 +450,37 @@ The triage engine maps safety flags + burden + patterns onto a single recommende
 
 ---
 
-## Section 7: The Six Clinical Axes — Independent Reads
+## Section 7: Four Headline Outputs + Three Secondary Axes
+
+### The Four Primary GSHS Outputs (Patient Summary Card)
+
+These are the first things clinicians and patients see:
+
+| Output | Engine Source | Meaning | Validated? | Use |
+|--------|---------------|---------|-----------|-----|
+| **Gut Symptom Burden** | Symptom axis (GSRS-only Index) | How heavy the gut symptoms feel overall, based on validated questionnaire | ✅ YES | Primary severity measure; drives most patterns & urgency |
+| **Nutrient & Malabsorption Risk** | Nutrient axis (NU) | Estimated risk that gut/other factors are affecting nutrient absorption | ⚠️ Draft (screening-level) | Supplementation intensity; deficiency risk; malabsorption workup |
+| **Microbiome Disruption Load** | Disruption half of Dys-R lens | Medications/history that can alter gut bacterial balance (recent abx, PPI, NSAID, microbiome-altering surgery) | ⚠️ Correlate | Probiotic/restoration rationale; microbiome-supporting lifestyle focus |
+| **Dysbiosis Correlate Load** | Correlate half of Dys-R lens | Symptom patterns associated with dysbiosis risk (post-infectious, food triggers, foul gas, stool variability, fibre paradox) | ⚠️ Correlate | SIBO testing candidacy; low-FODMAP trial; stool microbiota testing if indicated |
+
+**Secondary axes** (displayed on-screen but grouped separately):
+- **Inflammatory/Immune Burden**: Immune-driven screening signal
+- **Psychosocial/Gut-Brain Load**: Stress, mood, anxiety, fatigue, brain-fog
+- **Functional Impact (QOL)**: Work, social, diet, life interference
+
+### Six Clinical Axes (Behind the Scenes)
 
 Each axis measures a distinct health domain and is scored independently. A patient can have low Gut Symptom Burden but high Psychosocial Load; both are actionable.
 
-| Axis | Measures | Sample Items | Validated? | Band Range | Clinical Use |
-|------|----------|--------------|-----------|-----------|--------------|
-| **Symptom (Gut)** | GSRS-based gut severity + frequency | 15 items (Reflux, Pain, Indigestion, Diarrhoea, Constipation) | ✅ TRUE (with caveats) | 0–100% (Minimal → Severe) | Primary severity measure; drives most patterns |
-| **Inflammatory** | Immune markers, skin, joint signals | Infections, allergies, joint aches, skin rash, histamine picture, GI reactions | ⚠️ FALSE (draft domain) | 0–100% (Minimal → Severe) | Identifies immune-driven candidates; screens for elimination diet |
-| **Nutrient** | Malabsorption proxies + lab anchors | Hair loss, anaemia signs, mouth changes, known deficiency | ⚠️ FALSE (draft domain) | 0–100% | Flags absorption risk; drives supplementation intensity |
-| **Psychosocial** | Stress, anxiety, mood, fatigue, brain-fog | PSS-4 (validated), anxiety/mood items (draft), fatigue, brain-fog | ⚠️ PARTIAL (PSS-4 validated, items draft) | 0–100% | Identifies gut-brain candidates; stress a modifiable driver |
-| **Impact (QOL)** | Functional burden on work, social, diet, overall life | Interference with work, social, food choices, overall well-being | ⚠️ FALSE (new) | 0–100% | Independent Tier-2 escalator; outcome measure for treatment |
-| **Pelvic** | Incontinence, straining, evacuation dysfunction | Urge/passive/flatus incontinence, straining, blockage, maneuvers | ⚠️ FALSE (emerging) | Presence / absent or severity | Physio assessment driver; screens for pelvic-floor dysfunction |
+| Axis | Measures | Sample Items | Validated? | Scale | Clinical Use |
+|------|----------|--------------|-----------|-------|--------------|
+| **Symptom (Gut)** | GSRS-core severity (0–3) + per-cluster frequency (days/wk) | 15 GSRS items (Reflux, Pain, Indigestion, Diarrhoea, Constipation) + per-cluster frequency (2–3 mo) | ✅ YES (GSRS validated; frequency nudge emerging) | 0–100% (Minimal → Severe) | Primary severity measure; Gut Symptom Burden headline; drives most patterns & urgency |
+| **Inflammatory** | Immune markers (food reactions, histamine, skin/joint) + known IA conditions | Food-digestive reactions, histamine reactions, skin rash, joint aches, diagnosed IA condition | ⚠️ Draft (screening-level) | 0–100% (Minimal → Severe) | Identifies immune-driven candidates; screens for elimination diet; drives coeliac workup |
+| **Nutrient** | Malabsorption proxies + lab-confirmed deficiency | Hair loss, anaemia signs (pallor, SOB), mouth changes (cheilitis), known deficiency (B12/iron/D/Mg) | ⚠️ Draft (screening-level) | 0–100% | Flags absorption risk; drives supplementation intensity; independent Tier escalator |
+| **Psychosocial** | Stress (PSS-4), anxiety, mood, fatigue, brain-fog | PSS-4 (4-item validated stress scale), anxiety, mood, fatigue, brain-fog items | ⚠️ PARTIAL (PSS-4 validated, others draft) | 0–100% | Identifies gut-brain candidates; stress a modifiable driver; gut-directed hypnotherapy/CBT candidacy |
+| **Impact (QOL)** | Functional burden on work, social, diet, overall life | Work interference, social/family interference, food avoidance/restriction, overall quality of life | ⚠️ Draft (screening-level, new) | 0–100% (Minimal → Severe) | Independent Tier-2 escalator (high impact even with mild symptoms); outcome measure for treatment efficacy |
+| **Pelvic** | Anorectal control & evacuation function | Urge/passive/flatus incontinence, straining, blockage sensation, manual evacuation maneuvers | ⚠️ Draft (emerging, adaptive section) | Presence/Significant | Physio assessment driver; screens for pelvic-floor dysfunction & dyssynergic defecation |
+| **Autonomic** | Orthostatic & cardiac symptoms | Dizziness on standing, palpitations/racing heart, cyclical menstrual flare (female) | ⚠️ Draft (emerging, adaptive section) | Presence/Significant | Co-management signal; identifies sympathetic dysregulation/visceral hypersensitivity; stress-reduction candidacy |
 
 ### Interpretation Principle
 
@@ -425,23 +527,56 @@ Rome IV was validated on prospective diaries; a single tool snapshot gives a scr
 
 ## Section 9: Questionnaire Map — Every Question's Purpose
 
+### Core Questions (Always Scored)
+
 | Question | Section | Measures | Feeds To | Recall | Role |
 |----------|---------|----------|----------|--------|------|
-| gsrs_pain | GI core | Abdominal pain severity | Index + Pain cluster + Rome pain | 2 weeks | Validated GSRS item |
-| gsrs_bloating | GI core | Bloating/fullness | Index + Indigestion cluster + bloating pattern | 2 weeks | Validated GSRS |
-| gsrs_urgency | GI core | Urge to defecate | Index + Diarrhoea cluster + AR reveal trigger | 2 weeks | Validated GSRS |
-| gsrs_constip | GI core | Constipation | Index + Constipation cluster + AR reveal trigger | 2 weeks | Validated GSRS |
-| bristol | Driver | Stool form type 1–7 | IBS subtype label, Constipation/Diarrhoea nudge | Current visit | Single observation |
-| im_food_react | IM section | Food-related GI reactions | IM axis + bloating pattern + elimination trial signal | 2 weeks | Screening item |
-| im_histamine | IM section | Histamine-type reactions | IM axis + inflammatory pattern + low-histamine diet signal | 2 weeks | Screening item |
-| bg_anxiety | BG section | Anxiety/nervousness | BG axis + Psychosocial driver + gut-brain pattern | 2 weeks | Dual-role (screen + driver) |
-| nu_known_def | NU section | Lab-confirmed deficiency | NU axis + nutrient-malabsorption pattern (fires independently) | Lifetime | Lab-anchored anchor |
-| imp_work | IMP section | Work interference | Impact axis + Tier-2 escalation | 2 weeks | Functional outcome |
-| ar_incont_urge | AR (adaptive) | Urge incontinence | Pelvic-floor pattern + pelvic-floor physio candidacy | 2 weeks | Optional, adaptive reveal |
-| ug_earlysat | UG (adaptive) | Early satiation | Dyspepsia pattern + upper-GI workup | 2 weeks | Optional, adaptive reveal |
-| sy_orthostatic | SY (adaptive) | Orthostatic symptoms | Autonomic pattern + safety/co-management signal | 2 weeks | Optional, adaptive reveal |
-| sx_duration | GI section | Symptom chronicity (5 bands: <3mo to >3yr) | Triage urgency + Rome IV fallback onset | Lifetime | Driver, never scored |
-| pss4_items | Driver | Perceived Stress Scale (validated) | Psychosocial driver (never Index) | 1 month | Modifiable stress measure |
+| gsrs_pain, gsrs_hunger, gsrs_nausea | GI core | Pain cluster (3 items) | Index + Pain cluster + Rome pain criterion + gut-brain pattern | 2 weeks | Validated GSRS |
+| gsrs_heartburn, gsrs_regurg | GI core | Reflux cluster (2 items) | Index + Reflux cluster + reflux pattern + UG reveal trigger | 2 weeks | Validated GSRS |
+| gsrs_bloating, gsrs_gas, gsrs_burp, gsrs_rumble | GI core | Indigestion cluster (4 items) | Index + Indigestion cluster + bloating/fermentation pattern + UG reveal trigger | 2 weeks | Validated GSRS |
+| gsrs_diarr, gsrs_loose, gsrs_urgency | GI core | Diarrhoea cluster (3 items) | Index + Diarrhoea cluster + IBS-D pattern + AR reveal trigger | 2 weeks | Validated GSRS |
+| gsrs_constip, gsrs_hard, gsrs_incomplete | GI core | Constipation cluster (3 items) | Index + Constipation cluster + IBS-C pattern + AR reveal trigger + pelvic-floor pattern | 2 weeks | Validated GSRS |
+| bristol | Driver | Stool form type 1–7 (current observation) | IBS subtype primary input, Constipation/Diarrhoea nudge | Single visit | Non-scored driver |
+| clusterFreq_[cluster] (5 rows) | GI section | Per-cluster symptom frequency (days/week, 2–3 mo) | Index cluster nudge (up to +0.15 per cluster, capped with Bristol) | 2–3 months | Optional frequency nudge |
+
+### Systemic & Impact (Always Scored)
+
+| Question | Section | Measures | Feeds To | Recall | Role |
+|----------|---------|----------|----------|--------|------|
+| im_food_react | IM section | Digestive food reactions (GI, not vasomotor) | IM axis + bloating/fermentation pattern | 2 weeks | Screening item |
+| im_histamine | IM section | Histamine reactions (flushing, hives, food-triggered) | IM axis + inflammatory pattern + low-histamine diet signal | 2 weeks | Screening item |
+| im_skin, im_joint | IM section | Skin/joint involvement | IM axis + inflammatory pattern | 2 weeks | Screening item |
+| bg_anxiety, bg_mood, bg_brainfog, bg_fatigue | BG section | Psychological & autonomic burden (4 items) | Psychosocial axis + gut-brain pattern, SY reveal trigger | 2 weeks | Screening items (never Index) |
+| nu_hairloss, nu_pallor, nu_mouth | NU section | Malabsorption proxy signs (3 items) | NU axis + nutrient-malabsorption pattern | 2 weeks | Screening items |
+| nu_known_def, nu_known_def_which (free-text follow-up) | NU section | Lab-confirmed deficiency + which type | NU axis + nutrient-malabsorption pattern (fires independently on deficiency alone) | Lifetime | Lab-anchored anchor |
+| imp_work, imp_social, imp_global, imp_food | IMP section | Functional impact on work, social, diet, overall life | Impact axis + Tier-2 escalation | 2 weeks | Functional outcome |
+| pss4_items (4-item Perceived Stress Scale) | Driver | Stress, worry, loss of control, overwhelm | Psychosocial axis + gut-brain pattern (never Index) | 1 month | Validated driver measure |
+
+### Adaptive Sections (Conditional Reveal, Scored When Answered)
+
+| Question | Section | Reveals When | Measures | Feeds To | Recall | Role |
+|----------|---------|--------------|----------|----------|--------|------|
+| ar_incont_urge, ar_incont_passive, ar_incont_flatus | AR (adaptive) | Constipation ≥0.4 OR urgency ≥2 OR pelvic-risk flag | Urge/passive/flatus incontinence (3 items) | Pelvic-floor pattern + pelvic-floor physio Tier-2 | 2 weeks | Screening items |
+| ar_straining, ar_blockage, ar_maneuvers | AR (adaptive) | Same as above | Straining, blockage sensation, digital maneuvers | Pelvic-floor pattern | 2 weeks | Screening items |
+| ug_earlysat, ug_fullness | UG (adaptive) | Reflux ≥0.3 OR Indigestion ≥0.3 | Early satiety, post-meal fullness | Functional dyspepsia pattern + upper-GI workup | 2 weeks | Screening items |
+| sy_orthostatic, sy_palpitations | SY (adaptive) | Fatigue ≥2 OR brain-fog ≥2 | Orthostatic dizziness, heart racing | Autonomic/systemic signal + co-management note | 2 weeks | Screening items |
+| gy_cyclical | SY (adaptive) | Pain ≥2 OR bloating ≥2 (female only) | Menstrual-cycle flare | Gynaecological/hormonal note + cycle-tracking suggestion | 2 weeks | Screening item |
+
+### History & Context (Never Scored, Clinician & Triage Notes Only)
+
+| Item | Stored As | Measures | Feeds To | Role |
+|------|-----------|----------|----------|------|
+| Height (cm), Weight (kg), Waist (cm) | extras.anthro | BMI, Waist-to-Height Ratio | Triage anthropometric note (BMI <18.5, WHtR ≥0.5) | Optional driver |
+| Known conditions (chips: coeliac, IBD, IBS, SIBO, etc.) | extras.conditions | Diagnostic history | Triage condition guidance + NU/IM axes context | Context |
+| Surgeries (appendix, bariatric, hysterectomy, pelvic, hernia) | extras.surgeries | Surgical history & adhesion risk | Pelvic-risk flag + nutrient-malabsorption pattern (EPI, bariatric) | Context |
+| Regular medications + confounders | extras.meds, extras.medsConfounders | Drug-GI interactions | Triage medication note (GLP-1, opioids, SSRIs) | Context |
+| Other medications (free-text) | extras.medsOther | Unlisted complex regimens | Clinician report only | Documentation |
+| Family history (chips: coeliac, IBD, cancer) | extras.familyHistory | Family risk | Triage family note (coeliac serology reminder) + CRC screening candidacy | Context |
+| Treatments already tried (chips + free-text) | extras.treatmentsTried | Management history | Triage treatment note (avoid re-suggesting failed tx) + clinician context | Documentation |
+| Smoking, caffeine, hydration, bowel frequency | extras.smoking, caffeine, hydration, bowelFreq | Lifestyle factors | Triage lifestyle notes + modifiable-driver card | Non-scored drivers |
+| Bowel movement frequency (stools/week) | extras.bowelFreq | Motility baseline | Displayed in modifiable-factors card (Rome IV context) | Non-scored |
+| Microbiome disruptors (antibiotics, PPI, NSAID, post-infectious) | extras.dys | Exposure history | Disruption Load + Recent Gut Disruptor pattern | Non-scored |
+| Symptom onset/duration (5 bands: <3mo to >3yr) | answers.sx_duration | Chronicity | Triage urgency + Rome IV onset fallback (if Rome pain unanswered) | Non-scored |
 
 ---
 
