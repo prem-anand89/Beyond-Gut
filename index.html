@@ -3046,11 +3046,50 @@ function refreshReveals() {
   // Per-cluster symptom-frequency rows: show a cluster's "how often" row only
   // when that cluster has a positive symptom answer; hide the whole card when
   // none qualifies (Pain is handled by Rome IV's own frequency question).
+  //
+  // Hierarchical reveal for bowel clusters (Constipation/Diarrhoea):
+  // - Constipation frequency shows ONLY when bowelFreq < 2 (infrequent output)
+  //   AND constipation symptoms present. Rationale: if bowelFreq says "1–3/week",
+  //   asking "how many days/week with constipation" makes sense. If it says
+  //   ">3/day", constipation frequency is redundant/contradictory.
+  // - Diarrhoea frequency shows ONLY when bowelFreq >= 2 (frequent output) AND
+  //   diarrhoea symptoms present. Rationale: if bowelFreq says "1–3/week" (low
+  //   output), asking about diarrhoea days is illogical.
+  // - If bowelFreq is unanswered, show both Constipation and Diarrhoea frequency
+  //   rows (fallback to original symptom-only logic: show if cluster > 0).
   let anyFreq = false;
   GI_CLUSTERS.filter(k => k !== 'Pain').forEach(k => {
     const h = document.getElementById('reveal-freq-' + k);
     if (!h) return;
-    const show = manual || (live.clusterNorm[k] != null && live.clusterNorm[k] > 0);
+    let show = false;
+    if (manual || (live.clusterNorm[k] != null && live.clusterNorm[k] > 0)) {
+      // Base condition: cluster has symptoms (pre-hierarchical logic)
+      const clusterHasSymptoms = live.clusterNorm[k] > 0;
+      if (k === 'Constipation') {
+        // Hierarchical reveal for Constipation:
+        // - If bowelFreq answered, show ONLY if bowelFreq < 2 (infrequent output)
+        // - If bowelFreq unanswered, fall back to symptom-only logic
+        const bowelFreqVal = extras.bowelFreq;
+        if (bowelFreqVal == null) {
+          show = clusterHasSymptoms; // No bowelFreq → show if constipation symptoms present
+        } else {
+          show = bowelFreqVal < 2 && clusterHasSymptoms; // Show if infrequent output + constipation symptoms
+        }
+      } else if (k === 'Diarrhoea') {
+        // Hierarchical reveal for Diarrhoea:
+        // - If bowelFreq answered, show ONLY if bowelFreq >= 2 (frequent output)
+        // - If bowelFreq unanswered, fall back to symptom-only logic
+        const bowelFreqVal = extras.bowelFreq;
+        if (bowelFreqVal == null) {
+          show = clusterHasSymptoms; // No bowelFreq → show if diarrhoea symptoms present
+        } else {
+          show = bowelFreqVal >= 2 && clusterHasSymptoms; // Show if frequent output + diarrhoea symptoms
+        }
+      } else {
+        // Reflux, Indigestion: no hierarchical logic, show if cluster > 0
+        show = clusterHasSymptoms;
+      }
+    }
     h.style.display = show ? '' : 'none';
     if (show) anyFreq = true;
   });
@@ -3135,15 +3174,22 @@ function clusterFreqCard() {
   card.appendChild(el('div', { class: 'sec-head', style: 'background:#6B4A2E' }, 'How often, typically'));
   const body = el('div', { class: 'sec-body' });
   body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' },
-    "Thinking about your usual pattern over the last 2–3 months (not just the last 2 weeks) — how many days a week do you typically get each of these? Gently feeds the matching part of your gut-core score (capped so it can't dominate)."));
+    "Thinking about your usual pattern over the last 2–3 months (not just the last 2 weeks) — how many days a week do you typically <strong>experience each symptom</strong>? (These are symptom-frequency questions, separate from stool-output frequency asked earlier.) Gently feeds the matching part of your gut-core score (capped so it can't dominate)."));
   // Pain excluded here — Rome IV (romeCard) already asks "how often do you get
   // abdominal pain" and its answer feeds the Pain cluster's frequency nudge
   // directly (see scoring.js clusterFreqSignal). Asking again here would be a
   // near-exact duplicate for pain-positive patients.
   // Each row is wrapped in a reveal holder: refreshReveals() shows a cluster's
-  // frequency row only when that cluster has a positive symptom answer — there's
-  // no point asking "how often" about a symptom the patient doesn't have. The
-  // whole card hides when no cluster qualifies.
+  // frequency row conditionally based on hierarchical logic (see refreshReveals):
+  // - Constipation: shown only if bowelFreq < 2 (infrequent stool output) AND
+  //   constipation symptoms present (asking about constipation days when output
+  //   is 5+/day is redundant).
+  // - Diarrhoea: shown only if bowelFreq >= 2 (frequent stool output) AND
+  //   diarrhoea symptoms present (asking about diarrhoea days when output is
+  //   1–3/week is illogical).
+  // - Reflux, Indigestion: shown if cluster has symptoms (no hierarchical logic).
+  // - If bowelFreq unanswered, all clusters fall back to symptom-only logic.
+  // The whole card hides when no cluster qualifies for reveal.
   GI_CLUSTERS.filter(k => k !== 'Pain').forEach(k => {
     const holder = el('div', { id: 'reveal-freq-' + k, style: 'display:none' });
     holder.appendChild(segRow(GI_CLUSTER_FREQ_LABELS[k], CLUSTER_FREQ_LEVELS,

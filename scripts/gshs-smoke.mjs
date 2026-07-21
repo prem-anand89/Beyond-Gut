@@ -1093,5 +1093,19 @@ ok((html.match(/scoreSnapshot: buildScoreSnapshot\(answers, extras\)/g) || []).l
 ok(/const snap = v\.scoreSnapshot \|\| null;[\s\S]{0,400}snap \? snap\.index/.test(html),
   'pilot CSV prefers the frozen snapshot index when present');
 
+// ── Hierarchical reveal for bowel cluster frequency ──
+// Constipation/Diarrhoea frequency rows show conditionally based on bowelFreq:
+// - Constipation: show only if bowelFreq < 2 AND constipation symptoms present
+// - Diarrhoea: show only if bowelFreq >= 2 AND diarrhoea symptoms present
+// - Reflux/Indigestion: show if cluster has symptoms (no hierarchical logic)
+ok(/const bowelFreqVal = extras\.bowelFreq/.test(html), 'hierarchical reveal reads bowelFreq from extras');
+ok(/bowelFreqVal < 2 && clusterHasSymptoms/.test(html), 'Constipation frequency shows only when bowelFreq < 2 AND symptoms present');
+ok(/bowelFreqVal >= 2 && clusterHasSymptoms/.test(html), 'Diarrhoea frequency shows only when bowelFreq >= 2 AND symptoms present');
+ok(/} else \{[\s\S]{0,100}show = clusterHasSymptoms;[\s\S]{0,50}}\s+}\s+h\.style\.display = show/.test(html),
+  'Reflux/Indigestion fall through to non-hierarchical logic (show if cluster > 0)');
+ok(/These are symptom-frequency questions/.test(html), 'clusterFreqCard clarifies symptom-frequency vs stool-output distinction');
+ok(/Constipation: shown only if bowelFreq < 2[\s\S]{0,300}Diarrhoea: shown only if bowelFreq >= 2/.test(html),
+  'clusterFreqCard comment documents hierarchical reveal logic');
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);
