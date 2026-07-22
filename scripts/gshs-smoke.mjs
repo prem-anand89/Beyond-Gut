@@ -410,6 +410,21 @@ const clSrc = clFn ? clFn[0] : '';
 ok(/clinicalImpression\(c\)/.test(clSrc), 'clinician: clinical impression generated');
 ok(clSrc.indexOf('Clinical impression') < clSrc.indexOf('>Triage<'), 'clinician: impression appears before triage');
 ok(/Screening synthesis only — not a diagnosis/.test(html), 'clinician: impression carries not-a-diagnosis caveat');
+
+// 28-unified. The clinician report is the single UNIFIED, LAYERED report: a
+// plain-language impression synthesis on top of the detailed clinical sections,
+// and it must surface every advanced lens (E2–F2 + Tranche G).
+const impFn = html.match(/function clinicalImpression\(c\)\s*\{[\s\S]*?\n\}\n/);
+const impSrc = impFn ? impFn[0] : '';
+ok(/peakAlerts/.test(impSrc), 'unified: impression layer surfaces E4 peak-symptom alerts');
+ok(/pelvic_floor_paradox/.test(impSrc), 'unified: impression layer surfaces the F2 paradoxical pelvic-floor read');
+ok(/correlateLoad.*tier|tier === 'High'/.test(impSrc), 'unified: impression layer surfaces the E3 weighted Dys-R tier');
+ok(/same-day assessment|prompt assessment/.test(impSrc), 'unified: impression layer leads red flags with E2 urgency');
+// Advanced reads all present in the unified clinician report body.
+ok(/Symptom severity × frequency/.test(clSrc), 'unified: report contains the Tranche G severity × frequency widget');
+ok(/Interventions this visit/.test(clSrc), 'unified: report contains the Tranche G interventions section');
+ok(/Peak-symptom alert/.test(clSrc), 'unified: report contains the E4 peak-symptom alert row');
+ok(/highest: \$\{esc\(topMeta\.label\)\}|firedByUrgency/.test(clSrc), 'unified: report groups red flags by E2 urgency tier');
 // Red flags moved up — before the Axis profile.
 ok(clSrc.indexOf('>Red flags<') < clSrc.indexOf('>Axis profile<'), 'clinician: red flags moved above axis profile');
 ok(clSrc.indexOf('>Red flags<') < clSrc.indexOf('>Domain breakdown<'), 'clinician: red flags above domain breakdown');

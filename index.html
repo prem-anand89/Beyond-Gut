@@ -4768,10 +4768,19 @@ const CONCERN_BANDS = new Set(['Significant', 'Severe', 'Elevated']);
 // already says — and always closed with an explicit "screening, not diagnosis"
 // caveat so it can never read as a clinical conclusion.
 function clinicalImpression(c) {
-  const { score, sv, conf, fired, rome, tri, heads } = c;
+  const { score, sv, conf, fired, rome, tri, heads, correlateLoad, patterns } = c;
   const bits = [];
-  if (sv && sv.label) bits.push(`${sv.label.toLowerCase()} gut-symptom burden${score.index != null ? ` (index ${score.index}%)` : ''}`);
+  if (sv && sv.label) {
+    // E4 — reflect a peak-escalated band in the readable layer so the plain-
+    // language summary matches the escalated display, not the raw number alone.
+    const peakNote = (sv.peakEscalated) ? ' (raised for an isolated high-severity symptom)' : '';
+    bits.push(`${sv.label.toLowerCase()} gut-symptom burden${score.index != null ? ` (index ${score.index}%)` : ''}${peakNote}`);
+  }
   if (rome && rome.criteriaMet && rome.subtype) bits.push(`pattern consistent with ${rome.subtype}`);
+  // F2 — call out the paradoxical pelvic-floor read explicitly (management differs).
+  if (patterns && patterns.some(p => p.id === 'pelvic_floor_paradox')) bits.push('paradoxical pelvic-floor (dyssynergic) features');
+  // E3 — weighted Dys-R tier when Moderate/High.
+  if (correlateLoad && (correlateLoad.tier === 'High' || correlateLoad.tier === 'Moderate')) bits.push(`${correlateLoad.tier.toLowerCase()} dysbiosis-correlate load`);
   const elevated = [];
   if (heads) {
     const nut = heads.primary && heads.primary.nutrient;
@@ -4781,7 +4790,15 @@ function clinicalImpression(c) {
   if (elevated.length) bits.push(`elevated systemic reads (${elevated.join(', ')})`);
   let txt = bits.length ? `${bits.join('; ')}.` : 'No prominent findings on this screen.';
   txt = txt.charAt(0).toUpperCase() + txt.slice(1);
-  if (fired && fired.length) txt += ` ⚠ ${fired.length} red-flag item${fired.length > 1 ? 's' : ''} answered Yes (see Red flags).`;
+  // E4 — surface an isolated peak symptom even when the averaged burden is modest.
+  if (score.peakAlerts && score.peakAlerts.length) txt += ` ⚠ Peak-symptom alert: ${score.peakAlerts.map(p => `${p.label} (${p.level === 'ceiling' ? 'very severe' : 'severe'})`).join(', ')}.`;
+  if (fired && fired.length) {
+    // E2 — lead the red-flag mention with the highest urgency tier present.
+    const rank = { emergency: 3, urgent: 2, routine: 1 };
+    const top = fired.reduce((t, f) => (rank[f.urgency || 'routine'] > rank[t] ? (f.urgency || 'routine') : t), 'routine');
+    const urg = top === 'emergency' ? ' — same-day assessment' : top === 'urgent' ? ' — prompt assessment' : '';
+    txt += ` ⚠ ${fired.length} red-flag item${fired.length > 1 ? 's' : ''} answered Yes${urg} (see Red flags).`;
+  }
   if (tri) txt += ` Suggested triage: Tier ${tri.level} — ${tri.label}.`;
   const caveat = `Screening synthesis only — not a diagnosis.${conf ? ` Confidence ${conf.level}, ${score.completeness}% complete.` : ''} Apply clinical judgement.`;
   return { txt, caveat };
