@@ -1921,6 +1921,37 @@ const PATTERNS = [
     },
   },
   {
+    // F2 — PFD-paradoxical (dyssynergic defecation). The ordinary pelvic_floor
+    // pattern and constipation_dominant both key off incontinence or a
+    // constipation-cluster burden. This one catches the OPPOSITE-looking picture:
+    // marked straining / incomplete evacuation despite NORMAL-or-LOOSE stool (not
+    // hard, not a constipation cluster) — the hallmark of pelvic-floor dyssynergia,
+    // where the problem is coordination, not stool consistency. It CO-FLAGS with
+    // (is called out separately from) IBS-C, and routes to pelvic-floor PT +
+    // anorectal assessment — NOT laxatives, which don't address dyssynergia.
+    id: 'pelvic_floor_paradox', axis: 'pelvic',
+    label: 'Paradoxical pelvic-floor (dyssynergic defecation) pattern',
+    desc: 'Straining or a sense of incomplete emptying despite stool that is not hard — a coordination problem of the pelvic floor rather than slow transit. Pelvic-floor physiotherapy and an anorectal assessment (not laxatives) are usually the right next step.',
+    eval: (s, ex, a) => {
+      const strain     = ge(av(a, 'ar_straining'), 2);
+      const incomplete = ge(av(a, 'gsrs_incomplete'), 2);
+      const blockage   = ge(av(a, 'ar_blockage'), 2);   // corroborator
+      const maneuv     = ge(av(a, 'ar_maneuvers'), 1);   // digital evacuation / splinting
+      const bristol = ex && ex.bristol;
+      // Positive evidence the stool is NOT hard/constipated: Bristol 3–5 (normal)
+      // or a present Diarrhoea cluster. Both are required-in-spirit — without them
+      // this is ordinary constipation, which constipation_dominant already covers.
+      const normalLoose = (typeof bristol === 'number' && bristol >= 3 && bristol <= 5)
+        || (clu(s, 'Diarrhoea') != null && clu(s, 'Diarrhoea') >= 0.3);
+      // AND the Constipation cluster is not prominent (else it's not paradoxical).
+      const constipLow = (clu(s, 'Constipation') == null) || clu(s, 'Constipation') < 0.4;
+      const evacDifficulty = strain.t || incomplete.t;
+      const stoolSig = { a: (typeof bristol === 'number' || clu(s, 'Diarrhoea') != null), t: !!normalLoose };
+      const signals = [strain, incomplete, blockage, maneuv, stoolSig];
+      return { fires: !!(evacDifficulty && normalLoose && constipLow), signals };
+    },
+  },
+  {
     id: 'functional_dyspepsia', axis: 'symptom',
     label: 'Functional dyspepsia pattern',
     desc: 'Early fullness and uncomfortable post-meal fullness (a postprandial-distress picture), often with reflux or indigestion. Meal patterns, an H. pylori test, and a trial of acid suppression are worth discussing with your clinician.',
@@ -2063,6 +2094,10 @@ function triage(score, patterns, firedFlags, dys, opts) {
   if (o.romeResult && o.romeResult.criteriaMet) add(2, `Meets Rome IV-informed criteria for ${o.romeResult.subtype}`, 'symptom');
   // Targeted-symptom patterns (adaptive reveal):
   if (has('pelvic_floor')) add(2, 'Pelvic-floor / anorectal dysfunction — pelvic-floor physiotherapy candidacy', 'pelvic');
+  // F2 — PFD-paradoxical co-flags separately from IBS-C: straining/incomplete
+  // evacuation WITH normal-or-loose stool points to dyssynergia, where laxatives
+  // don't help — the management hint is deliberately different.
+  if (has('pelvic_floor_paradox')) add(2, 'Paradoxical pelvic-floor (dyssynergic defecation) — straining/incomplete emptying despite non-hard stool: pelvic-floor physiotherapy + anorectal assessment (not laxatives)', 'pelvic');
   if (has('functional_dyspepsia')) add(2, 'Functional dyspepsia pattern (early satiety / post-meal fullness)', 'symptom');
   // Orphan pattern, now wired: gut-brain is a psychosocial-axis finding where
   // gut-directed / clinician-led therapy is the appropriate lever.
@@ -2255,6 +2290,7 @@ function triage(score, patterns, firedFlags, dys, opts) {
     gut_brain: ['Consider PHQ-9 / GAD-7 if PSS-4 ≥ 10', 'Gut-directed hypnotherapy or CBT referral', 'Mind-body approach to symptom management'],
     inflammatory_immune: ['Coeliac serology (anti-tTG IgA + total IgA) if not done', 'Clinician-guided structured elimination trial', 'Low-histamine / DAO discussion if a histamine pattern fits'],
     pelvic_floor: ['Anorectal / pelvic-floor examination', 'Pelvic-floor physiotherapy referral', 'Bowel / defecation diary'],
+    pelvic_floor_paradox: ['Anorectal physiology / balloon expulsion test (assess dyssynergia)', 'Pelvic-floor physiotherapy with biofeedback', 'Avoid escalating laxatives — address coordination first'],
     functional_dyspepsia: ['H. pylori test (stool antigen or urea breath test)', 'Trial of acid suppression (4–8 weeks)', 'Review meal pattern, caffeine, alcohol, NSAID use'],
   };
   const RI = {

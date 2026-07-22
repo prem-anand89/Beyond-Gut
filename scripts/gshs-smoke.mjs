@@ -202,6 +202,30 @@ ok(reasons(rPF.tri).some(r => /pelvic-floor physiotherapy/i.test(r.text)), 'pelv
 ['ar_incont_urge', 'ar_incont_passive', 'ar_incont_flatus'].forEach(id =>
   ok(run(2, { [id]: 3 }).pat.some(p => p.id === 'pelvic_floor'), `${id} alone fires pelvic_floor`));
 
+// 15c. F2 — PFD-paradoxical (dyssynergic defecation). Straining/incomplete
+// evacuation WITH normal-or-loose stool and a LOW constipation cluster fires the
+// paradoxical pattern and routes to pelvic-floor PT + anorectal assessment (not
+// laxatives) — separately from a constipation-dominant read.
+const rPara = run(0, { ar_straining: 3, gsrs_constip: 0, gsrs_hard: 0, gsrs_diarrhoea: 2, gsrs_loose: 2 }, { bristol: 4 });
+ok(rPara.pat.some(p => p.id === 'pelvic_floor_paradox' && p.axis === 'pelvic'),
+  'F2: straining + normal/loose stool + low constipation cluster fires pelvic_floor_paradox');
+ok(reasons(rPara.tri).some(r => /dyssynergic|not laxatives/i.test(r.text)),
+  'F2: paradoxical PFD routes to pelvic-floor PT + anorectal assessment (not laxatives)');
+// It must NOT fire for an ordinary hard-stool constipation picture (that's
+// constipation_dominant's job) — the paradox pattern needs non-hard stool.
+const rHardConstip = run(0, { gsrs_constip: 3, gsrs_hard: 3, gsrs_incomplete: 3, ar_straining: 3 }, { bristol: 1 });
+ok(!rHardConstip.pat.some(p => p.id === 'pelvic_floor_paradox'),
+  'F2: a hard-stool constipation picture does NOT fire the paradoxical pattern (constipation_dominant covers it)');
+ok(rHardConstip.pat.some(p => p.id === 'constipation_dominant'),
+  'F2: the hard-stool picture still fires constipation_dominant (no regression)');
+// Paradoxical arm can also fire off gsrs_incomplete when the sibling constipation
+// items are low (F0 reveal fixture) — normal/loose stool required.
+const rParaInc = run(0, { gsrs_incomplete: 2, gsrs_constip: 0, gsrs_hard: 0, gsrs_diarrhoea: 2 }, { bristol: 4 });
+ok(rParaInc.pat.some(p => p.id === 'pelvic_floor_paradox'),
+  'F2: incomplete evacuation with low constipation cluster + normal stool fires the paradoxical pattern');
+ok(/pelvic_floor_paradox: \[/.test(html) && /balloon expulsion test/i.test(html),
+  'F2: paradoxical PFD has its own investigations (anorectal physiology / balloon expulsion)');
+
 // 16. functional_dyspepsia fires on early satiety / fullness.
 const rFD = run(2, { ug_earlysat: 3, ug_fullness: 3 });
 ok(rFD.pat.some(p => p.id === 'functional_dyspepsia'), 'functional_dyspepsia pattern fires');
