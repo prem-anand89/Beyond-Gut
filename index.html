@@ -760,6 +760,39 @@ const HYDRATION_LEVELS  = ['Low (<1L/day)', 'Moderate (1–2L/day)', 'Good (2L+/
 // (not part of GSRS itself), so it's free to use its own window — it nudges
 // the Index (scoring.js) but never touches the validated severity items.
 const CLUSTER_FREQ_LEVELS = ['1–2 days/week', '3–4 days/week', '5–6 days/week', 'Daily or almost daily']; // 0–3
+// Tranche G — interventions actually implemented for this visit. Captured
+// POST-intake (the plan isn't formed at screening time — locked decision #3), so
+// this is editable free-text + chips recorded on the clinician surface and
+// overlaid on the trend, letting a clinician read burden change against what was
+// tried. Context/annotation only — never scored, never a Tier trigger.
+const INTERVENTION_OPTIONS = [
+  { id: 'diet_lowfodmap',  label: 'Low-FODMAP trial' },
+  { id: 'diet_fibre',      label: 'Fibre / fluid optimisation' },
+  { id: 'diet_elimination',label: 'Elimination / reintroduction' },
+  { id: 'ref_dietitian',   label: 'Dietitian referral' },
+  { id: 'probiotic',       label: 'Probiotic / microbiome trial' },
+  { id: 'ppi',             label: 'Acid suppression (PPI/H2) trial' },
+  { id: 'antispasmodic',   label: 'Antispasmodic' },
+  { id: 'laxative',        label: 'Laxative / osmotic' },
+  { id: 'antidiarrhoeal',  label: 'Antidiarrhoeal' },
+  { id: 'pelvic_pt',       label: 'Pelvic-floor physiotherapy' },
+  { id: 'psych',           label: 'Psychological therapy (CBT / hypnotherapy)' },
+  { id: 'ref_gi',          label: 'GI specialist referral' },
+  { id: 'lifestyle',       label: 'Exercise / stress / sleep' },
+  { id: 'investigations',  label: 'Investigations ordered' },
+];
+// Human-readable summary of a visit's recorded interventions (trend overlay,
+// print, CSV). Reads a visit's extras; returns a short label or null. Lives in
+// scales.js so every module (ui + export) can reach it.
+function interventionSummary(ex) {
+  const e = ex || {};
+  const labels = (e.interventionChips || []).map(id => {
+    const o = INTERVENTION_OPTIONS.find(x => x.id === id); return o ? o.label : id;
+  });
+  const notes = (e.interventionNotes || '').trim();
+  if (!labels.length && !notes) return null;
+  return [labels.join(', '), notes].filter(Boolean).join(' · ');
+}
 // Sleep — relocated from a scored screen domain to a modifiable DRIVER (TRIM_PLAN
 // §8.3). Context only: tracked over time, kept OUT of the GI Symptom Burden score.
 const SLEEP_ITEMS   = ['Trouble falling asleep', 'Waking during the night', 'Waking unrefreshed', 'Fewer hours than you need'];
@@ -1125,7 +1158,7 @@ __e.PSS4_ITEMS = PSS4_ITEMS; __e.PSS4_REVERSED = PSS4_REVERSED; __e.PSS4_ANCHORS
 __e.psychLoadScore = psychLoadScore; __e.loadBand = loadBand;
 __e.DISRUPTORS = DISRUPTORS; __e.ALCOHOL_LEVELS = ALCOHOL_LEVELS; __e.ACTIVITY_LEVELS = ACTIVITY_LEVELS; __e.dietBurden = dietBurden; __e.dietBand = dietBand;
 __e.STOOL_FREQ_LEVELS = STOOL_FREQ_LEVELS; __e.SMOKING_LEVELS = SMOKING_LEVELS; __e.HYDRATION_LEVELS = HYDRATION_LEVELS; __e.FREQ_LEVELS = FREQ_LEVELS;
-__e.PROPORTION_LEVELS = PROPORTION_LEVELS; __e.PROPORTION_PCT_MID = PROPORTION_PCT_MID;
+__e.PROPORTION_LEVELS = PROPORTION_LEVELS; __e.PROPORTION_PCT_MID = PROPORTION_PCT_MID; __e.INTERVENTION_OPTIONS = INTERVENTION_OPTIONS; __e.interventionSummary = interventionSummary;
 __e.CLUSTER_FREQ_LEVELS = CLUSTER_FREQ_LEVELS;
 __e.SLEEP_ITEMS = SLEEP_ITEMS; __e.SLEEP_ANCHORS = SLEEP_ANCHORS; __e.sleepBurden = sleepBurden; __e.sleepBand = sleepBand;
 __e.FOOD_TRIGGERS = FOOD_TRIGGERS; __e.ABX_COURSES = ABX_COURSES; __e.GAS_LEVELS = GAS_LEVELS; __e.STOOLVAR_LEVELS = STOOLVAR_LEVELS;
@@ -2528,7 +2561,7 @@ __e.blankDB = blankDB; __e.loadDB = loadDB; __e.saveDB = saveDB; __e.uid = uid; 
 function pilotExportCSV(db) {
   const { SECTIONS, QUESTIONS } = __req('schema.js');
   const { computeScores } = __req('scoring.js');
-  const { pss4Score, psychLoadScore, dietBurden, sleepBurden, dysbiosisLens, surgicalFlags, anthropometrics, KNOWN_LABS } = __req('scales.js');
+  const { pss4Score, psychLoadScore, dietBurden, sleepBurden, dysbiosisLens, surgicalFlags, anthropometrics, KNOWN_LABS, interventionSummary } = __req('scales.js');
   const { PATTERNS, detectPatterns } = __req('patterns.js');
   const { classifyRomeIV } = __req('romeiv.js');
   const d = normalise(db);
@@ -2558,7 +2591,7 @@ function pilotExportCSV(db) {
     'ex_dietFibre', 'ex_dietProcessed', 'ex_dietBurden', 'ex_alcohol', 'ex_activity',
     'ex_sleep_1', 'ex_sleep_2', 'ex_sleep_3', 'ex_sleep_4', 'ex_sleepBurden',
     'ex_abxCourses', 'ex_dys_stoolVar', 'ex_dys_postInfectious', 'ex_dys_gasFoul', 'ex_dys_fibreParadox', 'ex_dys_foodTriggers', 'ex_dysLensCount', 'ex_dysLensScore', 'ex_dysLensTier',
-    'ex_surgeryCount', 'ex_surgeryOther',
+    'ex_surgeryCount', 'ex_surgeryOther', 'ex_interventions',
     'ex_rome_painFreq', 'ex_rome_onset', 'ex_rome_assoc_defecation', 'ex_rome_assoc_freqchange', 'ex_rome_assoc_formchange',
     'ex_romeCriteriaMet', 'ex_romeSubtype', 'ex_romeSubtypeBasis', 'ex_bristolHardPct', 'ex_bristolLoosePct',
     ...CLUSTERS.map(c => 'ex_clusterFreq_' + c.toLowerCase()),
@@ -2604,7 +2637,7 @@ function pilotExportCSV(db) {
         cell(ex.dietFibre), cell(ex.dietProcessed), num(dietBurden(drv)), cell(ex.alcohol), cell(ex.activity),
         cell((ex.sleep || [])[0]), cell((ex.sleep || [])[1]), cell((ex.sleep || [])[2]), cell((ex.sleep || [])[3]), num(sleepBurden(ex.sleep)),
         cell(ex.abxCourses), cell((ex.dys || {}).stoolVar), cell((ex.dys || {}).postInfectious), cell((ex.dys || {}).gasFoul), cell((ex.dys || {}).fibreParadox), cell(((ex.dys || {}).foodTriggers || []).length), cell(dysbiosisLens(ex).count), cell(dysbiosisLens(ex).score), cell(dysbiosisLens(ex).tier),
-        cell(surgicalFlags(ex).count), cell(ex.surgeryOther || ''),
+        cell(surgicalFlags(ex).count), cell(ex.surgeryOther || ''), cell(interventionSummary(ex) || ''),
         cell(rm.painFreq), cell(rm.onset), bool(rm.rm_assoc_defecation, true), bool(rm.rm_assoc_freqchange, true), bool(rm.rm_assoc_formchange, true),
         romeResult.criteriaMet ? 1 : 0, cell(romeResult.subtype), cell(romeResult.subtypeBasis), cell((ex.bristolProps || {}).hardPct), cell((ex.bristolProps || {}).loosePct),
         ...CLUSTERS.map(c => cell(cf[c])),
@@ -2631,11 +2664,11 @@ const { SECTIONS, QUESTIONS, questionsOf, sectionMax, itemMax, revealMet } = __r
 const { scaleFor, RECALL_NOTE, PSS4_ITEMS, PSS4_ANCHORS, PSS4_REVERSED, pss4Score, BRISTOL_TYPES, PAIN_REGIONS, modifiableFactors,
         DISRUPTORS, ALCOHOL_LEVELS, ACTIVITY_LEVELS, SLEEP_ITEMS, SLEEP_ANCHORS,
         STOOL_FREQ_LEVELS, SMOKING_LEVELS, HYDRATION_LEVELS, FREQ_LEVELS, CLUSTER_FREQ_LEVELS,
-        PROPORTION_LEVELS, PROPORTION_PCT_MID,
+        PROPORTION_LEVELS, PROPORTION_PCT_MID, INTERVENTION_OPTIONS,
         FOOD_TRIGGERS, ABX_COURSES, GAS_LEVELS, STOOLVAR_LEVELS, POSTINF_OPTS, PARADOX_OPTS, dysbiosisLens,
         SURGERIES, surgicalFlags, KNOWN_CONDITIONS, knownConditions, KNOWN_LABS, knownLabs,
         MED_CONFOUNDERS, medConfounders, TREATMENTS_TRIED, treatmentsTried, FAMILY_HISTORY, familyHistory,
-        OBSTETRIC_HISTORY, obstetricHistory, anthropometrics } = __req('scales.js');
+        OBSTETRIC_HISTORY, obstetricHistory, anthropometrics, interventionSummary } = __req('scales.js');
 const { computeScores, scoreConfidence, axisProfile, headlineOutputs, bandForPct, GI_CLUSTERS, severityFrequencyMatrix } = __req('scoring.js');
 // Human-readable per-cluster prompt for clusterFreqCard() — mirrors the same
 // 5 GSRS clusters scoring.js nudges, kept in sync by reusing GI_CLUSTERS
@@ -2664,6 +2697,7 @@ const blankExtras = () => ({
   heightCm: null, weightKg: null, waistCm: null,   // anthropometrics — optional, notes-only (BMI / WHtR)
   bristol: null, bowelFreq: null,    // bowelFreq: stools/week band — paired with Bristol, context only
   bristolProps: { hardPct: null, loosePct: null }, // F1 — Rome IV stool-form proportions (% Bristol 1–2 / 6–7) for the >25% subtype rule
+  interventionChips: [], interventionNotes: '', // Tranche G — interventions implemented this visit (post-intake, editable; annotation only)
   clusterFreq: { Reflux: null, Pain: null, Indigestion: null, Diarrhoea: null, Constipation: null }, // per-cluster symptom-occurrence frequency — nudges the Index, see scoring.js
   pss4: [null, null, null, null], nrsPain: null, painRegion: null,
   meds: { abx: false, ppi: false, nsaid: false },
@@ -3036,6 +3070,37 @@ function severityFrequencyCard(score, extras) {
   return card;
 }
 
+// Tranche G — interventions implemented this visit. Editable on the clinician
+// surface (post-intake — the plan isn't formed at screening), persisted with the
+// visit, and overlaid on the trend so burden change reads against what was tried.
+// Annotation only: never scored, never a Tier trigger.
+function interventionCard() {
+  const card = el('div', { class: 'card', style: 'border-left:6px solid #185FA5' });
+  card.appendChild(el('h2', {}, 'Interventions this visit'));
+  card.appendChild(el('div', { class: 'q-sub' },
+    'Record what was actually started or changed at this visit — this is overlaid on the trend so you can read symptom change against what was tried. Not part of the score.'));
+  const chips = el('div', { class: 'chips', style: 'margin-top:6px' });
+  const list = () => extras.interventionChips || (extras.interventionChips = []);
+  INTERVENTION_OPTIONS.forEach(it => {
+    const sel = list().includes(it.id);
+    const b = el('button', { class: `chip-opt${sel ? ' sel' : ''}`, type: 'button', 'aria-pressed': String(sel) }, esc(it.label));
+    b.onclick = () => {
+      const arr = list(); const i = arr.indexOf(it.id);
+      if (i >= 0) arr.splice(i, 1); else arr.push(it.id);
+      b.classList.toggle('sel'); b.setAttribute('aria-pressed', String(i < 0));
+    };
+    chips.appendChild(b);
+  });
+  card.appendChild(chips);
+  const ta = el('textarea', { rows: '2',
+    style: 'margin-top:8px;width:100%;padding:9px 12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px',
+    placeholder: 'Other detail (dose, referral target, follow-up plan)…' });
+  ta.value = extras.interventionNotes || '';
+  ta.oninput = () => { extras.interventionNotes = ta.value; };
+  card.appendChild(ta);
+  return card;
+}
+
 // Longitudinal trend card — burden + cluster trajectory across this patient's
 // visits, with visit-to-visit delta and pattern persistence. `markLastUnsaved`
 // labels the final point as the current in-progress (preview) visit.
@@ -3054,7 +3119,11 @@ function trendCard(visits, markLastUnsaved) {
        <span style="font-size:13px;color:var(--inks)">Burden ${d.delta > 0 ? '+' : ''}${d.delta} pts vs previous visit (${points[points.length - 2].index}% → ${latest.index}%)</span>`));
   }
 
-  // Per-visit rows: date, index + band, delta.
+  // Per-visit rows: date, index + band, delta. Tranche G — each row also carries
+  // the interventions recorded at that visit (overlay), so burden change reads
+  // against what was tried. Sort the source visits the same way buildTrend does
+  // so the intervention summary aligns to the right point.
+  const sortedVisits = (visits || []).slice().sort((a, b) => (a.date || 0) - (b.date || 0));
   const tbl = el('div', { style: 'margin-top:8px' });
   points.forEach((p, i) => {
     const isLast = i === points.length - 1;
@@ -3066,6 +3135,8 @@ function trendCard(visits, markLastUnsaved) {
     const bandTxt = p.band != null ? esc(p.band) : 'Not completed';
     tbl.appendChild(el('div', { class: 'bar-row', style: 'display:flex;justify-content:space-between;gap:10px;padding:4px 0' },
       `<span>${esc(dateStr)}${tag}</span><span><b>${indexTxt}</b> <span class="muted">${bandTxt}</span> · ${deltaTxt}</span>`));
+    const iv = interventionSummary(sortedVisits[i] && sortedVisits[i].extras);
+    if (iv) tbl.appendChild(el('div', { class: 'q-sub', style: 'padding:0 0 4px 6px;color:#185FA5' }, '↳ interventions: ' + esc(iv)));
   });
   card.appendChild(tbl);
 
@@ -4964,16 +5035,26 @@ function buildClinicianPrint(c) {
   });
   h += `</div></div>`;
 
-  // Longitudinal trend (if applicable)
+  // Tranche G — interventions recorded at THIS visit (annotation only).
+  {
+    const ivNow = interventionSummary(driverExtras);
+    if (ivNow) h += `<div class="pr-section"><div class="pr-sh">Interventions this visit</div>
+      <div style="font-size:11px">${esc(ivNow)}</div></div>`;
+  }
+
+  // Longitudinal trend (if applicable). Tranche G — interventions overlaid per
+  // visit so burden change reads against what was tried.
   if (trend && trend.points.length >= 2) {
+    const sortedTrendVisits = trendVisits.slice().sort((a, b) => (a.date || 0) - (b.date || 0));
     h += `<div class="pr-section"><div class="pr-sh">Longitudinal progression (${trend.points.length} visits)</div>
-      <table class="pr-tbl"><thead><tr><th>#</th><th>Date</th><th>Type</th><th>Index</th><th>Band</th><th>Δ</th></tr></thead><tbody>
+      <table class="pr-tbl"><thead><tr><th>#</th><th>Date</th><th>Type</th><th>Index</th><th>Band</th><th>Δ</th><th>Interventions</th></tr></thead><tbody>
         ${trend.points.map((p, i) => {
           const d = p.date ? new Date(p.date).toISOString().slice(0, 10) : '—';
           const dTxt = p.delta ? `${p.delta.delta > 0 ? '+' : ''}${p.delta.delta} (${esc(p.delta.label)})` : '—';
           const idxTxt = p.index != null ? `${p.index}%` : '—';
           const bandTxt = p.band != null ? esc(p.band) : 'Not completed';
-          return `<tr><td>${i + 1}</td><td>${esc(d)}</td><td>${p.followup ? 'Follow-up' : 'Baseline'}</td><td>${idxTxt}</td><td>${bandTxt}</td><td>${dTxt}</td></tr>`;
+          const iv = interventionSummary(sortedTrendVisits[i] && sortedTrendVisits[i].extras);
+          return `<tr><td>${i + 1}</td><td>${esc(d)}</td><td>${p.followup ? 'Follow-up' : 'Baseline'}</td><td>${idxTxt}</td><td>${bandTxt}</td><td>${dTxt}</td><td>${iv ? esc(iv) : '—'}</td></tr>`;
         }).join('')}
       </tbody></table>
       ${trend.persistent.length ? `<div style="font-size:10.5px;margin-top:4px">Persistent patterns: <b>${trend.persistent.map(id => esc(id.replace(/_/g, ' '))).join(', ')}</b></div>` : ''}
@@ -5146,6 +5227,10 @@ function renderClinician() {
   const sfCard = severityFrequencyCard(score, extras); if (sfCard) root.appendChild(sfCard); // 2-D severity × frequency
   root.appendChild(riskMatrixCard(sv, correlateLoad));
   root.appendChild(clinicianDetailCard(c));
+
+  // Tranche G — editable interventions for this visit (post-intake), overlaid on
+  // the trend below so symptom change reads against what was tried.
+  root.appendChild(interventionCard());
 
   // Longitudinal context if this patient has prior saved visits.
   // If a saved visit is loaded, it's already in the DB — don't duplicate it.

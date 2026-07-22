@@ -248,6 +248,18 @@ const sfLowCells = scoring.severityFrequencyMatrix(sfLow, { clusterFreq: { Indig
 const lowIndig = sfLowCells.find(c => c.cluster === 'Indigestion');
 ok(lowIndig && lowIndig.quadrant === 'low', 'G: mild + infrequent cluster → low quadrant');
 
+// 15e. Tranche G — intervention overlay (annotation only, never scored).
+ok(scales.interventionSummary({}) === null, 'G: no interventions → null summary');
+ok(scales.interventionSummary({ interventionChips: ['diet_lowfodmap', 'pelvic_pt'] }) === 'Low-FODMAP trial, Pelvic-floor physiotherapy',
+  'G: chip interventions render as human-readable labels');
+ok(scales.interventionSummary({ interventionChips: ['ppi'], interventionNotes: '20mg om, review 6/52' }) === 'Acid suppression (PPI/H2) trial · 20mg om, review 6/52',
+  'G: chips + free-text notes combine in the summary');
+ok(/interventionChips: \[\], interventionNotes: ''/.test(html), 'G: blankExtras seeds the intervention fields');
+ok(/function interventionCard/.test(html) && /Interventions this visit/.test(html),
+  'G: editable intervention card rendered on the clinician surface');
+ok(/interventions:.*interventionSummary|↳ interventions/.test(html),
+  'G: interventions overlaid on the trend rows');
+
 // 16. functional_dyspepsia fires on early satiety / fullness.
 const rFD = run(2, { ug_earlysat: 3, ug_fullness: 3 });
 ok(rFD.pat.some(p => p.id === 'functional_dyspepsia'), 'functional_dyspepsia pattern fires');
