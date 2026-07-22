@@ -1017,19 +1017,30 @@ function anthropometrics(extras, session) {
   return { bmi, bmiBand, whtr, whtrBand, notes, caveat };
 }
 
-// Returns the count of dysbiosis-correlate signals present + their labels.
+// Dysbiosis-correlate lens (Dys-R). E3: signals are WEIGHTED, not flat-counted —
+// a flat count treated a foul-gas report and a post-infectious onset as equal
+// evidence, which over-called mild pictures and under-called strong ones. Each
+// signal carries a weight by strength of association:
+//   Major  2.0 — post-infectious onset, fibre/probiotic paradox, recent antibiotics
+//   Moderate 1.0 — multiple fermentable-food triggers, microbiome-altering surgery
+//   Minor  0.5 — day-to-day stool variability, foul-smelling gas
+// Weighted score → tier: High ≥3.0 / Moderate 1.5–2.5 / Low <1.5. `count` and
+// `signals[]` are retained for backward-compatible readers; `score`/`tier` are the
+// stratified read. Stays a labelled CORRELATE, never a dysbiosis diagnosis (§10).
 function dysbiosisLens(extras) {
   const ex = extras || {}, d = ex.dys || {};
   const signals = [];
   if (typeof ex.abxCourses === 'number' && ex.abxCourses >= 1)
-    signals.push({ k: 'abx', label: (ABX_COURSES[ex.abxCourses] || ex.abxCourses) + ' antibiotic course(s) in 12mo' });
-  if (d.postInfectious === 1) signals.push({ k: 'postinf', label: 'Post-infectious onset' });
-  if ((d.foodTriggers || []).length >= 2) signals.push({ k: 'fodmap', label: d.foodTriggers.length + ' fermentable-food triggers' });
-  if (typeof d.gasFoul === 'number' && d.gasFoul >= 2) signals.push({ k: 'gas', label: 'Foul-smelling gas' });
-  if (d.fibreParadox === 1) signals.push({ k: 'paradox', label: 'Worse with fibre / probiotics' });
-  if (typeof d.stoolVar === 'number' && d.stoolVar >= 1) signals.push({ k: 'var', label: 'Day-to-day stool variability' });
-  if (surgicalFlags(ex).microbiome) signals.push({ k: 'surg', label: 'Microbiome-altering surgery' });
-  return { count: signals.length, signals };
+    signals.push({ k: 'abx', w: 2.0, label: (ABX_COURSES[ex.abxCourses] || ex.abxCourses) + ' antibiotic course(s) in 12mo' });
+  if (d.postInfectious === 1) signals.push({ k: 'postinf', w: 2.0, label: 'Post-infectious onset' });
+  if (d.fibreParadox === 1) signals.push({ k: 'paradox', w: 2.0, label: 'Worse with fibre / probiotics' });
+  if ((d.foodTriggers || []).length >= 2) signals.push({ k: 'fodmap', w: 1.0, label: d.foodTriggers.length + ' fermentable-food triggers' });
+  if (surgicalFlags(ex).microbiome) signals.push({ k: 'surg', w: 1.0, label: 'Microbiome-altering surgery' });
+  if (typeof d.stoolVar === 'number' && d.stoolVar >= 1) signals.push({ k: 'var', w: 0.5, label: 'Day-to-day stool variability' });
+  if (typeof d.gasFoul === 'number' && d.gasFoul >= 2) signals.push({ k: 'gas', w: 0.5, label: 'Foul-smelling gas' });
+  const score = Math.round(signals.reduce((t, s) => t + s.w, 0) * 10) / 10;
+  const tier = score >= 3.0 ? 'High' : score >= 1.5 ? 'Moderate' : 'Low';
+  return { count: signals.length, score, tier, signals };
 }
 
 // ONE shared driver descriptor used by every surface (results now; report later).
@@ -1499,8 +1510,12 @@ function headlineOutputs(score, ex, dys) {
   if (meds.nsaid) disruption.push('Regular NSAID');
   if (microSurg)  disruption.push('Microbiome-altering surgery');
   const CORRELATE_KEYS = ['postinf', 'fodmap', 'gas', 'paradox', 'var'];
-  const correlate = ((dys && dys.signals) || [])
-    .filter(s => CORRELATE_KEYS.includes(s.k)).map(s => s.label);
+  const correlateSignals = ((dys && dys.signals) || []).filter(s => CORRELATE_KEYS.includes(s.k));
+  const correlate = correlateSignals.map(s => s.label);
+  // E3 — weighted Dys-R tier over the INFERRED correlate signals only (objective
+  // exposures live in Disruption Load). High ≥3.0 / Moderate 1.5–2.5 / Low <1.5.
+  const correlateScore = Math.round(correlateSignals.reduce((t, s) => t + (s.w || 0), 0) * 10) / 10;
+  const correlateTier = correlateScore >= 3.0 ? 'High' : correlateScore >= 1.5 ? 'Moderate' : 'Low';
 
   const primary = {
     symptom:    { key: 'gut_symptom_burden', label: 'Gut Symptom Burden', value: score.index,
@@ -1510,7 +1525,8 @@ function headlineOutputs(score, ex, dys) {
     disruption: { key: 'disruption_load', label: 'Disruption Load', value: disruption.length,
                   band: loadBandFor(disruption.length), validated: false, signals: disruption },
     correlate:  { key: 'dysbiosis_correlate_load', label: 'Dysbiosis Correlate Load', value: correlate.length,
-                  band: loadBandFor(correlate.length), validated: false, signals: correlate },
+                  band: loadBandFor(correlate.length), validated: false, signals: correlate,
+                  weightedScore: correlateScore, tier: correlateTier },
   };
   const secondary = {
     inflammatory: { key: 'inflammatory_burden', label: 'Inflammatory / Immune Burden',
@@ -1954,6 +1970,10 @@ function triage(score, patterns, firedFlags, dys, opts) {
   const flags = firedFlags || [];
   const o = opts || {};
   const dysCount = (dys && typeof dys.count === 'number') ? dys.count : 0;
+  // E3 — weighted Dys-R tier (High/Moderate/Low) over the inferred correlate
+  // signals, replacing a flat ≥2 count for Tier-3 microbiome-support routing.
+  const dysTier = (dys && dys.tier) || null;
+  const dysScore = (dys && typeof dys.score === 'number') ? dys.score : null;
   const has = (id) => pids.has(id);
   // candidacy[] entries are axis-aware { text, axis } so a referral-summary export
   // can group reasons by axis instead of one flat list.
@@ -2038,7 +2058,13 @@ function triage(score, patterns, firedFlags, dys, opts) {
   // Tier 3 — microbiome-support candidacy
   if (has('post_disruptor')) add(3, 'Recent gut-disruptor exposure (strongest probiotic-trial rationale)', 'microbiome');
   if (has('bloating_fermentation')) add(3, 'Bloating / fermentation pattern', 'symptom');
-  if (dysCount >= 2) add(3, dysCount + ' dysbiosis-correlate signals (see Dysbiosis Correlate Load)', 'microbiome');
+  // E3 — route on the weighted tier when available (Moderate/High), falling back to
+  // the flat ≥2 count for callers that don't supply a tier (backward-compatible).
+  if (dysTier === 'High' || dysTier === 'Moderate') {
+    add(3, `${dysTier} dysbiosis-correlate load (weighted Dys-R ${dysScore != null ? dysScore : '—'}; see Dysbiosis Correlate Load)`, 'microbiome');
+  } else if (dysTier == null && dysCount >= 2) {
+    add(3, dysCount + ' dysbiosis-correlate signals (see Dysbiosis Correlate Load)', 'microbiome');
+  }
 
   // Tier 4 — self-management / monitor
   if (has('lifestyle_modifiable')) add(4, 'Modifiable lifestyle factors are the main lever', 'lifestyle');
@@ -2412,7 +2438,7 @@ function pilotExportCSV(db) {
     'ex_med_abx', 'ex_med_ppi', 'ex_med_nsaid', 'ex_medsOther',
     'ex_dietFibre', 'ex_dietProcessed', 'ex_dietBurden', 'ex_alcohol', 'ex_activity',
     'ex_sleep_1', 'ex_sleep_2', 'ex_sleep_3', 'ex_sleep_4', 'ex_sleepBurden',
-    'ex_abxCourses', 'ex_dys_stoolVar', 'ex_dys_postInfectious', 'ex_dys_gasFoul', 'ex_dys_fibreParadox', 'ex_dys_foodTriggers', 'ex_dysLensCount',
+    'ex_abxCourses', 'ex_dys_stoolVar', 'ex_dys_postInfectious', 'ex_dys_gasFoul', 'ex_dys_fibreParadox', 'ex_dys_foodTriggers', 'ex_dysLensCount', 'ex_dysLensScore', 'ex_dysLensTier',
     'ex_surgeryCount', 'ex_surgeryOther',
     'ex_rome_painFreq', 'ex_rome_onset', 'ex_rome_assoc_defecation', 'ex_rome_assoc_freqchange', 'ex_rome_assoc_formchange',
     'ex_romeCriteriaMet', 'ex_romeSubtype',
@@ -2458,7 +2484,7 @@ function pilotExportCSV(db) {
         bool(meds && meds.abx, !!meds), bool(meds && meds.ppi, !!meds), bool(meds && meds.nsaid, !!meds), cell(ex.medsOther || ''),
         cell(ex.dietFibre), cell(ex.dietProcessed), num(dietBurden(drv)), cell(ex.alcohol), cell(ex.activity),
         cell((ex.sleep || [])[0]), cell((ex.sleep || [])[1]), cell((ex.sleep || [])[2]), cell((ex.sleep || [])[3]), num(sleepBurden(ex.sleep)),
-        cell(ex.abxCourses), cell((ex.dys || {}).stoolVar), cell((ex.dys || {}).postInfectious), cell((ex.dys || {}).gasFoul), cell((ex.dys || {}).fibreParadox), cell(((ex.dys || {}).foodTriggers || []).length), cell(dysbiosisLens(ex).count),
+        cell(ex.abxCourses), cell((ex.dys || {}).stoolVar), cell((ex.dys || {}).postInfectious), cell((ex.dys || {}).gasFoul), cell((ex.dys || {}).fibreParadox), cell(((ex.dys || {}).foodTriggers || []).length), cell(dysbiosisLens(ex).count), cell(dysbiosisLens(ex).score), cell(dysbiosisLens(ex).tier),
         cell(surgicalFlags(ex).count), cell(ex.surgeryOther || ''),
         cell(rm.painFreq), cell(rm.onset), bool(rm.rm_assoc_defecation, true), bool(rm.rm_assoc_freqchange, true), bool(rm.rm_assoc_formchange, true),
         romeResult.criteriaMet ? 1 : 0, cell(romeResult.subtype),
@@ -3881,6 +3907,8 @@ function computeAll() {
   // also folded in objective exposure history like antibiotics / surgery).
   const correlateLoad = {
     count: heads.primary.correlate.value,
+    score: heads.primary.correlate.weightedScore,
+    tier: heads.primary.correlate.tier,
     signals: (heads.primary.correlate.signals || []).map(label => ({ label })),
   };
   const tri = triage(score, patterns, fired, correlateLoad, {
@@ -4593,7 +4621,12 @@ function buildClinicianPrint(c) {
   // (0–6), not percentages; all other axis values are 0–100%.
   const COUNT_LOADS = new Set(['disruption_load', 'dysbiosis_correlate_load']);
   const pctOrCount = (o) => o.value == null ? '—'
-    : (o.max != null ? `${o.value}/${o.max}` : (COUNT_LOADS.has(o.key) ? `${o.value} signal${o.value === 1 ? '' : 's'}` : o.value + '%'));
+    : (o.max != null ? `${o.value}/${o.max}`
+      // E3 — the Dysbiosis Correlate Load shows the weighted Dys-R tier alongside the
+      // raw signal count, so a clinician sees strength-of-evidence, not just how many.
+      : (o.key === 'dysbiosis_correlate_load' && o.tier
+          ? `${o.value} signal${o.value === 1 ? '' : 's'} · Dys-R ${o.tier}${o.weightedScore != null ? ` (${o.weightedScore})` : ''}`
+          : (COUNT_LOADS.has(o.key) ? `${o.value} signal${o.value === 1 ? '' : 's'}` : o.value + '%')));
   const axisRow = (o) => `<tr><td>${esc(o.label)}</td><td style="white-space:nowrap"><b>${esc(String(pctOrCount(o)))}</b></td><td>${prBandPill(o.band)}</td><td>${prProv(o.validated)}</td></tr>`;
   h += `<div class="pr-section"><div class="pr-sh">Axis profile</div>
     <table class="pr-tbl"><thead><tr><th>Axis</th><th>Value</th><th>Band</th><th>Basis</th></tr></thead><tbody>

@@ -51,7 +51,7 @@ function run(gi, sys = {}, extra = {}, romeIn = {}) {
   const pat = patterns.detectPatterns(score, ex, a);
   const rr = rome.classifyRomeIV(ex.rome, score.clusterNorm);
   // Mirror computeAll(): triage reads the correlate-only split, not the merged lens.
-  const correlateLoad = { count: heads.primary.correlate.value, signals: (heads.primary.correlate.signals || []).map(l => ({ label: l })) };
+  const correlateLoad = { count: heads.primary.correlate.value, score: heads.primary.correlate.weightedScore, tier: heads.primary.correlate.tier, signals: (heads.primary.correlate.signals || []).map(l => ({ label: l })) };
   const conditions = scales.knownConditions(ex);
   const famhx = scales.familyHistory(ex);
   const obstetric = scales.obstetricHistory(ex);
@@ -118,6 +118,29 @@ const rExp = run(2, {}, { meds: { abx: true }, abxCourses: 2, surgeries: ['gallb
 ok(rExp.heads.primary.disruption.value >= 2, 'exposure history raises Disruption Load');
 ok(rExp.correlateLoad.count === 0, 'no inferred correlates → Dysbiosis Correlate Load = 0');
 ok(!reasons(rExp.tri).some(r => /dysbiosis-correlate/i.test(r.text)), 'exposure-only does NOT trigger a dysbiosis-correlate triage reason');
+
+// 10b. E3 — weighted Dys-R stratification.
+const dl0 = scales.dysbiosisLens({});
+ok(dl0.score === 0 && dl0.tier === 'Low', 'E3: empty lens → score 0, tier Low');
+// Two Minor signals (0.5 + 0.5 = 1.0) stay Low; a single Major (2.0) reaches Moderate.
+const dlMinor = scales.dysbiosisLens({ dys: { stoolVar: 2, gasFoul: 2 } });
+ok(dlMinor.score === 1.0 && dlMinor.tier === 'Low', 'E3: two Minor signals (1.0) stay Low — flat count would have over-called 2 signals');
+const dlMajor = scales.dysbiosisLens({ dys: { postInfectious: 1 } });
+ok(dlMajor.score === 2.0 && dlMajor.tier === 'Moderate', 'E3: one Major signal (post-infectious, 2.0) → Moderate on a single signal');
+// Two Majors (post-infectious + fibre paradox = 4.0) → High.
+const dlHigh = scales.dysbiosisLens({ dys: { postInfectious: 1, fibreParadox: 1 } });
+ok(dlHigh.score === 4.0 && dlHigh.tier === 'High', 'E3: two Major signals (4.0) → High');
+ok(scales.dysbiosisLens({ dys: { postInfectious: 1 } }).signals.find(s => s.k === 'postinf').w === 2.0,
+  'E3: signals retain their weight for display/audit');
+// Weighted tier drives Tier-3 routing (Moderate/High), replacing the flat ≥2 count.
+const rDysHi = run(2, { gsrs_bloating: 2 }, { dys: { postInfectious: 1, fibreParadox: 1 } });
+ok(reasons(rDysHi.tri).some(r => /High dysbiosis-correlate load|weighted Dys-R/i.test(r.text)),
+  'E3: High weighted tier surfaces a Tier-3 microbiome-support reason with the weighted read');
+// A single Minor correlate (0.5, Low) must NOT trigger the Tier-3 dysbiosis reason,
+// where the old flat rule (≥2 signals) also wouldn't — but now Low is explicit.
+const rDysLo = run(2, {}, { dys: { gasFoul: 2 } });
+ok(!reasons(rDysLo.tri).some(r => /dysbiosis-correlate load/i.test(r.text)),
+  'E3: a single Low-tier correlate does not trigger the Tier-3 dysbiosis reason');
 
 // 11. diarrhoea_dominant now uses the shared bowelSubtype (agrees with Rome IV).
 const rD = run(0, { gsrs_diarrhoea: 3, gsrs_loose: 3, gsrs_urgency: 3 }, {}, { painFreq: 3, onset: 3, rm_assoc_defecation: true, rm_assoc_freqchange: true });
