@@ -111,6 +111,9 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 .rf-title{font-size:13.5px;font-weight:700;color:var(--re);margin-bottom:3px}
 .rf-body{font-size:12px;color:#5A1414;line-height:1.5}
 .rf-list{margin:6px 0 0 16px;padding:0;font-size:11.5px;color:#5A1414}
+.rf-tier{margin-top:8px}
+.rf-tier-head{font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#7A1F1F}
+.rf-tier .rf-list{margin-top:2px}
 
 .empty-note{text-align:center;padding:40px 20px;color:var(--inkt);font-size:13px}
 
@@ -1129,33 +1132,72 @@ return __e;
    the result. CLEAN SLATE: item list co-designed; mechanism ported from v1.
    ========================================================================== */
 __modules['redflags.js'] = function(__e){
+// E2 — each flag carries an `urgency` tier so the banner + triage headline reflect
+// the HIGHEST-acuity feature present, instead of treating every alarm identically.
+// Mapping is clinical (locked decision #4 — sound clinical mapping, NOT the source
+// doc's under-call), provisional and clinician-adjustable. Tier meanings:
+//   emergency = needs same-day / urgent assessment (acute GI bleed, jaundice)
+//   urgent    = 2-week-wait / see a clinician within days (alarm features)
+//   routine   = refer, but not time-critical on this item alone
+// INVARIANT: tiering never downgrades below "refer" — the lowest tier is still a
+// referral, and any fired flag still suppresses reassuring output elsewhere.
 const RED_FLAGS = [
   // Lower-GI / colorectal alarm features
-  { id: 'rf_bleeding',   label: 'Blood in your stool, rectal bleeding, or black tarry stools' },
+  // Combined item spans fresh rectal bleeding AND melena (black tarry) — the latter
+  // is an acute upper-GI bleed, so the combined item errs to emergency (safe-side).
+  { id: 'rf_bleeding',   urgency: 'emergency', label: 'Blood in your stool, rectal bleeding, or black tarry stools' },
   // Quantified so self-report maps to the meaningful clinical threshold (~5% over
   // 6 months) rather than any trivial fluctuation. No fixed kg figure — 5% varies
   // by body size — with a concrete everyday cue instead.
-  { id: 'rf_weightloss', label: 'Losing weight without trying — for example, your clothes feel looser, or you have lost more than about 5% of your body weight over the past 6 months' },
-  { id: 'rf_nocturnal',  label: 'Gut symptoms that wake you from sleep at night' },
+  { id: 'rf_weightloss', urgency: 'urgent',    label: 'Losing weight without trying — for example, your clothes feel looser, or you have lost more than about 5% of your body weight over the past 6 months' },
+  { id: 'rf_nocturnal',  urgency: 'urgent',    label: 'Gut symptoms that wake you from sleep at night' },
   // Threshold lowered to 45 and reframed around persistence (≥6 weeks) — early-onset
   // colorectal cancer is rising and a sustained change warrants review at any age.
-  { id: 'rf_newonset50', label: 'A new, persistent change in your bowel habit lasting 6 weeks or more. This applies at any age, but is especially important if you are over 45.' },
-  { id: 'rf_mass',       label: 'A lump or mass you (or a doctor) can feel in your abdomen' },
+  { id: 'rf_newonset50', urgency: 'urgent',    label: 'A new, persistent change in your bowel habit lasting 6 weeks or more. This applies at any age, but is especially important if you are over 45.' },
+  { id: 'rf_mass',       urgency: 'urgent',    label: 'A lump or mass you (or a doctor) can feel in your abdomen' },
   // (Family history moved out of acute red flags — it's a risk factor, not an acute
   // alarm. Captured as a Family-history chip set and wired in triage instead.)
   // Upper-GI alarm features
-  { id: 'rf_dysphagia',  label: 'Difficulty or pain when swallowing' },
-  { id: 'rf_vomiting',   label: 'Persistent vomiting' },
-  { id: 'rf_hematemesis',label: 'Vomiting blood or coffee-ground material' },
+  { id: 'rf_dysphagia',  urgency: 'urgent',    label: 'Difficulty or pain when swallowing' },
+  { id: 'rf_vomiting',   urgency: 'urgent',    label: 'Persistent vomiting' },
+  { id: 'rf_hematemesis',urgency: 'emergency', label: 'Vomiting blood or coffee-ground material' },
   // Systemic / other
-  { id: 'rf_anaemia',    label: 'Diagnosed iron-deficiency anaemia without a clear cause' },
-  { id: 'rf_jaundice',   label: 'Yellowing of the skin or eyes (jaundice)' },
-  { id: 'rf_fever',      label: 'Fever accompanying your gut symptoms' },
+  { id: 'rf_anaemia',    urgency: 'urgent',    label: 'Diagnosed iron-deficiency anaemia without a clear cause' },
+  { id: 'rf_jaundice',   urgency: 'emergency', label: 'Yellowing of the skin or eyes (jaundice)' },
+  { id: 'rf_fever',      urgency: 'urgent',    label: 'Fever accompanying your gut symptoms' },
 ];
+const RF_URGENCY_RANK = { emergency: 3, urgent: 2, routine: 1 };
+const RF_URGENCY_META = {
+  emergency: { label: 'Emergency', order: 3,
+    headline: 'Urgent, same-day medical assessment recommended — one or more answers point to a potentially acute problem (e.g. active GI bleeding or jaundice).' },
+  urgent:    { label: 'Urgent',    order: 2,
+    headline: 'Prompt clinical assessment recommended (within days) — one or more answers are recognised alarm features that warrant timely investigation.' },
+  routine:   { label: 'Refer',     order: 1,
+    headline: 'Clinician review recommended before starting a gut-health protocol.' },
+};
 function anyRedFlag(answers) { return !!answers && RED_FLAGS.some(f => answers[f.id] === true); }
 function firedRedFlags(answers) { return answers ? RED_FLAGS.filter(f => answers[f.id] === true) : []; }
+// Highest urgency among fired flags (null if none). Drives the banner + triage headline.
+function topUrgency(answers) {
+  const fired = firedRedFlags(answers);
+  if (!fired.length) return null;
+  return fired.reduce((top, f) => {
+    const u = f.urgency || 'routine';
+    return (RF_URGENCY_RANK[u] > RF_URGENCY_RANK[top]) ? u : top;
+  }, 'routine');
+}
+// Fired flags grouped by tier, highest-acuity first — for the tiered banner/report.
+function firedByUrgency(answers) {
+  const fired = firedRedFlags(answers);
+  const groups = { emergency: [], urgent: [], routine: [] };
+  fired.forEach(f => groups[f.urgency || 'routine'].push(f));
+  return ['emergency', 'urgent', 'routine']
+    .filter(t => groups[t].length)
+    .map(t => ({ tier: t, meta: RF_URGENCY_META[t], flags: groups[t] }));
+}
 const RED_FLAG_BANNER = "One or more of your answers suggest symptoms that should be assessed directly by a clinician before starting a gut-health protocol. This doesn't replace that evaluation — please discuss these specific answers with your clinician.";
 __e.RED_FLAGS = RED_FLAGS; __e.anyRedFlag = anyRedFlag; __e.firedRedFlags = firedRedFlags; __e.RED_FLAG_BANNER = RED_FLAG_BANNER;
+__e.RF_URGENCY_META = RF_URGENCY_META; __e.topUrgency = topUrgency; __e.firedByUrgency = firedByUrgency;
 return __e;
 };
 
@@ -1918,8 +1960,20 @@ function triage(score, patterns, firedFlags, dys, opts) {
   const candidacy = { 1: [], 2: [], 3: [], 4: [] };
   const add = (lvl, text, axis) => candidacy[lvl].push({ text, axis });
 
-  // Tier 1 — refer
-  if (flags.length) add(1, flags.length + ' safety red-flag answer' + (flags.length > 1 ? 's' : '') + ' present', 'safety');
+  // Tier 1 — refer. E2: the reason wording reflects the HIGHEST urgency tier among
+  // fired flags (emergency > urgent > routine), so a same-day feature (GI bleed,
+  // jaundice) reads differently from a routine 2-week-wait alarm. Never downgrades
+  // below "refer" — the lowest tier is still a Tier-1 referral reason.
+  if (flags.length) {
+    const rank = { emergency: 3, urgent: 2, routine: 1 };
+    const top = flags.reduce((t, f) => {
+      const u = f.urgency || 'routine';
+      return (rank[u] > rank[t]) ? u : t;
+    }, 'routine');
+    const urgWord = top === 'emergency' ? ' — same-day assessment advised'
+      : top === 'urgent' ? ' — prompt (within-days) assessment advised' : '';
+    add(1, flags.length + ' safety red-flag answer' + (flags.length > 1 ? 's' : '') + ' present' + urgWord, 'safety');
+  }
   if (band === 'Severe') add(1, 'Severe GI symptom burden', 'symptom');
   if (has('nutrient_malabsorption')) add(1, 'Possible malabsorption — bloods / clinical review advised', 'nutrient');
 
@@ -2448,7 +2502,7 @@ const GI_CLUSTER_FREQ_LABELS = {
   Diarrhoea: 'Loose or urgent stools',
   Constipation: 'Constipation or hard stools',
 };
-const { RED_FLAGS, anyRedFlag, firedRedFlags, RED_FLAG_BANNER } = __req('redflags.js');
+const { RED_FLAGS, anyRedFlag, firedRedFlags, RED_FLAG_BANNER, RF_URGENCY_META, topUrgency, firedByUrgency } = __req('redflags.js');
 const { el, esc, toast, patientForm } = __req('util.js');
 const Store = __req('storage.js');
 const { detectPatterns } = __req('patterns.js');
@@ -3926,10 +3980,20 @@ function calc() {
   }
 
   if (anyRedFlag(redflags)) {
-    const items = fired.map(f => `<li>${esc(f.label)}</li>`).join('');
+    // E2 — tiered banner: the highest urgency present drives the headline, and
+    // flags are grouped under their tier so an acute feature (GI bleed, jaundice)
+    // is visually separated from a routine 2-week-wait alarm.
+    const top = topUrgency(redflags);
+    const topMeta = top ? RF_URGENCY_META[top] : null;
+    const groups = firedByUrgency(redflags);
+    const groupHtml = groups.map(g =>
+      `<div class="rf-tier"><div class="rf-tier-head">${esc(g.meta.label)}</div>` +
+      `<ul class="rf-list">${g.flags.map(f => `<li>${esc(f.label)}</li>`).join('')}</ul></div>`
+    ).join('');
+    const headline = topMeta ? topMeta.headline : RED_FLAG_BANNER;
     out.appendChild(el('div', { class: 'rf-banner' },
       `<div class="rf-ic">⚠️</div><div><div class="rf-title">Please speak with a clinician about these answers</div>
-       <div class="rf-body">${esc(RED_FLAG_BANNER)}</div><ul class="rf-list">${items}</ul></div>`));
+       <div class="rf-body">${esc(headline)} ${esc(RED_FLAG_BANNER)}</div>${groupHtml}</div>`));
   }
 
   if (score.completeness < 80) toast(`${score.completeness}% complete — result shown as provisional.`);
@@ -4495,11 +4559,23 @@ function buildClinicianPrint(c) {
   </div>`;
 
   // Red flags — moved up directly under Triage so the safety read is never buried.
+  // E2: grouped by urgency tier, highest-acuity first, with a tier headline so the
+  // clinician sees at a glance whether a same-day feature is present.
   h += `<div class="pr-section"><div class="pr-sh">Red flags</div>`;
-  h += fired.length
-    ? `<div class="pr-alert"><div class="pr-alert-t">⚠ ${fired.length} item${fired.length > 1 ? 's' : ''} answered Yes</div>
-       <ul style="margin:4px 0 0 14px;font-size:10.5px">${fired.map(f => `<li>${esc(f.label)}</li>`).join('')}</ul></div>`
-    : `<div style="font-size:11px;color:#555">No red flags answered Yes.</div>`;
+  if (fired.length) {
+    const top = topUrgency(redflags);
+    const topMeta = top ? RF_URGENCY_META[top] : null;
+    const groups = firedByUrgency(redflags);
+    h += `<div class="pr-alert"><div class="pr-alert-t">⚠ ${fired.length} item${fired.length > 1 ? 's' : ''} answered Yes${topMeta ? ` · highest: ${esc(topMeta.label)}` : ''}</div>`;
+    if (topMeta) h += `<div style="font-size:10px;color:#7A1F1F;margin:2px 0 4px">${esc(topMeta.headline)}</div>`;
+    h += groups.map(g =>
+      `<div style="margin-top:4px"><div style="font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#7A1F1F">${esc(g.meta.label)}</div>` +
+      `<ul style="margin:2px 0 0 14px;font-size:10.5px">${g.flags.map(f => `<li>${esc(f.label)}</li>`).join('')}</ul></div>`
+    ).join('');
+    h += `</div>`;
+  } else {
+    h += `<div style="font-size:11px;color:#555">No red flags answered Yes.</div>`;
+  }
   h += `</div>`;
 
   // Physiotherapy candidacy — the pelvic-floor / visceral-fascial manual-therapy
@@ -4779,10 +4855,20 @@ function renderClinician() {
   const rfCard = el('div', { class: 'card', style: `border-left:6px solid ${fired.length ? '#A32D2D' : '#0F6E56'}` });
   rfCard.appendChild(el('h2', {}, 'Red flags'));
   if (fired.length) {
+    // E2 — group by urgency tier off the fired flag objects (each carries `urgency`).
+    const rank = { emergency: 3, urgent: 2, routine: 1 };
+    const top = fired.reduce((t, f) => (rank[f.urgency || 'routine'] > rank[t] ? (f.urgency || 'routine') : t), 'routine');
+    const topMeta = RF_URGENCY_META[top];
     rfCard.appendChild(el('div', { style: 'font-weight:700;color:#A32D2D;font-size:13px' },
-      `⚠ ${fired.length} item${fired.length > 1 ? 's' : ''} answered Yes`));
-    rfCard.appendChild(el('ul', { style: 'font-size:12.5px;padding-left:18px;color:#A32D2D;margin:4px 0 0' },
-      fired.map(f => `<li>${esc(f.label)}</li>`).join('')));
+      `⚠ ${fired.length} item${fired.length > 1 ? 's' : ''} answered Yes · highest: ${esc(topMeta.label)}`));
+    rfCard.appendChild(el('div', { style: 'font-size:11px;color:#7A1F1F;margin:2px 0 4px' }, esc(topMeta.headline)));
+    ['emergency', 'urgent', 'routine'].forEach(tier => {
+      const grp = fired.filter(f => (f.urgency || 'routine') === tier);
+      if (!grp.length) return;
+      rfCard.appendChild(el('div', { style: 'font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#7A1F1F;margin-top:6px' }, esc(RF_URGENCY_META[tier].label)));
+      rfCard.appendChild(el('ul', { style: 'font-size:12.5px;padding-left:18px;color:#A32D2D;margin:2px 0 0' },
+        grp.map(f => `<li>${esc(f.label)}</li>`).join('')));
+    });
   } else {
     rfCard.appendChild(el('div', { class: 'q-sub' }, 'No red flags answered Yes.'));
   }

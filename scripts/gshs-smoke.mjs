@@ -58,7 +58,8 @@ function run(gi, sys = {}, extra = {}, romeIn = {}) {
   const gynOverlap = (typeof a.gy_cyclical === 'number' && a.gy_cyclical >= 2) && (typeof a.gsrs_pain === 'number' && a.gsrs_pain >= 2);
   const anthro = scales.anthropometrics(ex, {});
   const labs = scales.knownLabs(ex);
-  const tri = triage(score, pat, [], correlateLoad, {
+  const fired = req('redflags.js').firedRedFlags(extra.redflags || {});
+  const tri = triage(score, pat, fired, correlateLoad, {
     impactBand: prof.impact.band, romeResult: rr, adhesionSurgery: false,
     knownConditions: conditions, conditionNotes: conditions.notes, labResults: labs,
     family: famhx, gynOverlap, obstetric, anthro,
@@ -211,6 +212,30 @@ const rfWeight = RF.find(f => f.id === 'rf_weightloss');
 const rfOnset  = RF.find(f => f.id === 'rf_newonset50');
 ok(/5%/.test(rfWeight.label), 'weight-loss alarm quantified (≈5% threshold in wording)');
 ok(/45/.test(rfOnset.label) && /6 weeks/i.test(rfOnset.label) && !/age 50/.test(rfOnset.label), 'new-onset alarm lowered to 45 + persistence (≥6 weeks)');
+
+// 21b. E2 — red-flag urgency stratification.
+const rfMod = req('redflags.js');
+ok(RF.every(f => ['emergency', 'urgent', 'routine'].includes(f.urgency)), 'E2: every red flag carries a valid urgency tier');
+ok(rfMod.RED_FLAGS.find(f => f.id === 'rf_hematemesis').urgency === 'emergency' &&
+   rfMod.RED_FLAGS.find(f => f.id === 'rf_bleeding').urgency === 'emergency' &&
+   rfMod.RED_FLAGS.find(f => f.id === 'rf_jaundice').urgency === 'emergency',
+  'E2: acute GI-bleed / jaundice features map to emergency');
+ok(rfMod.RED_FLAGS.find(f => f.id === 'rf_weightloss').urgency === 'urgent' &&
+   rfMod.RED_FLAGS.find(f => f.id === 'rf_nocturnal').urgency === 'urgent',
+  'E2: weight-loss + nocturnal map to urgent (locked decision #4 — not routine)');
+ok(rfMod.topUrgency({ rf_nocturnal: true, rf_hematemesis: true }) === 'emergency',
+  'E2: topUrgency returns the highest tier present (emergency > urgent)');
+ok(rfMod.topUrgency({ rf_nocturnal: true }) === 'urgent' && rfMod.topUrgency({}) === null,
+  'E2: topUrgency reflects urgent-only, and is null with no flags');
+const fbu = rfMod.firedByUrgency({ rf_nocturnal: true, rf_hematemesis: true });
+ok(fbu[0].tier === 'emergency' && fbu[1].tier === 'urgent', 'E2: firedByUrgency groups highest-acuity first');
+// Tiering never downgrades below refer — any fired flag still forces Tier 1.
+const rEmerg = run(0, {}, { redflags: { rf_hematemesis: true } });
+ok(rEmerg.tri.level === 1 && reasons(rEmerg.tri).some(r => /same-day/i.test(r.text)),
+  'E2: emergency flag → Tier 1 with same-day wording in the reason');
+const rUrg = run(0, {}, { redflags: { rf_nocturnal: true } });
+ok(rUrg.tri.level === 1 && reasons(rUrg.tri).some(r => /within-days|prompt/i.test(r.text)),
+  'E2: urgent flag → Tier 1 with prompt/within-days wording (never below refer)');
 
 // 22. Change 5a — diabetes/thyroid/PCOS now carry clinNotes → conditionGuidance.
 ['thyroid', 'diabetes', 'pcos'].forEach(id =>
