@@ -1,88 +1,65 @@
-/**
- * Trend Module (trend.js)
- *
- * Visit progression and outcome tracking for repeated assessments.
- * Compares current visit to historical visits to show improvement/worsening.
- *
- * CORE EXPORTS:
- *   - computeTrend(currentVisit, previousVisits, session)
- *       Computes progression summary:
- *       - Index delta (improved/stable/worsened)
- *       - Pattern changes (new, resolved, persistent)
- *       - Outcome indicators (lab trends, medication changes)
- *
- *   - visitScore(visit, opts)
- *       Re-computes a visit's score from stored answers.
- *       Uses frozen scoreSnapshot if available (for historical preservation).
- *       Falls back to live compute for pre-snapshot visits.
- *
- *   - buildScoreSnapshot(visit)
- *       Captures Index + band + completeness at save time.
- *       Ensures historical visits don't re-score differently if calculation changes.
- *
- * WHY SNAPSHOTS MATTER:
- *   If scoring logic changes (e.g., band cutoffs updated, new nudge added),
- *   ALL historical visits would re-score with new logic, losing the original
- *   snapshot. Snapshots preserve the EXACT score at the time of visit,
- *   so trends are stable across code updates.
- *
- * PROGRESSION TRACKING:
- *   Compares:
- *   - Gut Symptom Index: "Improved X points" / "Stable" / "Worsened Y points"
- *   - Patterns: "New patterns: [list]" / "Resolved: [list]"
- *   - High-burden burden signals: Labs, red flags, psychosocial load changes
- *
- * DELTA BANDS:
- *   - ≥ +10 pts: "Significantly improved"
- *   - +5 to +9: "Improved"
- *   - -4 to +4: "Stable"
- *   - -9 to -5: "Worsened"
- *   - ≤ -10: "Significantly worsened"
- *
- * OUTCOME INDICATORS:
- *   - Lab improvements (e.g., CRP down, coeliac serology converted to negative)
- *   - Medication reduction (discontinuation of FODMAP/probiotics/PPI trial)
- *   - Psychosocial improvement (stress score lowered, mood improved)
- *   - New red flags (escalation signal)
- *
- * USE CASES:
- *   1. Patient-facing: "You've improved by 15 points since last visit"
- *   2. Clinician: Track efficacy of an intervention (diet, medication, PT)
- *   3. Research: Audit population-level outcomes over time
- *   4. Safety: Detect sudden worsening or new alarm features
- *
- * DEPENDENCIES:
- *   - scoring.js (computeScores for re-scoring)
- *   - patterns.js (detectPatterns for pattern comparison)
- *   - storage.js (loadVisit to fetch historical visits)
- *
- * DESIGN PRINCIPLES:
- *   1. Snapshots are immutable — captured at save, never recomputed
- *   2. Trends are RELATIVE — only compare patient to self, never to population
- *   3. Statistical rigor — deltas <5pts are noise (sample variability)
- *   4. Context-aware — acknowledge confounders (medication changes, infections)
- *
- * LIMITATIONS:
- *   - Single-patient view (no population benchmarks)
- *   - Intra-visit snapshot only (doesn't track within-week symptom variability)
- *   - Confounding uncontrolled (can't distinguish intervention effect from natural variation)
- *   - Causality not implied ("improved after starting probiotics" ≠ probiotics caused improvement)
- */
+const scoring = require('scoring.js');
+const patterns = require('patterns.js');
+const scales = require('scales.js');
 
-// PLACEHOLDER: This is a reference document.
-// In production, trend.js is currently inlined in index.html ~line 2145–2214.
-// Future extraction will move the actual implementation here as a CommonJS module.
-//
-// TODO[module-extraction]:
-//   1. Extract trend module from index.html
-//   2. Convert __req() calls to require()
-//   3. Export computeTrend, visitScore, buildScoreSnapshot
-//   4. Add tests for snapshot preservation across code updates
-//   5. Verify delta calculation robustness (NaN/null handling)
+const { computeScores } = __req('scoring.js');
+const { detectPatterns } = __req('patterns.js');
+const { pss4Score, anthropometrics } = __req('scales.js');
 
-module.exports = {
-  // To be populated when module is extracted
-  computeTrend: null,
-  visitScore: null,
-  buildScoreSnapshot: null,
-};
+function visitScore(v) {
+  const a = v.answers || {}, ex = v.extras || {};
+  // Must mirror the live computeAll()/computeScores() call and the CSV export's
+  // drv object exactly (clusterFreq/romePainFreq feed the Index; rome feeds
+  // pattern confidence; conditions/surgeries/anthro feed nutrient_malabsorption's
+  // D1 signals) — otherwise this recomputation silently disagrees with the
+  // index/band/patterns shown on the results screen and in the pilot CSV for
+  // the very same visit (A2 regression: previously omitted, up to ~15pt drift).
+  const sc = computeScores(a, { bristol: ex.bristol, clusterFreq: ex.clusterFreq, romePainFreq: ex.rome && ex.rome.painFreq });
+  const drv = {
+    pss4Score: pss4Score(ex.pss4), bgAnxiety: a.bg_anxiety, bgMood: a.bg_mood,
+    dietFibre: ex.dietFibre, dietProcessed: ex.dietProcessed,
+    bristol: ex.bristol, meds: ex.meds, alcohol: ex.alcohol, activity: ex.activity,
+    abxCourses: ex.abxCourses, dys: ex.dys, rome: ex.rome, // Dys-R + Rome inputs (keep trend patterns in sync with live)
+    conditions: ex.conditions, surgeries: ex.surgeries, anthro: anthropometrics(ex, {}),
+  };
+  const patterns = detectPatterns(sc, drv, a).map(p => p.id);
+  // P2 — the DISPLAYED numbers come from the visit's frozen snapshot when it has
+  // one, so a past visit keeps showing what the patient saw even if the scoring
+  // engine is later recalibrated. Patterns are always recomputed (not snapshotted
+  // by design). Visits saved before snapshots existed fall back to the recompute.
+  const snap = v.scoreSnapshot || null;
+  return {
+    id: v.id, date: v.date || 0, followup: !!v.followup,
+    index: snap ? snap.index : sc.index,
+    band: snap ? (snap.severity && snap.severity.label) : sc.severity.label,
+    completeness: snap && snap.completeness != null ? snap.completeness : sc.completeness,
+    clusterNorm: snap ? snap.clusterNorm : sc.clusterNorm, patterns,
+  };
+}
+
+// Lower burden = improvement. Returns null for the first visit (no prior),
+// or when either index is unavailable (core GI section not completed on
+// that visit) — a null index must never coerce to 0 and read as "Improved".
+function deltaLabel(curr, prev) {
+  if (prev == null || curr == null) return null;
+  const d = curr - prev, ad = Math.abs(d);
+  if (ad < 5) return { dir: 'stable', label: 'Stable', delta: d, color: '#999' };
+  const meaningful = ad >= 10;
+  if (d < 0) return { dir: 'improved', label: meaningful ? 'Improved' : 'Slightly improved', delta: d, color: '#0F6E56' };
+  return { dir: 'worsened', label: meaningful ? 'Worsened' : 'Slightly worse', delta: d, color: '#A32D2D' };
+}
+
+function buildTrend(visits) {
+  const points = (visits || []).slice().sort((a, b) => (a.date || 0) - (b.date || 0)).map(visitScore);
+  points.forEach((p, i) => { p.delta = i > 0 ? deltaLabel(p.index, points[i - 1].index) : null; });
+  // Persistence: patterns that fired on BOTH the latest and the prior visit.
+  let persistent = [];
+  if (points.length >= 2) {
+    const prev = new Set(points[points.length - 2].patterns);
+    persistent = points[points.length - 1].patterns.filter(id => prev.has(id));
+  }
+  return { points, persistent, latest: points[points.length - 1] || null };
+}
+
+module.exports.visitScore = visitScore; module.exports.deltaLabel = deltaLabel; module.exports.buildTrend = buildTrend;
+return __e;
