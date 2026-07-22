@@ -162,9 +162,70 @@ Every step ships with its smoke-test regression and a browser check, per the rep
 
 ---
 
-## Decisions needed from you
+## Decisions — LOCKED (2026-07-22)
 
-1. **Scale**: keep 4-point (preserve "validated GSRS" claim) **or** move to 0–4 (re-label as "GSRS-derived, provisional")?
-2. **Frequency**: 2-D severity×frequency report (recommended) **or** a single blended Lived-Burden number?
-3. **Advanced lenses**: which to build now (PFD / BAM / autonomic-hEDS / FD-subtype / ARFID circuit-breaker)?
-4. **Red-flag urgency mapping**: confirm which flags are Emergency vs Urgent vs Routine (my draft pushes nocturnal + weight-loss to Urgent).
+1. **Scale** → **move to 0–4** (5-point), re-label Symptom axis "GSRS-derived, provisional."
+2. **Frequency** → **2-D severity × frequency report** (not a blended Lived-Burden number).
+3. **Lenses** → **leanest pass**: the four zero-question logic wins (peak-override, red-flag
+   stratification, weighted Dys-R, PFD-paradoxical) + Rome-% subtyping. BAM / ARFID /
+   autonomic-hEDS / FD-subtype **deferred** to a later wave.
+4. **Red-flag urgency** → clinician mapping (nocturnal + weight-loss = Urgent, not Routine).
+5. **Report** → **one unified report** (merge, not delete): clinician interpretation layered
+   over patient-readable scores/domains, with trend + a deferred-editable intervention overlay.
+6. **Execution model** → Opus 4.8 (`claude-opus-4-8`) — clinical-scoring correctness stakes.
+
+---
+
+## Questionnaire visibility audit (mandatory vs gated) + scoring-driven changes
+
+### Current visibility — three tiers
+
+- **Tier 1 · always shown, always mandatory (never gate):** GI core 15 GSRS items;
+  12 red flags.
+- **Tier 2 · always shown, mandatory-by-completeness:** IM ×6, BG ×5, NU ×3, IMP ×4
+  (~18 systemic items). Not flagged `optional`, so a blank counts against completeness —
+  effectively mandatory even though none feed the Gut Symptom Index.
+- **Tier 3 · optional / reveal-gated (don't count toward mandatory total / progress / time):**
+  `sx_duration` (any cluster > 0); Pain + Rome cards (`gsrs_pain ≥ 1` or moderate-chronic
+  `sx_duration`); AR section (Constipation ≥ 0.4 OR `gsrs_urgency ≥ 2` OR pelvicRisk);
+  UG (Reflux ≥ 0.3 OR Indigestion ≥ 0.3); SY (fatigue/brain-fog ≥ 2 OR pain/bloating ≥ 2);
+  positive-follow-ups (`im_histamine_foods`, `im_known_dx_which`, `nu_known_def_which`);
+  optional anchors (`im_known_dx`, `nu_known_def`); cluster-frequency rows; all history chips.
+
+Reveal engine = one predicate (`revealMet`, schema.js): **item gates** off a raw value
+(`min:2`), **cluster gates** off a normalized 0–1 cluster norm (`min:0.3/0.4`), **flag gates**
+off computed risk flags. Render order + `refreshReveals()` in ui-patient.js (~2838, ~3019).
+
+### Changes the 0–4 scale FORCES (required, not optional)
+
+- **B1 · Re-tune cluster reveal thresholds.** Cluster gates use normalized `sum/max`; widening
+  item max 3→4 lowers every normalized cluster value, so AR (`≥0.4`), UG (`≥0.3`) and
+  `sx_duration` gates fire **less** readily — the pelvic-floor (physio) section would silently
+  stop revealing for mild-moderate pictures it currently catches. Re-derive (~×0.75, i.e.
+  0.4→0.30, 0.3→0.22, or re-anchor to the new distribution). **Ships with the scale migration.**
+- **B2 · Item-level `min:2` gates stay** (value 2 = "Moderate" anchor on both scales) — the
+  reveal semantics are anchor-based, so no change; confirmed as intent, not fraction-based.
+
+### Gap that blocks a lens
+
+- **PFD-paradoxical (F2) can't reveal for its own target.** AR reveals on *constipation* or
+  *urgency*, but PFD-paradoxical is straining/incomplete evacuation WITH normal-or-loose stool.
+  A loose-stool straining patient (no urgency, no constipation burden) never sees the AR items.
+  **Fix: add a `gsrs_incomplete ≥ 2` arm to the AR `revealIf.any`** so the pelvic-floor section
+  reveals for the paradoxical presentation too. Without this, F2 is dead on arrival.
+
+### Reorganization opportunities (optional)
+
+- **~18 systemic items are mandatory-by-completeness.** Keep (recommended — the systemic screen
+  is the "beyond-gut" differentiator; domains are short) but **relabel them in the UI as a
+  screening battery** rather than silently counting blanks against completeness. Alternative:
+  gate/soften the low-specificity NU proxies (hair/iron/mouth), already backstopped by the
+  `nu_known_def` lab anchor (~3 fewer mandatory items).
+- **Bristol card is always shown** — could gate on any bowel-cluster presence to shave the form
+  for pure-reflux patients. Low priority.
+
+### No-visibility-change items
+
+Peak-override, red-flag stratification, and weighted Dys-R change **no** reveals — red flags
+stay always-shown/mandatory; stratification only re-classifies urgency. Rome-% adds 2 gated
+items (bowel-symptom patients only).
