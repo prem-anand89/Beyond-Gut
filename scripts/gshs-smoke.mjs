@@ -406,10 +406,25 @@ ok(/Clinical impression/.test(ptSrc) && ptSrc.indexOf('Clinical impression') < p
 const clFn = html.match(/function buildClinicianPrint\(c\)\s*\{[\s\S]*?\n\}\n/);
 ok(!!clFn, 'buildClinicianPrint present');
 const clSrc = clFn ? clFn[0] : '';
-// Clinical impression up top, before Triage.
+// Clinical impression (rendered as "Executive summary") up top, before Triage.
 ok(/clinicalImpression\(c\)/.test(clSrc), 'clinician: clinical impression generated');
-ok(clSrc.indexOf('Clinical impression') < clSrc.indexOf('>Triage<'), 'clinician: impression appears before triage');
+ok(clSrc.indexOf('>Executive summary<') < clSrc.indexOf('>Triage<'), 'clinician: executive summary (clinical impression) appears before triage');
 ok(/Screening synthesis only — not a diagnosis/.test(html), 'clinician: impression carries not-a-diagnosis caveat');
+
+// Report redesign — 5-section structure with red flags leading Section 1,
+// the 2-D burden matrix promoted to its own Section 2, and an explicitly
+// optional appendix for the raw item-level Q&A.
+ok(/Section 1 · Triage &amp;? ?safety/.test(clSrc), 'clinician: Section 1 group header present');
+ok(/Section 2 · Symptom burden/.test(clSrc), 'clinician: Section 2 (severity × frequency) group header present');
+ok(/Section 3 · Active clinical lenses/.test(clSrc), 'clinician: Section 3 group header present');
+ok(/Section 4 · Action recommendation arms/.test(clSrc), 'clinician: Section 4 group header present');
+ok(/Section 5 · Longitudinal trend/.test(clSrc), 'clinician: Section 5 group header present');
+ok(/Appendix · Full questionnaire responses \(optional\)/.test(clSrc), 'clinician: item-level Q&A relabelled as an optional appendix');
+ok(clSrc.indexOf('>Red flags<') < clSrc.indexOf('Executive summary'), 'clinician: red flags lead Section 1, ahead of the executive summary');
+ok(clSrc.indexOf('Section 2 ·') < clSrc.indexOf('Section 3 ·') && clSrc.indexOf('Section 3 ·') < clSrc.indexOf('Section 4 ·') && clSrc.indexOf('Section 4 ·') < clSrc.indexOf('Section 5 ·'),
+  'clinician: the 5 sections appear in numeric order');
+ok(clSrc.indexOf('Section 5 ·') < clSrc.indexOf('Appendix ·'), 'clinician: appendix comes after Section 5, not interleaved');
+ok((clSrc.match(/Symptom severity × frequency/g) || []).length === 1, 'clinician: severity × frequency widget renders exactly once (no leftover duplicate)');
 
 // 28-unified. The clinician report is the single UNIFIED, LAYERED report: a
 // plain-language impression synthesis on top of the detailed clinical sections,
@@ -470,6 +485,12 @@ ok(rcSrc.indexOf('clinicalImpression') < rcSrc.indexOf('headlineCard(heads'), 'c
 ok(/physioCandidacy\(tri\)/.test(rcSrc) && /Physiotherapy candidacy/.test(rcSrc), 'clinician tab: physio candidacy callout');
 ok(/No red flags answered Yes/.test(rcSrc), 'clinician tab: foregrounded red-flags card (with none-reassurance)');
 ok(rcSrc.indexOf('Red flags') < rcSrc.indexOf('axisProfileCard'), 'clinician tab: red flags before axis profile');
+// Report redesign — same 5-section grouping mirrored on-screen.
+['Section 1 · Triage', 'Section 2 · Symptom burden', 'Section 3 · Active clinical lenses',
+ 'Section 4 · Action recommendation arms', 'Section 5 · Longitudinal trend', 'Appendix · Full clinical detail'
+].forEach(txt => ok(rcSrc.includes(txt), `clinician tab: on-screen group header "${txt}" present`));
+ok(rcSrc.indexOf('rfCard') < rcSrc.indexOf('impCard'), 'clinician tab: red-flag card precedes the executive-summary card');
+ok(rcSrc.indexOf('clinicianDetailCard(c)') > rcSrc.lastIndexOf('Section 5'), 'clinician tab: clinicianDetailCard renders after Section 5, under the Appendix header');
 // De-dup — the buried red-flag block is gone from clinicianDetailCard.
 const cdFn = html.match(/function clinicianDetailCard\(c\)\s*\{[\s\S]*?\n\}\n/);
 ok(cdFn && !/Red flags — \$\{fired\.length\} answered Yes/.test(cdFn[0]), 'clinician detail: buried red-flag block removed (no duplication)');
@@ -1316,6 +1337,26 @@ ok(/} else \{[\s\S]{0,100}show = clusterHasSymptoms;[\s\S]{0,50}}\s+}\s+h\.style
 ok(/These are symptom-frequency questions/.test(html), 'clusterFreqCard clarifies symptom-frequency vs stool-output distinction');
 ok(/Constipation: shown only if bowelFreq < 2[\s\S]{0,300}Diarrhoea: shown only if bowelFreq >= 2/.test(html),
   'clusterFreqCard comment documents hierarchical reveal logic');
+
+// ── Treatments already tried moved to the end of intake ──
+// It used to sit in the History group (before red flags); it should now be its
+// own group after the Adaptive deep dive, right before the "See results" action.
+ok(/'Treatments already tried'[\s\S]{0,60}treatmentsTriedCard\(\)/.test(html),
+  'treatmentsTriedCard() renders under its own "Treatments already tried" group');
+ok(/targetedSymptomsArea\(\)\);[\s\S]{0,400}treatmentsTriedCard\(\)[\s\S]{0,300}justify-content:flex-end/.test(html),
+  'treatmentsTriedCard() now renders after the adaptive deep dive, just before the See-results action row');
+ok(!/medConfoundersCard\(\)\);\s*root\.appendChild\(treatmentsTriedCard\(\)\);/.test(html),
+  'treatmentsTriedCard() no longer sits directly after medConfoundersCard() in the History group');
+
+// ── bloating_fermentation: gasFoul is a low-yield correlate, must not solo-fire ──
+// Foul-smelling gas alone (no Indigestion-cluster burden) used to fire the whole
+// pattern; now it needs at least mild Indigestion-cluster signal alongside it.
+const rGasAlone = run(0, {}, { dys: { gasFoul: 2 } });
+ok(!rGasAlone.pat.some(p => p.id === 'bloating_fermentation'),
+  'bloating_fermentation does NOT fire on gasFoul alone with zero Indigestion-cluster burden');
+const rGasWithIndig = run(0, { gsrs_rumbling: 1, gsrs_bloating: 1, gsrs_burping: 1, gsrs_gas: 1 }, { dys: { gasFoul: 2 } });
+ok(rGasWithIndig.pat.some(p => p.id === 'bloating_fermentation'),
+  'bloating_fermentation fires when gasFoul co-occurs with mild Indigestion-cluster burden');
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

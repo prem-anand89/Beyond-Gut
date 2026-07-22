@@ -382,7 +382,7 @@ test.describe('Beyond-Gut GSHS E2E Tests', () => {
       await page.getByRole('button', { name: '🖨 Clinician report' }).click();
 
       const clinicianPrint = await page.locator('#print-area').textContent();
-      expect(clinicianPrint).toContain('Clinical impression');
+      expect(clinicianPrint).toContain('Executive summary');
       expect(clinicianPrint).toMatch(/investigations/i);
       expect(clinicianPrint).toMatch(/Tier [1-4]/);
     });
