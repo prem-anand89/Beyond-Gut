@@ -406,25 +406,49 @@ ok(/Clinical impression/.test(ptSrc) && ptSrc.indexOf('Clinical impression') < p
 const clFn = html.match(/function buildClinicianPrint\(c\)\s*\{[\s\S]*?\n\}\n/);
 ok(!!clFn, 'buildClinicianPrint present');
 const clSrc = clFn ? clFn[0] : '';
-// Clinical impression (rendered as "Executive summary") up top, before Triage.
+// Clinical impression (rendered as "Executive summary", item 2) follows the
+// merged safety-banner/triage arm (item 1) — triage is deliberately read
+// FIRST now (report redesign v2), so the check is inverted from the original
+// 5-section layout: triage precedes the executive summary, not the other way.
 ok(/clinicalImpression\(c\)/.test(clSrc), 'clinician: clinical impression generated');
-ok(clSrc.indexOf('>Executive summary<') < clSrc.indexOf('>Triage<'), 'clinician: executive summary (clinical impression) appears before triage');
+ok(clSrc.indexOf('pr-triage') < clSrc.indexOf('Executive summary'), 'clinician: triage (item 1) appears before the executive summary (item 2)');
 ok(/Screening synthesis only — not a diagnosis/.test(html), 'clinician: impression carries not-a-diagnosis caveat');
 
-// Report redesign — 5-section structure with red flags leading Section 1,
-// the 2-D burden matrix promoted to its own Section 2, and an explicitly
-// optional appendix for the raw item-level Q&A.
-ok(/Section 1 · Triage &amp;? ?safety/.test(clSrc), 'clinician: Section 1 group header present');
-ok(/Section 2 · Symptom burden/.test(clSrc), 'clinician: Section 2 (severity × frequency) group header present');
-ok(/Section 3 · Active clinical lenses/.test(clSrc), 'clinician: Section 3 group header present');
-ok(/Section 4 · Action recommendation arms/.test(clSrc), 'clinician: Section 4 group header present');
-ok(/Section 5 · Longitudinal trend/.test(clSrc), 'clinician: Section 5 group header present');
-ok(/Appendix · Full questionnaire responses \(optional\)/.test(clSrc), 'clinician: item-level Q&A relabelled as an optional appendix');
-ok(clSrc.indexOf('>Red flags<') < clSrc.indexOf('Executive summary'), 'clinician: red flags lead Section 1, ahead of the executive summary');
-ok(clSrc.indexOf('Section 2 ·') < clSrc.indexOf('Section 3 ·') && clSrc.indexOf('Section 3 ·') < clSrc.indexOf('Section 4 ·') && clSrc.indexOf('Section 4 ·') < clSrc.indexOf('Section 5 ·'),
-  'clinician: the 5 sections appear in numeric order');
-ok(clSrc.indexOf('Section 5 ·') < clSrc.indexOf('Appendix ·'), 'clinician: appendix comes after Section 5, not interleaved');
-ok((clSrc.match(/Symptom severity × frequency/g) || []).length === 1, 'clinician: severity × frequency widget renders exactly once (no leftover duplicate)');
+// Report redesign v2 — 3-page/6-item structure: Page 1 merges the safety
+// banner with the triage/action arm (item 1) so "what's wrong" and "what to
+// do" are never apart, then the executive summary (2) and 2-D burden matrix
+// (3); Page 2 holds the reordered clinical lenses (4, named/actionable reads
+// leading) and the trend engine (5); Page 3+ is the optional item-level appendix.
+ok(/Page 1 · At-a-glance action &amp; overview/.test(clSrc), 'clinician: Page 1 group header present');
+ok(/1 · Safety banner &amp; action arm/.test(clSrc), 'clinician: item 1 (merged safety banner + action arm) header present');
+ok(/2 · Executive summary/.test(clSrc), 'clinician: item 2 (executive summary) header present');
+ok(/3 · Symptom burden — severity × frequency/.test(clSrc), 'clinician: item 3 (severity × frequency) header present');
+ok(/Page 2 · Clinical deep dive &amp; trends/.test(clSrc), 'clinician: Page 2 group header present');
+ok(/4 · Active clinical lenses/.test(clSrc), 'clinician: item 4 (active clinical lenses) header present');
+ok(/5 · Longitudinal trend &amp; intervention overlay/.test(clSrc), 'clinician: item 5 (trend + intervention overlay) header present');
+ok(/Page 3\+ · Reference appendix/.test(clSrc), 'clinician: Page 3+ group header present');
+ok(/6 · Full item-level Q&amp;A/.test(clSrc), 'clinician: item 6 (full item-level Q&A) relabelled as the optional appendix');
+ok(clSrc.indexOf('>Red flags<') < clSrc.indexOf('2 · Executive summary'), 'clinician: red flags (item 1) lead, ahead of the executive summary (item 2)');
+ok(clSrc.indexOf('Page 1 ·') < clSrc.indexOf('Page 2 ·') && clSrc.indexOf('Page 2 ·') < clSrc.indexOf('Page 3+ ·'),
+  'clinician: the 3 pages appear in order');
+ok(clSrc.indexOf('1 · Safety') < clSrc.indexOf('2 · Executive') && clSrc.indexOf('2 · Executive') < clSrc.indexOf('3 · Symptom burden')
+  && clSrc.indexOf('3 · Symptom burden') < clSrc.indexOf('4 · Active') && clSrc.indexOf('4 · Active') < clSrc.indexOf('5 · Longitudinal')
+  && clSrc.indexOf('5 · Longitudinal') < clSrc.indexOf('6 · Full item-level'),
+  'clinician: the 6 items appear in numeric order');
+// Merged action arm: triage tier, physio candidacy, and modifiable drivers all
+// sit inside item 1, before item 2 (executive summary) opens.
+ok(clSrc.indexOf('pr-triage') < clSrc.indexOf('2 · Executive summary'), 'clinician: triage tier/action sits inside item 1 (merged action arm)');
+ok(clSrc.indexOf('Physiotherapy candidacy') < clSrc.indexOf('2 · Executive summary'), 'clinician: physiotherapy candidacy folded into item 1');
+ok(/Modifiable drivers[\s\S]{0,600}2 · Executive summary/.test(clSrc), 'clinician: modifiable drivers folded into item 1, before item 2');
+// Lens reordering: named/actionable reads (Patterns, Rome IV, microbiome
+// correlates) lead item 4; supporting tables (axis profile, domain
+// breakdown) and history/context follow.
+ok(clSrc.indexOf('4 · Active clinical lenses') < clSrc.indexOf('>Patterns<'), 'clinician: Patterns sits inside item 4');
+ok(clSrc.indexOf('>Patterns<') < clSrc.indexOf('>Axis profile<'), 'clinician: Patterns leads Axis profile within item 4 (named/actionable reads first)');
+ok(clSrc.indexOf('Rome IV-informed bowel-pain pattern') < clSrc.indexOf('>Axis profile<'), 'clinician: Rome IV subtype leads Axis profile within item 4');
+ok(clSrc.indexOf('Microbiome-correlate signals') < clSrc.indexOf('>Axis profile<'), 'clinician: microbiome correlates lead Axis profile within item 4');
+ok(clSrc.indexOf('>Axis profile<') < clSrc.indexOf('>Domain breakdown<'), 'clinician: Axis profile (supporting table) leads Domain breakdown within item 4');
+ok((clSrc.match(/Symptom burden — severity × frequency/g) || []).length === 1, 'clinician: severity × frequency widget renders exactly once (no leftover duplicate)');
 
 // 28-unified. The clinician report is the single UNIFIED, LAYERED report: a
 // plain-language impression synthesis on top of the detailed clinical sections,
@@ -436,7 +460,7 @@ ok(/pelvic_floor_paradox/.test(impSrc), 'unified: impression layer surfaces the 
 ok(/correlateLoad.*tier|tier === 'High'/.test(impSrc), 'unified: impression layer surfaces the E3 weighted Dys-R tier');
 ok(/same-day assessment|prompt assessment/.test(impSrc), 'unified: impression layer leads red flags with E2 urgency');
 // Advanced reads all present in the unified clinician report body.
-ok(/Symptom severity × frequency/.test(clSrc), 'unified: report contains the Tranche G severity × frequency widget');
+ok(/Symptom burden — severity × frequency/.test(clSrc), 'unified: report contains the Tranche G severity × frequency widget');
 ok(/Interventions this visit/.test(clSrc), 'unified: report contains the Tranche G interventions section');
 ok(/Peak-symptom alert/.test(clSrc), 'unified: report contains the E4 peak-symptom alert row');
 ok(/highest: \$\{esc\(topMeta\.label\)\}|firedByUrgency/.test(clSrc), 'unified: report groups red flags by E2 urgency tier');
@@ -485,15 +509,26 @@ ok(rcSrc.indexOf('clinicalImpression') < rcSrc.indexOf('headlineCard(heads'), 'c
 ok(/physioCandidacy\(tri\)/.test(rcSrc) && /Physiotherapy candidacy/.test(rcSrc), 'clinician tab: physio candidacy callout');
 ok(/No red flags answered Yes/.test(rcSrc), 'clinician tab: foregrounded red-flags card (with none-reassurance)');
 ok(rcSrc.indexOf('Red flags') < rcSrc.indexOf('axisProfileCard'), 'clinician tab: red flags before axis profile');
-// Report redesign — same 5-section grouping mirrored on-screen.
-['Section 1 · Triage', 'Section 2 · Symptom burden', 'Section 3 · Active clinical lenses',
- 'Section 4 · Action recommendation arms', 'Section 5 · Longitudinal trend', 'Appendix · Full clinical detail'
+// Report redesign v2 — same 3-page/6-item grouping mirrored on-screen, with
+// the safety banner + triage/action arm merged into item 1, and modifiable
+// drivers folded into item 1 rather than left in the appendix-only detail card.
+['Page 1 · At-a-glance action &amp; overview', '1 · Safety banner &amp; action arm',
+ '2 · Executive summary', '3 · Symptom burden — severity × frequency',
+ 'Page 2 · Clinical deep dive &amp; trends', '4 · Active clinical lenses',
+ '5 · Longitudinal trend &amp; intervention overlay',
+ 'Page 3+ · Reference appendix', '6 · Full clinical detail (optional)',
 ].forEach(txt => ok(rcSrc.includes(txt), `clinician tab: on-screen group header "${txt}" present`));
 ok(rcSrc.indexOf('rfCard') < rcSrc.indexOf('impCard'), 'clinician tab: red-flag card precedes the executive-summary card');
-ok(rcSrc.indexOf('clinicianDetailCard(c)') > rcSrc.lastIndexOf('Section 5'), 'clinician tab: clinicianDetailCard renders after Section 5, under the Appendix header');
+ok(rcSrc.indexOf('triageCard(tri') < rcSrc.indexOf('2 · Executive summary'), 'clinician tab: triage card sits inside item 1 (merged action arm)');
+ok(rcSrc.indexOf('modifiableDriversCard') < rcSrc.indexOf('2 · Executive summary'), 'clinician tab: modifiable-driver card folded into item 1, before item 2');
+ok(rcSrc.indexOf('clinicianDetailCard(c)') > rcSrc.lastIndexOf('5 · Longitudinal'), 'clinician tab: clinicianDetailCard renders after item 5, under the Page 3+ appendix header');
 // De-dup — the buried red-flag block is gone from clinicianDetailCard.
 const cdFn = html.match(/function clinicianDetailCard\(c\)\s*\{[\s\S]*?\n\}\n/);
 ok(cdFn && !/Red flags — \$\{fired\.length\} answered Yes/.test(cdFn[0]), 'clinician detail: buried red-flag block removed (no duplication)');
+// De-dup — modifiable-driver raw values now live only in the Page 1 action
+// arm's standalone card, not duplicated inside the appendix detail card.
+ok(/function modifiableDriversCard\(driverExtras\)/.test(html), 'modifiableDriversCard() helper defined');
+ok(cdFn && !/Modifiable driver raw values/.test(cdFn[0]), 'clinician detail: modifiable-driver table removed from the appendix (moved to item 1)');
 
 // 30. Questionnaire & scoring audit fix pass.
 
