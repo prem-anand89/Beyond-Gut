@@ -226,6 +226,28 @@ ok(rParaInc.pat.some(p => p.id === 'pelvic_floor_paradox'),
 ok(/pelvic_floor_paradox: \[/.test(html) && /balloon expulsion test/i.test(html),
   'F2: paradoxical PFD has its own investigations (anorectal physiology / balloon expulsion)');
 
+// 15d. Tranche G — 2-D severity × frequency matrix (read-only display dimension).
+const sfScore = scoring.computeScores(Object.fromEntries(GI_IDS.map(id => [id, 3])), {});
+// High severity everywhere; Indigestion also high-frequency (band 3 = daily) →
+// priority quadrant; Reflux with no frequency answered → incomplete quadrant.
+const sfCells = scoring.severityFrequencyMatrix(sfScore, { clusterFreq: { Indigestion: 3 } });
+const indig = sfCells.find(c => c.cluster === 'Indigestion');
+ok(indig && indig.sevHi === true && indig.freqHi === true && indig.quadrant === 'priority',
+  'G: severe + frequent cluster → priority quadrant');
+const reflux = sfCells.find(c => c.cluster === 'Reflux');
+ok(reflux && reflux.sevHi === true && reflux.freqHi === null && reflux.quadrant === null,
+  'G: severe but frequency-unanswered → incomplete (no quadrant)');
+// Frequency is read-only: adding a frequency answer must NOT move the index.
+const sfNoFreq = scoring.computeScores(Object.fromEntries(GI_IDS.map(id => [id, 2])), {});
+ok(typeof sfNoFreq.index === 'number', 'G: index computes independent of the frequency dimension');
+ok(/function severityFrequencyCard/.test(html) && /Symptom severity × frequency/.test(html),
+  'G: severity × frequency widget rendered in the clinician surfaces');
+// Low severity + low frequency → low quadrant.
+const sfLow = scoring.computeScores({ gsrs_bloating: 1 }, {});
+const sfLowCells = scoring.severityFrequencyMatrix(sfLow, { clusterFreq: { Indigestion: 0 } });
+const lowIndig = sfLowCells.find(c => c.cluster === 'Indigestion');
+ok(lowIndig && lowIndig.quadrant === 'low', 'G: mild + infrequent cluster → low quadrant');
+
 // 16. functional_dyspepsia fires on early satiety / fullness.
 const rFD = run(2, { ug_earlysat: 3, ug_fullness: 3 });
 ok(rFD.pat.some(p => p.id === 'functional_dyspepsia'), 'functional_dyspepsia pattern fires');

@@ -1581,9 +1581,41 @@ function headlineOutputs(score, ex, dys) {
   };
 }
 
+// ── Tranche G · Symptom severity × frequency (2-D) ──────────────────────────
+// Frequency is surfaced as its OWN reported dimension alongside severity, NOT
+// blended into the Index or pattern-firing (read-only display — the invariant
+// against driver/frequency answers moving the band/patterns still holds). For
+// each GI cluster we cross severity (clusterNorm) with how often it occurs
+// (extras.clusterFreq band, or Rome painFreq for Pain) into a 2×2 quadrant.
+// High-severity × high-frequency is the priority quadrant a clinician should
+// action first. Returns null cells where a dimension is unanswered.
+const SEV_HI = 0.5;          // clusterNorm ≥ 0.5 (Moderate+ on the 0–4 scale)
+function severityFrequencyMatrix(score, extras) {
+  const ex = extras || {};
+  const cf = ex.clusterFreq || {};
+  const romePainFreq = ex.rome && typeof ex.rome.painFreq === 'number' ? ex.rome.painFreq : null;
+  const cells = GI_CLUSTERS.map(k => {
+    const sev = (score && score.clusterNorm && score.clusterNorm[k] != null) ? score.clusterNorm[k] : null;
+    // Pain's frequency comes from Rome IV painFreq (0–5, hi ≥4 = "more than half
+    // the days"); other clusters use clusterFreq band (0–3, hi ≥2 = "5–6 days/wk").
+    let freqIdx = null, freqHi = null, freqMax = null;
+    if (k === 'Pain') { freqIdx = romePainFreq; freqMax = 5; if (freqIdx != null) freqHi = freqIdx >= 4; }
+    else { freqIdx = (typeof cf[k] === 'number') ? cf[k] : null; freqMax = 3; if (freqIdx != null) freqHi = freqIdx >= 2; }
+    const sevHi = sev != null ? sev >= SEV_HI : null;
+    let quadrant = null;
+    if (sevHi != null && freqHi != null) {
+      quadrant = sevHi && freqHi ? 'priority' : sevHi ? 'severe-intermittent'
+        : freqHi ? 'frequent-mild' : 'low';
+    }
+    return { cluster: k, severity: sev, sevHi, freqIdx, freqHi, freqMax, quadrant };
+  }).filter(c => c.severity != null || c.freqIdx != null); // only clusters with some data
+  return cells;
+}
+
 __e.BANDS = BANDS; __e.computeScores = computeScores; __e.scoreConfidence = scoreConfidence;
 __e.BRISTOL_ALPHA = BRISTOL_ALPHA; __e.bristolTransit = bristolTransit; __e.GI_CLUSTERS = GI_CLUSTERS;
 __e.bandForPct = bandForPct; __e.axisBand = axisBand; __e.axisProfile = axisProfile; __e.headlineOutputs = headlineOutputs;
+__e.severityFrequencyMatrix = severityFrequencyMatrix; __e.SEV_HI = SEV_HI;
 return __e;
 };
 
@@ -2604,7 +2636,7 @@ const { scaleFor, RECALL_NOTE, PSS4_ITEMS, PSS4_ANCHORS, PSS4_REVERSED, pss4Scor
         SURGERIES, surgicalFlags, KNOWN_CONDITIONS, knownConditions, KNOWN_LABS, knownLabs,
         MED_CONFOUNDERS, medConfounders, TREATMENTS_TRIED, treatmentsTried, FAMILY_HISTORY, familyHistory,
         OBSTETRIC_HISTORY, obstetricHistory, anthropometrics } = __req('scales.js');
-const { computeScores, scoreConfidence, axisProfile, headlineOutputs, bandForPct, GI_CLUSTERS } = __req('scoring.js');
+const { computeScores, scoreConfidence, axisProfile, headlineOutputs, bandForPct, GI_CLUSTERS, severityFrequencyMatrix } = __req('scoring.js');
 // Human-readable per-cluster prompt for clusterFreqCard() — mirrors the same
 // 5 GSRS clusters scoring.js nudges, kept in sync by reusing GI_CLUSTERS
 // itself as the iteration order (not a separately-maintained id list).
@@ -2959,6 +2991,48 @@ function riskMatrixCard(severity, micro) {
   }
   card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-style:italic;color:#999' },
     'Two independent reads — symptom severity (GI score) and an inferred dysbiosis-correlate count (NOT a dysbiosis diagnosis; validate against stool testing). For discussion, not prescription.'));
+  return card;
+}
+
+// Tranche G — Symptom severity × frequency (2-D). Frequency is a REPORTED
+// dimension in its own right, crossed with severity per cluster: the
+// high-severity × high-frequency clusters are the priority quadrant. Read-only
+// (frequency never touches the Index or pattern-firing).
+const SEVFREQ_QUAD = {
+  priority:            { t: 'Priority — severe & frequent', c: '#A32D2D' },
+  'severe-intermittent': { t: 'Severe but intermittent',    c: '#C2622E' },
+  'frequent-mild':     { t: 'Frequent but milder',          c: '#BA7517' },
+  low:                 { t: 'Low burden',                   c: '#0F6E56' },
+};
+function severityFrequencyCard(score, extras) {
+  const { ROME_FREQ } = __req('romeiv.js');
+  const cells = severityFrequencyMatrix(score, extras);
+  if (!cells.length) return null;
+  const card = el('div', { class: 'card', style: 'border-left:6px solid #185FA5' });
+  card.appendChild(el('h2', {}, 'Symptom severity × frequency'));
+  card.appendChild(el('div', { class: 'q-sub', style: 'margin-bottom:6px' },
+    'How bad each symptom cluster is, crossed with how often it happens. Severe-and-frequent clusters (top-right) are the ones to prioritise. Frequency is shown here only — it does not change the score.'));
+  const anyPriority = cells.some(c => c.quadrant === 'priority');
+  const rows = cells.map(c => {
+    const sevTxt = c.severity == null ? '—' : Math.round(c.severity * 100) + '%';
+    const freqTxt = c.freqIdx == null ? '—'
+      : (c.cluster === 'Pain' ? ROME_FREQ[c.freqIdx] : CLUSTER_FREQ_LEVELS[c.freqIdx]) || String(c.freqIdx);
+    const q = c.quadrant ? SEVFREQ_QUAD[c.quadrant] : null;
+    const pill = q ? `<span style="display:inline-block;padding:1px 7px;border-radius:10px;background:${q.c};color:#fff;font-size:10.5px;font-weight:600">${esc(q.t)}</span>` : '<span style="color:#8A93A0;font-size:11px">incomplete</span>';
+    return `<tr>
+      <td style="padding:4px 6px;font-weight:600">${esc(c.cluster)}</td>
+      <td style="padding:4px 6px">${sevTxt}${c.sevHi ? ' <b style="color:#A32D2D">▲</b>' : ''}</td>
+      <td style="padding:4px 6px">${esc(freqTxt)}${c.freqHi ? ' <b style="color:#A32D2D">▲</b>' : ''}</td>
+      <td style="padding:4px 6px">${pill}</td></tr>`;
+  }).join('');
+  const tbl = el('div', {});
+  tbl.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="color:var(--inkt);font-size:10.5px;text-align:left">
+      <th style="padding:2px 6px">Cluster</th><th style="padding:2px 6px">Severity</th><th style="padding:2px 6px">Frequency</th><th style="padding:2px 6px">Read</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+  card.appendChild(tbl);
+  if (anyPriority) card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;font-weight:600;color:#A32D2D' },
+    '▲ One or more clusters are both severe and frequent — prioritise these.'));
   return card;
 }
 
@@ -4759,6 +4833,26 @@ function buildClinicianPrint(c) {
       ${score.coreUnknown ? '<tr><td colspan="4" style="color:#A32D2D;font-weight:600">⚠ Core GI section not answered — Gut Symptom Burden provisional</td></tr>' : ''}
       ${(score.peakAlerts && score.peakAlerts.length) ? `<tr><td colspan="4" style="color:#A32D2D;font-weight:600">⚠ Peak-symptom alert: ${esc(score.peakAlerts.map(p => `${p.label} (${p.level === 'ceiling' ? 'very severe' : 'severe'})`).join(', '))}${score.peakEscalated ? ' — displayed band raised; raw index unchanged' : ''}</td></tr>` : ''}
     </tbody></table></div>`;
+  // Tranche G — Symptom severity × frequency (2-D). Read-only; frequency never
+  // enters the Index. Priority = severe AND frequent.
+  {
+    const sfCells = severityFrequencyMatrix(score, driverExtras);
+    if (sfCells.length) {
+      const sfRows = sfCells.map(cc => {
+        const sevTxt = cc.severity == null ? '—' : Math.round(cc.severity * 100) + '%';
+        const freqTxt = cc.freqIdx == null ? '—' : (cc.cluster === 'Pain' ? ROME_FREQ[cc.freqIdx] : CLUSTER_FREQ_LEVELS[cc.freqIdx]) || String(cc.freqIdx);
+        const q = cc.quadrant ? SEVFREQ_QUAD[cc.quadrant] : null;
+        return `<tr><td style="padding:2px 6px;font-weight:600">${esc(cc.cluster)}</td>
+          <td style="padding:2px 6px">${sevTxt}${cc.sevHi ? ' ▲' : ''}</td>
+          <td style="padding:2px 6px">${esc(freqTxt)}${cc.freqHi ? ' ▲' : ''}</td>
+          <td style="padding:2px 6px;color:${q ? q.c : '#888'}">${q ? esc(q.t) : 'incomplete'}</td></tr>`;
+      }).join('');
+      h += `<div class="pr-section"><div class="pr-sh">Symptom severity × frequency</div>
+        <table class="pr-tbl"><thead><tr><th>Cluster</th><th>Severity</th><th>Frequency</th><th>Read</th></tr></thead>
+        <tbody>${sfRows}</tbody></table>
+        <div style="font-size:9px;color:#888;margin-top:2px">Frequency is a reported dimension only — it does not change the Index. ▲ = high. Priority = severe and frequent.</div></div>`;
+    }
+  }
   if (conditions && conditions.list && conditions.list.length) {
     h += `<div class="pr-section"><div class="pr-sh">Known conditions reported</div>
       <div style="font-size:10.5px">${esc(conditions.list.join(', '))}</div></div>`;
@@ -5049,6 +5143,7 @@ function renderClinician() {
 
   root.appendChild(axisProfileCard(profile, heads));
   root.appendChild(domainBarsCard(score, true));   // full domain breakdown incl. GSRS cluster shape
+  const sfCard = severityFrequencyCard(score, extras); if (sfCard) root.appendChild(sfCard); // 2-D severity × frequency
   root.appendChild(riskMatrixCard(sv, correlateLoad));
   root.appendChild(clinicianDetailCard(c));
 
