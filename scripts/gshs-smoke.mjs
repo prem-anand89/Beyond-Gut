@@ -68,7 +68,8 @@ function run(gi, sys = {}, extra = {}, romeIn = {}) {
 const reasons = (tri) => [tri.reasons, ...tri.alsoConsider.map(x => x.reasons)].flat();
 
 // 1. De-blend: GI=0 with systemic high → Gut Symptom Burden Minimal, systemic rises.
-const r1 = run(0, { im_food_react: 3, im_infections: 3, im_allergies: 3, im_joint: 3, im_histamine: 3, sk_skin: 3, nu_hair: 3, nu_iron: 3, nu_mouth: 3, imp_work: 3, imp_social: 3, imp_food: 3, imp_global: 3 });
+// 0–4 scale (D0): "maxed" is now 4, not 3, so the inflammatory/impact axes reach 100.
+const r1 = run(0, { im_food_react: 4, im_infections: 4, im_allergies: 4, im_joint: 4, im_histamine: 4, sk_skin: 4, nu_hair: 4, nu_iron: 4, nu_mouth: 4, imp_work: 4, imp_social: 4, imp_food: 4, imp_global: 4 });
 ok(r1.heads.primary.symptom.value === 0 && r1.heads.primary.symptom.band === 'Minimal', 'GI=0 keeps Gut Symptom Burden Minimal (de-blended)');
 ok(r1.heads.secondary.inflammatory.value === 100 && r1.heads.secondary.impact.value === 100, 'systemic axes rise independently');
 
@@ -137,6 +138,24 @@ ok(schema.revealMet(sec('SY'), { answers: { bg_fatigue: 2 }, clusterNorm: {} }) 
 const ctx0 = { answers: {}, clusterNorm: {} };
 ok(!schema.revealMet(sec('AR'), ctx0) && !schema.revealMet(sec('UG'), ctx0) && !schema.revealMet(sec('SY'), ctx0), 'blank form reveals no targeted sections');
 ok(schema.revealMet(undefined, ctx0) === true, 'no revealIf → always shown (core/red-flags never gated)');
+
+// 13a. D0b — cluster reveal thresholds re-tuned ×0.75 for the 0–4 scale. A
+// mild-moderate constipation picture (Constipation norm ≈ 0.33: one item at 2,
+// two at 1, of the 3-item cluster max 12) must now reveal AR under the new 0.30
+// gate — it would have stayed HIDDEN under the old 0.40 gate, silently dropping
+// the pelvic-floor section for exactly the patients it targets.
+const aConMild = { gsrs_constip: 2, gsrs_hard: 1, gsrs_incomplete: 1 };
+ok(cn(aConMild).Constipation < 0.40 && cn(aConMild).Constipation >= 0.30,
+  'D0b: mild-moderate constipation norm lands in the re-tuned (0.30–0.40) reveal window on the 0–4 scale');
+ok(schema.revealMet(sec('AR'), { answers: aConMild, clusterNorm: cn(aConMild) }) === true,
+  'D0b: re-tuned 0.30 gate reveals AR for a mild-moderate constipation picture (old 0.40 would have hidden it)');
+// F0 — paradoxical pelvic-floor arm. Incomplete evacuation ≥2 with NO constipation-
+// cluster burden must reveal AR via the new gsrs_incomplete item arm, so F2
+// (PFD-paradoxical) can fire for straining/incomplete WITHOUT constipation.
+const aParadox = { gsrs_constip: 0, gsrs_hard: 0, gsrs_incomplete: 2 };
+ok(cn(aParadox).Constipation < 0.30, 'F0: paradoxical fixture keeps the Constipation cluster below the 0.30 gate');
+ok(schema.revealMet(sec('AR'), { answers: aParadox, clusterNorm: cn(aParadox) }) === true,
+  'F0: gsrs_incomplete≥2 alone reveals AR (paradoxical pelvic-floor arm, no constipation cluster)');
 
 // 13b. Item-level follow-up + card gates.
 ok(schema.revealMet({ type: 'item', id: 'im_histamine', min: 2 }, { answers: { im_histamine: 2 } }) === true, 'histamine follow-up reveals at ≥2');
@@ -341,11 +360,11 @@ ok(cdFn && !/Red flags — \$\{fired\.length\} answered Yes/.test(cdFn[0]), 'cli
 // index. Previously the index was an item-weighted mean, so severe-reflux-only
 // (6/45=13%) and severe-indigestion-only (12/45=27%) landed in different bands
 // despite identical per-symptom severity.
-const refluxOnly = { gsrs_heartburn: 3, gsrs_regurg: 3, gsrs_pain: 0, gsrs_hunger: 0, gsrs_nausea: 0,
+const refluxOnly = { gsrs_heartburn: 4, gsrs_regurg: 4, gsrs_pain: 0, gsrs_hunger: 0, gsrs_nausea: 0,
   gsrs_rumbling: 0, gsrs_bloating: 0, gsrs_burping: 0, gsrs_gas: 0, gsrs_diarrhoea: 0, gsrs_loose: 0,
   gsrs_urgency: 0, gsrs_constip: 0, gsrs_hard: 0, gsrs_incomplete: 0 };
 const indigOnly = { gsrs_heartburn: 0, gsrs_regurg: 0, gsrs_pain: 0, gsrs_hunger: 0, gsrs_nausea: 0,
-  gsrs_rumbling: 3, gsrs_bloating: 3, gsrs_burping: 3, gsrs_gas: 3, gsrs_diarrhoea: 0, gsrs_loose: 0,
+  gsrs_rumbling: 4, gsrs_bloating: 4, gsrs_burping: 4, gsrs_gas: 4, gsrs_diarrhoea: 0, gsrs_loose: 0,
   gsrs_urgency: 0, gsrs_constip: 0, gsrs_hard: 0, gsrs_incomplete: 0 };
 const sRefluxOnly = scoring.computeScores(refluxOnly, {});
 const sIndigOnly = scoring.computeScores(indigOnly, {});
@@ -882,10 +901,10 @@ ok(!c1PatsWithBristol.some(p => p.id === 'constipation_dominant'),
 // C2 regression. The Symptom axis note no longer overclaims an unmodified
 // validated instrument.
 ok(!/'GSRS-based, validated instrument\.'/.test(html), 'old overreaching "validated instrument" note string removed (C2)');
-ok(/'GSRS-based \(modified 4-point scale\); index includes stool-form\/frequency adjustments — provisional\.'/.test(html),
-  'new accurate provisional note string present (C2)');
-ok(/symptom:\s*\{ axis: 'symptom',[\s\S]{0,300}validated: true,/.test(html),
-  'validated:true is unchanged — the underlying GSRS structure itself is still the validated instrument (C2)');
+ok(/'GSRS-derived \(modified 5-point 0–4 scale\); index includes stool-form\/frequency adjustments — provisional\.'/.test(html),
+  'new accurate provisional note string present (C2/D0 — 5-point 0–4 scale)');
+ok(/symptom:\s*\{ axis: 'symptom',[\s\S]{0,300}validated: 'derived',/.test(html),
+  "Symptom axis is validated:'derived' — modified 5-point scale is GSRS-DERIVED, not the unmodified validated instrument (D0)");
 
 // C4 regression checks.
 ok(/Over the last 3 months, on average, how often do you get abdominal pain\?/.test(html),

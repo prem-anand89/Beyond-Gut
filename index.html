@@ -376,7 +376,7 @@ const { scaleFor } = __req('scales.js');
 //   axis = the named clinical axis this section maps to (axisProfile()/triage
 //          cite findings by axis; the UI groups axes into headline outputs).
 const SECTIONS = [
-  // Domain 1 (locked): GSRS-derived GI core. 15 items, 0–3 severity, 2-wk recall.
+  // Domain 1 (locked): GSRS-derived GI core. 15 items, 0–4 severity, 2-wk recall.
   { id: 'GI',  label: 'GI',  full: 'Gut symptoms (GSRS-based)',          role: 'core',       axis: 'symptom',      color: '#0F6E56', bg: '#E1F5EE' },
   // Connected-axis screening domains, refocused at the trim (TRIM_PLAN §3–§6).
   // Oral/ENT, Hormonal, broad-Metabolic removed (no gut-specific engine pathway);
@@ -394,10 +394,15 @@ const SECTIONS = [
   // GSRS core points that way (or via the manual clinician toggle). All items are
   // optional, so they never enter the Index/mandatory-count/progress. Feed
   // patterns + triage + the clinician Domain breakdown only.
+  // D0b: cluster `min` gates re-tuned ×0.75 for the 0–4 scale (clusterNorm = sum/max
+  // shrinks as item max grows 3→4). Item-level `min:2` gates keep the "Moderate"
+  // anchor and are unchanged. F0: gsrs_incomplete ≥2 added so AR reveals for the
+  // PARADOXICAL pelvic-floor picture (straining/incomplete evacuation WITHOUT a
+  // constipation-cluster burden) — the presentation F2 (PFD-paradoxical) targets.
   { id: 'AR', label: 'AR', full: 'Bowel control & evacuation', role: 'standalone', axis: 'pelvic',    color: '#7A4A8C', bg: '#F3ECF7', conditional: true,
-    revealIf: { any: [ { type: 'cluster', cluster: 'Constipation', min: 0.4 }, { type: 'item', id: 'gsrs_urgency', min: 2 }, { type: 'flag', flag: 'pelvicRisk' } ] } },
+    revealIf: { any: [ { type: 'cluster', cluster: 'Constipation', min: 0.30 }, { type: 'item', id: 'gsrs_urgency', min: 2 }, { type: 'item', id: 'gsrs_incomplete', min: 2 }, { type: 'flag', flag: 'pelvicRisk' } ] } },
   { id: 'UG', label: 'UG', full: 'Upper-GI / dyspepsia',       role: 'standalone', axis: 'symptom',   color: '#0F6E56', bg: '#E1F5EE', conditional: true,
-    revealIf: { any: [ { type: 'cluster', cluster: 'Reflux', min: 0.3 }, { type: 'cluster', cluster: 'Indigestion', min: 0.3 } ] } },
+    revealIf: { any: [ { type: 'cluster', cluster: 'Reflux', min: 0.22 }, { type: 'cluster', cluster: 'Indigestion', min: 0.22 } ] } },
   { id: 'SY', label: 'SY', full: 'Systemic / autonomic',       role: 'standalone', axis: 'autonomic', color: '#117A8B', bg: '#E2F2F4', conditional: true,
     // Reveals on fatigue/brain-fog (original trigger) OR on pain/bloating — the
     // real clinical trigger for gy_cyclical, which lives in this section. Without
@@ -415,7 +420,7 @@ const SECTIONS = [
 
 // ── QUESTIONS — co-design output. ───────────────────────────────────────────
 // Shape: { id, section, scale?, cluster?, patientText, patientSub? }
-// GI items use the DEFAULT 0–3 severity scale. `cluster` tags the 5 validated
+// GI items use the DEFAULT 0–4 severity scale. `cluster` tags the 5 validated
 // GSRS syndromes for the per-cluster breakdown shown on results.
 const QUESTIONS = [
   // ── Universal symptom duration/chronicity — ungated, always visible ─────────
@@ -546,7 +551,7 @@ const QUESTIONS = [
 
   // ── IMP — Functional / quality-of-life impact (§7d + §7e) ──
   // Short, modeled on Rome IV's impact category (work/social function + a global
-  // rating) so it stays recognizable. DEFAULT 0–3 scale — no new rendering code.
+  // rating) so it stays recognizable. DEFAULT 0–4 scale — no new rendering code.
   { id: 'imp_work',   section: 'IMP', patientText: 'Interference with work, study, or daily responsibilities',
     patientSub: 'Over the last 2 weeks, because of your gut symptoms' },
   { id: 'imp_social', section: 'IMP', patientText: 'Interference with social or family activities',
@@ -629,8 +634,13 @@ return __e;
    ========================================================================== */
 __modules['scales.js'] = function(__e){
 const SCALES = {
-  // generic 0–3 severity fallback (placeholder; real scales added in co-design)
-  DEFAULT: ['None', 'Mild', 'Moderate', 'Severe'],
+  // 0–4 impact-anchored severity scale (GSRS-derived; the validated GSRS is
+  // 7-point — this tool uses a distinct 5-point ordinal for finer sensitivity,
+  // so the Symptom axis is labelled 'derived', not 'validated'). Anchors are
+  // impact-worded to improve inter-rater consistency: 1 = noticeable but easily
+  // ignored, 2 = cannot be ignored / occasionally disrupts, 3 = highly disruptive
+  // / dictates daily activities, 4 = incapacitating / constant distress.
+  DEFAULT: ['None', 'Mild', 'Moderate', 'Severe', 'Very severe'],
   // Universal symptom-duration scale (sx_duration) — same onset bands as Rome
   // IV's own onset question (romeiv.js ROME_ONSET), duplicated here as a plain
   // vocabulary so schema.js doesn't need to reach into the Rome IV module for a
@@ -702,8 +712,8 @@ function painBand(s) {
 function psychLoadScore(ex) {
   const parts = [];
   if (ex.pss4Score != null) parts.push([ex.pss4Score / 16, 0.5]);
-  if (ex.bgAnxiety  != null) parts.push([ex.bgAnxiety / 3,  0.25]);
-  if (ex.bgMood     != null) parts.push([ex.bgMood / 3,     0.25]);
+  if (ex.bgAnxiety  != null) parts.push([ex.bgAnxiety / 4,  0.25]); // DEFAULT scale now 0–4
+  if (ex.bgMood     != null) parts.push([ex.bgMood / 4,     0.25]);
   if (!parts.length) return null;
   const wsum = parts.reduce((a, [, w]) => a + w, 0);
   return Math.round(parts.reduce((a, [x, w]) => a + x * w, 0) / wsum * 100); // 0–100
@@ -1163,14 +1173,19 @@ return __e;
 __modules['scoring.js'] = function(__e){
 const { SECTIONS, QUESTIONS, QID, itemMax, sectionMax } = __req('schema.js');
 
-// Provisional bands on the 0–100 Index. Co-design: stricter 20/40/60 cutoffs.
+// Provisional bands on the 0–100 Index. Re-anchored for the 0–4 severity scale
+// (D0 migration): the Index is normalized (sum/max), so widening each item's max
+// from 3→4 depresses the same qualitative answers' percentage (e.g. all-"Moderate"
+// = 2/4 = 50% vs 2/3 = 67% before). Cutoffs move to 10/35/65: a ~10% subclinical
+// floor (Minimal) below which the picture is essentially clean, with Mild–Moderate
+// and Significant re-spread across the compressed mid-range.
 // TODO[recalibration, opened 2026-06]: cutoffs AND the 0.6/0.4 core/screen
 // weighting are provisional placeholders — refit against pilot distribution +
 // any lab-confirmed outcomes (breath test, GI-MAP) before treating as final.
 const BANDS = [
-  { label: 'Minimal',       maxPct: 20,        color: '#0F6E56', bg: '#E1F5EE', cls: 'sev-min' },
-  { label: 'Mild–Moderate', maxPct: 40,        color: '#BA7517', bg: '#FAEEDA', cls: 'sev-mod' },
-  { label: 'Significant',   maxPct: 60,        color: '#C2622E', bg: '#FAECE7', cls: 'sev-sig' },
+  { label: 'Minimal',       maxPct: 10,        color: '#0F6E56', bg: '#E1F5EE', cls: 'sev-min' },
+  { label: 'Mild–Moderate', maxPct: 35,        color: '#BA7517', bg: '#FAEEDA', cls: 'sev-mod' },
+  { label: 'Significant',   maxPct: 65,        color: '#C2622E', bg: '#FAECE7', cls: 'sev-sig' },
   { label: 'Severe',        maxPct: Infinity,  color: '#A32D2D', bg: '#FCEBEB', cls: 'sev-sev' },
 ];
 const SEVERITY_DESC = {
@@ -1397,14 +1412,13 @@ function axisProfile(score, ex, dys) {
   const bl = (k) => { const b = axisBand(score.secNorm && score.secNorm[k]); return b ? b.label : null; };
   return {
     symptom:      { axis: 'symptom',      label: 'Symptom (gut)',          value: score.index,
-                    band: score.severity && score.severity.label, validated: true,
-                    // The underlying 15-item/5-cluster structure IS the
-                    // validated GSRS instrument (validated:true stays), but
-                    // this tool uses a MODIFIED 4-point scale (GSRS proper is
-                    // 7-point) and the displayed index is further adjusted by
-                    // stool-form/frequency nudges — the note must say so, not
-                    // claim an unmodified validated score.
-                    note: 'GSRS-based (modified 4-point scale); index includes stool-form/frequency adjustments — provisional.' },
+                    band: score.severity && score.severity.label, validated: 'derived',
+                    // The underlying 15-item/5-cluster structure is DERIVED from
+                    // the GSRS, but this tool uses a MODIFIED 5-point (0–4) impact-
+                    // anchored scale (GSRS proper is 7-point) and the displayed
+                    // index is further adjusted by stool-form/frequency nudges —
+                    // hence 'derived', not 'validated'. The note must say so.
+                    note: 'GSRS-derived (modified 5-point 0–4 scale); index includes stool-form/frequency adjustments — provisional.' },
     inflammatory: { axis: 'inflammatory', label: 'Inflammatory / immune',  value: n('IM'), band: bl('IM'),
                     validated: false, note: 'Investigator-built domain, draft pending pilot validation.' },
     nutrient:     { axis: 'nutrient',     label: 'Nutrient / absorption',  value: n('NU'), band: bl('NU'),
@@ -1448,7 +1462,7 @@ function headlineOutputs(score, ex, dys) {
 
   const primary = {
     symptom:    { key: 'gut_symptom_burden', label: 'Gut Symptom Burden', value: score.index,
-                  band: score.severity && score.severity.label, validated: true, sub: ax.symptom },
+                  band: score.severity && score.severity.label, validated: 'derived', sub: ax.symptom },
     nutrient:   { key: 'nutrient_malabsorption_risk', label: 'Nutrient / Malabsorption Risk',
                   value: ax.nutrient.value, band: ax.nutrient.band, validated: false, sub: ax.nutrient },
     disruption: { key: 'disruption_load', label: 'Disruption Load', value: disruption.length,
@@ -2678,9 +2692,9 @@ function bandPillClass(band) {
 }
 // Small "validated / draft / partial" provenance tag, reusing the .opt-tag class.
 function provTag(validated) {
-  const label = validated === true ? 'validated' : validated === 'partial' ? 'part. validated' : 'draft';
-  const bg = validated === true ? '#E1F5EE' : validated === 'partial' ? '#FAEEDA' : '#F1F2F4';
-  const col = validated === true ? '#0F6E56' : validated === 'partial' ? '#7A5800' : '#6B7280';
+  const label = validated === true ? 'validated' : validated === 'derived' ? 'derived' : validated === 'partial' ? 'part. validated' : 'draft';
+  const bg = validated === true ? '#E1F5EE' : validated === 'derived' ? '#E8F0F7' : validated === 'partial' ? '#FAEEDA' : '#F1F2F4';
+  const col = validated === true ? '#0F6E56' : validated === 'derived' ? '#2C5D8A' : validated === 'partial' ? '#7A5800' : '#6B7280';
   return `<span class="opt-tag" style="background:${bg};color:${col}">${label}</span>`;
 }
 
@@ -4383,6 +4397,7 @@ function prBandPill(band) {
 // Print provenance tag — validated / part-validated / draft, mirroring provTag().
 function prProv(validated) {
   const m = validated === true ? ['validated', '#0F6E56']
+    : validated === 'derived' ? ['derived', '#2C5D8A']
     : validated === 'partial' ? ['part. validated', '#7A5800'] : ['draft', '#6B7280'];
   return `<span style="font-size:9px;color:${m[1]}">${m[0]}</span>`;
 }
