@@ -2572,7 +2572,7 @@ function saveVisit() {
       patient.visits = patient.visits || [];
       patient.visits.push(visit);
     } else {
-      patient = { id: Store.uid(), code: Store.nextPatientCode(db), ref: ref || null, createdAt: Date.now(), visits: [visit] };
+      patient = { id: Store.uid(), code: Store.nextPatientCode(db), ref: ref || null, visits: [visit] };
       db.patients.push(patient);
     }
   }
@@ -3368,21 +3368,18 @@ function labsCard() {
 // Used for family history and medication confounders.
 function chipMultiCard(title, sub, bg, items, listKey, onChange) {
   const card = el('div', { class: 'sec-card' });
-  const headId = `${listKey}-head`;
-  card.appendChild(el('div', { class: 'sec-head', style: `background:${bg}`, id: headId }, esc(title)));
+  card.appendChild(el('div', { class: 'sec-head', style: `background:${bg}` }, esc(title)));
   const body = el('div', { class: 'sec-body' });
   body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, esc(sub)));
-  const chips = el('div', { class: 'chips', role: 'group', 'aria-labelledby': headId });
+  const chips = el('div', { class: 'chips' });
   const list = () => extras[listKey] || (extras[listKey] = []);
   items.forEach(it => {
-    const isSelected = list().includes(it.id);
-    const b = el('button', { class: `chip-opt${isSelected ? ' sel' : ''}`, type: 'button', 'aria-pressed': isSelected,
-      title: it.effect ? `Can cause: ${it.effect}` : '', 'aria-label': `${it.label}${it.effect ? ` - can cause: ${it.effect}` : ''}` }, esc(it.label));
+    const b = el('button', { class: `chip-opt${list().includes(it.id) ? ' sel' : ''}`, type: 'button',
+      title: it.effect ? `Can cause: ${it.effect}` : '' }, esc(it.label));
     b.onclick = () => {
       const arr = list(); const i = arr.indexOf(it.id);
       if (i >= 0) arr.splice(i, 1); else arr.push(it.id);
       b.classList.toggle('sel');
-      b.setAttribute('aria-pressed', String(!isSelected));
       if (onChange) onChange();
     };
     chips.appendChild(b);
@@ -3707,30 +3704,28 @@ function redFlagCard() {
 function questionRow(q) {
   const row = el('div', { class: 'q' });
   const tag = q.optional ? ` <span class="opt-tag">${esc(q.optionalLabel || 'optional')}</span>` : '';
-  const qLabel = el('div', { class: 'q-txt', id: `q-${q.id}` }, esc(q.patientText) + tag);
-  row.appendChild(qLabel);
+  row.appendChild(el('div', { class: 'q-txt' }, esc(q.patientText) + tag));
   if (q.patientSub) row.appendChild(el('div', { class: 'q-sub' }, esc(q.patientSub)));
   // Free-text follow-up (reveal-on-positive detail). Stored as a string, so it is
   // never numeric → never affects scoring, patterns, progress or completeness.
   if (q.freeText) {
-    const input = el('input', { type: 'text', id: q.id, 'aria-labelledby': `q-${q.id}`, value: typeof answers[q.id] === 'string' ? answers[q.id] : '',
+    const input = el('input', { type: 'text', value: typeof answers[q.id] === 'string' ? answers[q.id] : '',
       placeholder: 'Type here…', style: 'width:100%;padding:9px 12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;margin-top:4px' });
     input.oninput = () => { answers[q.id] = input.value; };
     row.appendChild(input);
     return row;
   }
   const labels = scaleFor(q.scale);
-  const opts = el('div', { class: 'opts', role: 'group', 'aria-labelledby': `q-${q.id}` });
-  const naBtn = q.optional ? el('button', { class: `chip-opt na-opt${answers[q.id] === 'na' ? ' sel' : ''}`, type: 'button', 'aria-pressed': answers[q.id] === 'na', 'aria-label': `${q.patientText}: Not applicable` }, 'Not applicable') : null;
+  const opts = el('div', { class: 'opts' });
+  const naBtn = q.optional ? el('button', { class: `chip-opt na-opt${answers[q.id] === 'na' ? ' sel' : ''}`, type: 'button' }, 'Not applicable') : null;
   labels.forEach((lab, v) => {
     const sel = answers[q.id] === v ? ' sel' : '';
-    const b = el('button', { class: `opt s${v}${sel}`, type: 'button', 'aria-pressed': answers[q.id] === v, 'aria-label': `${q.patientText}: ${lab}` }, `<span class="on">${v}</span>${esc(lab)}`);
+    const b = el('button', { class: `opt s${v}${sel}`, type: 'button' }, `<span class="on">${v}</span>${esc(lab)}`);
     b.onclick = () => {
       answers[q.id] = v;
-      opts.querySelectorAll('.opt').forEach(o => { o.classList.remove('sel'); o.setAttribute('aria-pressed', 'false'); });
+      opts.querySelectorAll('.opt').forEach(o => o.classList.remove('sel'));
       b.classList.add('sel');
-      b.setAttribute('aria-pressed', 'true');
-      if (naBtn) { naBtn.classList.remove('sel'); naBtn.setAttribute('aria-pressed', 'false'); }
+      if (naBtn) naBtn.classList.remove('sel');
       updateProgress();
       refreshReveals();
     };
@@ -3740,9 +3735,8 @@ function questionRow(q) {
   if (naBtn) {
     naBtn.onclick = () => {
       answers[q.id] = 'na';
-      opts.querySelectorAll('.opt').forEach(o => { o.classList.remove('sel'); o.setAttribute('aria-pressed', 'false'); });
+      opts.querySelectorAll('.opt').forEach(o => o.classList.remove('sel'));
       naBtn.classList.add('sel');
-      naBtn.setAttribute('aria-pressed', 'true');
       updateProgress();
       refreshReveals();
     };

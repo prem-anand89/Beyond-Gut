@@ -6,10 +6,13 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "build": "node build.js",
+    "build": "node build.mjs",
+    "build:prod": "NODE_ENV=production node build.mjs",
+    "extract:modules": "node scripts/extract-modules-esm.mjs",
     "test": "playwright test",
     "test:headed": "playwright test --headed",
-    "test:debug": "playwright test --debug"
+    "test:debug": "playwright test --debug",
+    "test:smoke": "node scripts/gshs-smoke.mjs"
   },
   "keywords": [
     "health",
@@ -30,6 +33,6 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
-    "esbuild": "^0.28.1"
+    "esbuild": "^0.21.5"
   }
 }
