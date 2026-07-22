@@ -492,6 +492,34 @@ ok(rrChronic.answered === true, 'a real chronic sx_duration band (index 4) still
 // "Not sure" sentinel does not trip the pain/Rome duration-based card reveal).
 ok(schema.revealMet({ type: 'item', id: 'sx_duration', min: 2, max: 4 }, { answers: { sx_duration: 5 } }) === false,
   'revealMet item max bound excludes the "Not sure" sentinel');
+
+// F1 — Rome IV stool-form proportion (>25% rule) subtyping. Truth table over the
+// two proportions, plus fallback to single-Bristol / cluster-norm when absent.
+const romeCrit = { painFreq: 3, onset: 3, rm_assoc_defecation: true, rm_assoc_freqchange: true }; // meets criteria
+const propSub = (hardPct, loosePct) => rome.classifyRomeIV(romeCrit, {}, undefined, undefined, { hardPct, loosePct }).subtype;
+ok(propSub(40, 10) === 'IBS-C', 'F1: hard >25% & loose <25% → IBS-C');
+ok(propSub(10, 40) === 'IBS-D', 'F1: loose >25% & hard <25% → IBS-D');
+ok(propSub(40, 40) === 'IBS-M', 'F1: both >25% → IBS-M (only proportions can surface this)');
+ok(propSub(10, 10) === 'IBS-U', 'F1: neither >25% → IBS-U');
+// Boundary: exactly 25% is NOT >25% (Rome uses a strict greater-than).
+ok(rome.classifyRomeIV(romeCrit, {}, undefined, undefined, { hardPct: 25, loosePct: 25 }).subtype === 'IBS-U',
+  'F1: exactly 25% does not meet the >25% threshold');
+ok(rome.classifyRomeIV(romeCrit, {}, undefined, undefined, { hardPct: 40, loosePct: 10 }).subtypeBasis === 'proportion',
+  'F1: subtypeBasis reports "proportion" when both proportions are given');
+// Fallback: with no proportions, a decisive single Bristol still resolves C/D.
+ok(rome.classifyRomeIV(romeCrit, {}, undefined, 1).subtype === 'IBS-C' &&
+   rome.classifyRomeIV(romeCrit, {}, undefined, 1).subtypeBasis === 'single-bristol',
+  'F1: falls back to single-Bristol (type 1 → IBS-C) when proportions absent');
+// Fallback: no proportions, indeterminate Bristol (type 4) → cluster-norm read.
+ok(rome.classifyRomeIV(romeCrit, { Constipation: 0.6 }, undefined, 4).subtypeBasis === 'cluster-norm',
+  'F1: falls back to cluster-norm when proportions absent and Bristol indeterminate');
+// A partial proportion (only one of the two) must NOT trigger the proportion rule.
+ok(rome.classifyRomeIV(romeCrit, {}, undefined, 1, { hardPct: 40 }).subtypeBasis === 'single-bristol',
+  'F1: a single proportion is insufficient — the >25% rule needs both');
+// UI wiring + disclaimer present.
+ok(/reveal-bristol-props/.test(html) && /hard or lumpy \(Bristol 1–2\)/.test(html) && /loose or watery \(Bristol 6–7\)/.test(html),
+  'F1: proportion rows rendered in the Bristol card');
+ok(/PROPORTION_PCT_MID = \[10, 40, 70\]/.test(html), 'F1: proportion band→percentage midpoints defined');
 ok(schema.revealMet({ type: 'item', id: 'sx_duration', min: 2, max: 4 }, { answers: { sx_duration: 3 } }) === true,
   'revealMet item max bound admits a real chronic band');
 ok(scoring.computeScores({ sx_duration: 4, gsrs_pain: 0 }, {}).index === 0, 'sx_duration answer never enters the Index');

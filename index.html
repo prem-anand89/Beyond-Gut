@@ -741,6 +741,11 @@ const ACTIVITY_LEVELS = ['Sedentary (little/none)', 'Light (<75 min/wk)', 'Moder
 // Coverage-gap drivers (bowel frequency, smoking, hydration) — same "context
 // only, kept OUT of the Index" treatment as every other driver on this page.
 const STOOL_FREQ_LEVELS = ['<3 times/week', '3–6 times/week', '1–3 times/day', '>3 times/day']; // 0–3
+// F1 — Rome IV proportion bands for stool-form subtyping (>25% rule). The band
+// index maps to a representative percentage midpoint used by romeDisplaySubtype:
+// index 0 = <25% (below Rome's threshold), 1 = 25–50%, 2 = >50%.
+const PROPORTION_LEVELS = ['Rarely — under a quarter', 'About a quarter to half', 'More than half']; // 0–2
+const PROPORTION_PCT_MID = [10, 40, 70]; // midpoints: only index 0 is ≤25%
 const SMOKING_LEVELS    = ['Never smoked', 'Former smoker', 'Current smoker'];                   // 0–2
 // Shared with lifestyleCard()'s diet-frequency rows AND the new caffeine row —
 // module-level (not function-local) so modifiableFactors() can label it too.
@@ -1120,6 +1125,7 @@ __e.PSS4_ITEMS = PSS4_ITEMS; __e.PSS4_REVERSED = PSS4_REVERSED; __e.PSS4_ANCHORS
 __e.psychLoadScore = psychLoadScore; __e.loadBand = loadBand;
 __e.DISRUPTORS = DISRUPTORS; __e.ALCOHOL_LEVELS = ALCOHOL_LEVELS; __e.ACTIVITY_LEVELS = ACTIVITY_LEVELS; __e.dietBurden = dietBurden; __e.dietBand = dietBand;
 __e.STOOL_FREQ_LEVELS = STOOL_FREQ_LEVELS; __e.SMOKING_LEVELS = SMOKING_LEVELS; __e.HYDRATION_LEVELS = HYDRATION_LEVELS; __e.FREQ_LEVELS = FREQ_LEVELS;
+__e.PROPORTION_LEVELS = PROPORTION_LEVELS; __e.PROPORTION_PCT_MID = PROPORTION_PCT_MID;
 __e.CLUSTER_FREQ_LEVELS = CLUSTER_FREQ_LEVELS;
 __e.SLEEP_ITEMS = SLEEP_ITEMS; __e.SLEEP_ANCHORS = SLEEP_ANCHORS; __e.sleepBurden = sleepBurden; __e.sleepBand = sleepBand;
 __e.FOOD_TRIGGERS = FOOD_TRIGGERS; __e.ABX_COURSES = ABX_COURSES; __e.GAS_LEVELS = GAS_LEVELS; __e.STOOLVAR_LEVELS = STOOLVAR_LEVELS;
@@ -1644,14 +1650,25 @@ function bowelSubtype(clusterNorm) {
   return 'IBS-U';
 }
 
-// Rome IV's own subtyping criterion is predominant stool FORM (Bristol 1–2 vs
-// 6–7), not symptom severity — using cluster norms for the displayed Rome
-// subtype over-called IBS-M whenever both clusters carried some burden. A
-// single visit only records one Bristol observation (not the diary Rome IV
-// was validated against), so it can decisively resolve IBS-C/IBS-D but not
-// IBS-M — Bristol 3–5 (indeterminate) or unanswered falls back to the
-// cluster-norm read, which is the only route that can surface IBS-M.
-function romeDisplaySubtype(clusterNorm, bristol) {
+// Rome IV's own subtyping criterion is the PROPORTION of bowel movements with
+// abnormal form: IBS-C = >25% Bristol 1–2 & <25% Bristol 6–7; IBS-D = mirror;
+// IBS-M = both >25%; IBS-U = neither (F1). When the patient gives those two
+// proportions (props.hardPct / props.loosePct), apply that rule directly — it is
+// the validated criterion. Otherwise fall back: a single Bristol observation can
+// decisively resolve IBS-C/IBS-D (form 1–2 / 6–7) but not IBS-M, and Bristol 3–5
+// (indeterminate) or unanswered falls back to the cluster-norm read — the only
+// route that can surface IBS-M without proportions. Still a single-visit estimate,
+// NOT the prospective stool diary Rome IV was validated against.
+const ROME_PCT_MET = 25; // Rome IV ">25% of bowel movements" threshold
+function romeDisplaySubtype(clusterNorm, bristol, props) {
+  if (props && typeof props.hardPct === 'number' && typeof props.loosePct === 'number') {
+    const cHi = props.hardPct > ROME_PCT_MET;
+    const dHi = props.loosePct > ROME_PCT_MET;
+    if (cHi && dHi) return 'IBS-M';
+    if (cHi) return 'IBS-C';
+    if (dHi) return 'IBS-D';
+    return 'IBS-U';
+  }
   if (typeof bristol === 'number') {
     if (bristol <= 2) return 'IBS-C';
     if (bristol >= 6) return 'IBS-D';
@@ -1669,7 +1686,7 @@ function romeDisplaySubtype(clusterNorm, bristol) {
 // patients — a near-exact duplicate of sx_duration, which every patient
 // already answers. Only fall back when rome.onset itself is unanswered
 // (preserves any historical visit that explicitly answered both).
-function classifyRomeIV(rome, clusterNorm, sxDuration, bristol) {
+function classifyRomeIV(rome, clusterNorm, sxDuration, bristol, props) {
   const r = rome || {};
   // sxDuration index >= ROME_ONSET.length is the 'Not sure / it varies' escape
   // (schema.js DURATION) — not a real onset band, so it must not satisfy onsetMet.
@@ -1682,11 +1699,14 @@ function classifyRomeIV(rome, clusterNorm, sxDuration, bristol) {
   if (!answered) return { criteriaMet: false, answered: false, subtype: null, assocCount };
   const criteriaMet = freqMet && onsetMet && assocCount >= 2;
   if (!criteriaMet) return { criteriaMet: false, answered: true, subtype: null, assocCount };
-  return { criteriaMet: true, answered: true, subtype: romeDisplaySubtype(clusterNorm, bristol), assocCount };
+  return { criteriaMet: true, answered: true, subtype: romeDisplaySubtype(clusterNorm, bristol, props),
+           subtypeBasis: (props && typeof props.hardPct === 'number' && typeof props.loosePct === 'number') ? 'proportion'
+             : (typeof bristol === 'number' && (bristol <= 2 || bristol >= 6)) ? 'single-bristol' : 'cluster-norm',
+           assocCount };
 }
 __e.ROME_FREQ = ROME_FREQ; __e.ROME_ONSET = ROME_ONSET; __e.ROME_ASSOC = ROME_ASSOC;
 __e.ROME_FREQ_MET = ROME_FREQ_MET; __e.ROME_ONSET_MET = ROME_ONSET_MET;
-__e.classifyRomeIV = classifyRomeIV; __e.bowelSubtype = bowelSubtype; __e.romeDisplaySubtype = romeDisplaySubtype;
+__e.classifyRomeIV = classifyRomeIV; __e.bowelSubtype = bowelSubtype; __e.romeDisplaySubtype = romeDisplaySubtype; __e.ROME_PCT_MET = ROME_PCT_MET;
 return __e;
 };
 
@@ -2472,7 +2492,7 @@ function pilotExportCSV(db) {
     'ex_abxCourses', 'ex_dys_stoolVar', 'ex_dys_postInfectious', 'ex_dys_gasFoul', 'ex_dys_fibreParadox', 'ex_dys_foodTriggers', 'ex_dysLensCount', 'ex_dysLensScore', 'ex_dysLensTier',
     'ex_surgeryCount', 'ex_surgeryOther',
     'ex_rome_painFreq', 'ex_rome_onset', 'ex_rome_assoc_defecation', 'ex_rome_assoc_freqchange', 'ex_rome_assoc_formchange',
-    'ex_romeCriteriaMet', 'ex_romeSubtype',
+    'ex_romeCriteriaMet', 'ex_romeSubtype', 'ex_romeSubtypeBasis', 'ex_bristolHardPct', 'ex_bristolLoosePct',
     ...CLUSTERS.map(c => 'ex_clusterFreq_' + c.toLowerCase()),
     'ex_bowelFreq', 'ex_smoking', 'ex_caffeine', 'ex_hydration', 'ex_treatmentsTried', 'ex_treatmentsTriedOther',
     'ex_heightCm', 'ex_weightKg', 'ex_waistCm',
@@ -2501,7 +2521,7 @@ function pilotExportCSV(db) {
                     conditions: ex.conditions, surgeries: ex.surgeries, anthro: anthropometrics(ex, {}) };
       const fired = new Set(detectPatterns(score, drv, a).map(p => p.id));
       const rm = ex.rome || {};
-      const romeResult = classifyRomeIV(rm, score.clusterNorm, a.sx_duration, ex.bristol);
+      const romeResult = classifyRomeIV(rm, score.clusterNorm, a.sx_duration, ex.bristol, ex.bristolProps);
       const cf = ex.clusterFreq || {};
       const tried = (ex.treatmentsTried || []);
       rows.push([
@@ -2518,7 +2538,7 @@ function pilotExportCSV(db) {
         cell(ex.abxCourses), cell((ex.dys || {}).stoolVar), cell((ex.dys || {}).postInfectious), cell((ex.dys || {}).gasFoul), cell((ex.dys || {}).fibreParadox), cell(((ex.dys || {}).foodTriggers || []).length), cell(dysbiosisLens(ex).count), cell(dysbiosisLens(ex).score), cell(dysbiosisLens(ex).tier),
         cell(surgicalFlags(ex).count), cell(ex.surgeryOther || ''),
         cell(rm.painFreq), cell(rm.onset), bool(rm.rm_assoc_defecation, true), bool(rm.rm_assoc_freqchange, true), bool(rm.rm_assoc_formchange, true),
-        romeResult.criteriaMet ? 1 : 0, cell(romeResult.subtype),
+        romeResult.criteriaMet ? 1 : 0, cell(romeResult.subtype), cell(romeResult.subtypeBasis), cell((ex.bristolProps || {}).hardPct), cell((ex.bristolProps || {}).loosePct),
         ...CLUSTERS.map(c => cell(cf[c])),
         cell(ex.bowelFreq), cell(ex.smoking), cell(ex.caffeine), cell(ex.hydration), cell(tried.join('|')), cell(ex.treatmentsTriedOther || ''),
         cell(ex.heightCm), cell(ex.weightKg), cell(ex.waistCm),
@@ -2543,6 +2563,7 @@ const { SECTIONS, QUESTIONS, questionsOf, sectionMax, itemMax, revealMet } = __r
 const { scaleFor, RECALL_NOTE, PSS4_ITEMS, PSS4_ANCHORS, PSS4_REVERSED, pss4Score, BRISTOL_TYPES, PAIN_REGIONS, modifiableFactors,
         DISRUPTORS, ALCOHOL_LEVELS, ACTIVITY_LEVELS, SLEEP_ITEMS, SLEEP_ANCHORS,
         STOOL_FREQ_LEVELS, SMOKING_LEVELS, HYDRATION_LEVELS, FREQ_LEVELS, CLUSTER_FREQ_LEVELS,
+        PROPORTION_LEVELS, PROPORTION_PCT_MID,
         FOOD_TRIGGERS, ABX_COURSES, GAS_LEVELS, STOOLVAR_LEVELS, POSTINF_OPTS, PARADOX_OPTS, dysbiosisLens,
         SURGERIES, surgicalFlags, KNOWN_CONDITIONS, knownConditions, KNOWN_LABS, knownLabs,
         MED_CONFOUNDERS, medConfounders, TREATMENTS_TRIED, treatmentsTried, FAMILY_HISTORY, familyHistory,
@@ -2574,6 +2595,7 @@ let nav = {};          // { goRecords } — set by app.js so the banner can jump
 const blankExtras = () => ({
   heightCm: null, weightKg: null, waistCm: null,   // anthropometrics — optional, notes-only (BMI / WHtR)
   bristol: null, bowelFreq: null,    // bowelFreq: stools/week band — paired with Bristol, context only
+  bristolProps: { hardPct: null, loosePct: null }, // F1 — Rome IV stool-form proportions (% Bristol 1–2 / 6–7) for the >25% subtype rule
   clusterFreq: { Reflux: null, Pain: null, Indigestion: null, Diarrhoea: null, Constipation: null }, // per-cluster symptom-occurrence frequency — nudges the Index, see scoring.js
   pss4: [null, null, null, null], nrsPain: null, painRegion: null,
   meds: { abx: false, ppi: false, nsaid: false },
@@ -3162,6 +3184,17 @@ function refreshReveals() {
     const h = document.getElementById(id);
     if (h) h.style.display = (manual || revealMet(CARD_REVEAL[id], ctx)) ? '' : 'none';
   });
+  // F1 — Rome IV stool-form proportion rows: reveal only when a bowel-habit
+  // cluster (Constipation or Diarrhoea) carries some burden, since the >25% rule
+  // is meaningless without an altered bowel pattern to characterise.
+  const propHolder = document.getElementById('reveal-bristol-props');
+  if (propHolder) {
+    const bowelPresent = revealMet({ any: [
+      { type: 'cluster', cluster: 'Constipation', min: 0.01 },
+      { type: 'cluster', cluster: 'Diarrhoea', min: 0.01 },
+    ] }, ctx);
+    propHolder.style.display = (manual || bowelPresent) ? '' : 'none';
+  }
   // Reveal-on-positive follow-up items
   QUESTIONS.forEach(q => {
     if (!q.revealIf) return;
@@ -3282,6 +3315,21 @@ function bristolCard() {
   // Bowel frequency — paired here with stool form, the two classic bowel-habit
   // descriptors. Context only (never enters the Index or Rome IV scoring).
   body.appendChild(segRow('How often do you have a bowel movement?', STOOL_FREQ_LEVELS, () => extras.bowelFreq, v => extras.bowelFreq = v));
+  // F1 — Rome IV stool-form PROPORTIONS. Rome IV subtypes IBS by the % of bowel
+  // movements that are hard/lumpy (Bristol 1–2) vs loose/watery (6–7), not by a
+  // single "usual" type. These two rows let a patient give both proportions so
+  // romeDisplaySubtype() can apply the true >25% rule (and surface IBS-M, which a
+  // single Bristol type can't). Revealed only when a bowel cluster is present
+  // (holder gated in refreshReveals). Stored as representative % midpoints in
+  // extras.bristolProps. Single-visit estimate, not a stool diary.
+  const propHolder = el('div', { id: 'reveal-bristol-props', style: 'display:none' });
+  propHolder.appendChild(el('div', { class: 'q-sub', style: 'padding-top:10px;font-weight:600' },
+    'Over the last 2 weeks, what share of your bowel movements were…'));
+  const setProp = (key) => (v) => { extras.bristolProps = extras.bristolProps || {}; extras.bristolProps[key] = (v == null ? null : PROPORTION_PCT_MID[v]); };
+  const getProp = (key) => () => { const p = extras.bristolProps && extras.bristolProps[key]; return p == null ? null : PROPORTION_PCT_MID.indexOf(p); };
+  propHolder.appendChild(segRow('…hard or lumpy (Bristol 1–2)', PROPORTION_LEVELS, getProp('hardPct'), setProp('hardPct')));
+  propHolder.appendChild(segRow('…loose or watery (Bristol 6–7)', PROPORTION_LEVELS, getProp('loosePct'), setProp('loosePct')));
+  body.appendChild(propHolder);
   card.appendChild(body);
   return card;
 }
@@ -3906,7 +3954,7 @@ function computeAll() {
   const patterns = detectPatterns(score, driverExtras, answers);
   const fired = firedRedFlags(redflags);
   const lens = dysbiosisLens(extras);
-  const rome = classifyRomeIV(extras.rome, score.clusterNorm, answers.sx_duration, extras.bristol);
+  const rome = classifyRomeIV(extras.rome, score.clusterNorm, answers.sx_duration, extras.bristol, extras.bristolProps);
   const profile = axisProfile(score, driverExtras, lens);
   const heads = headlineOutputs(score, driverExtras, lens);
   const conditions = knownConditions(extras);
@@ -4245,8 +4293,14 @@ function triageCard(tri, rome, showInvestigations) {
       `• ${esc(a.label)} — ${a.reasons.map(r => esc(r.text)).join('; ')}`)));
   }
   if (rome && rome.criteriaMet) {
+    // F1 — note how the subtype was resolved: by the Rome IV >25% stool-form
+    // proportion rule (strongest), a single decisive Bristol type, or the
+    // cluster-norm fallback (weakest — over-calls IBS-M).
+    const basisNote = rome.subtypeBasis === 'proportion' ? ' (subtype by Rome IV stool-form proportion rule)'
+      : rome.subtypeBasis === 'single-bristol' ? ' (subtype from a single Bristol observation)'
+      : rome.subtypeBasis === 'cluster-norm' ? ' (subtype inferred from symptom clusters — proportions not given)' : '';
     tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-weight:600;color:#185FA5' },
-      `Meets Rome IV-informed criteria for ${esc(rome.subtype)} — single-visit estimate, not the prospective diary Rome IV was validated against. A pattern to discuss, not a diagnosis.`));
+      `Meets Rome IV-informed criteria for ${esc(rome.subtype)}${esc(basisNote)} — single-visit estimate, not the prospective diary Rome IV was validated against. A pattern to discuss, not a diagnosis.`));
   }
   if (showInvestigations && tri.investigations && tri.investigations.length) {
     tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-weight:600;color:#3A4A5A' }, 'Suggested investigations / management:'));
