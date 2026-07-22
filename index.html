@@ -1434,12 +1434,43 @@ function computeScores(answers, opts) {
   const completeness = scoredItems ? Math.round(answeredItems / scoredItems * 100) : 100;
   const coreUnknown = coreMean == null;                 // GI/GSRS section wasn't answered at all
   const band = coreUnknown ? null : bandForPct(index);
-  const severity = band
-    ? Object.assign({}, band, { index, provisional: false, desc: SEVERITY_DESC[band.label] })
+
+  // ── E4 · Peak-override anti-dilution ────────────────────────────────────────
+  // The cluster-balanced mean is deliberately un-spiky: a single incapacitating
+  // symptom sitting among otherwise-mild answers can average down into Minimal,
+  // hiding a picture a clinician would want to see. Peak-override scans the RAW GI
+  // answers and, if any item is at ceiling (4 on the 0–4 scale) or Severe (3),
+  // raises the DISPLAYED band floor to at least Mild–Moderate and attaches an
+  // item-level alert. INVARIANT: this touches ONLY the displayed band + the new
+  // peakAlerts[] — it never mutates `index`, `coreMean`, `secNorm.GI`, or
+  // `clusterNorm`, so pattern-firing and the raw Index are unchanged (a peak
+  // cannot, by itself, flip a pattern gate — only annotate the band).
+  const peakAlerts = [];
+  if (!coreUnknown) {
+    for (const q of QUESTIONS) {
+      if (!q.cluster) continue;
+      const v = raw(q.id);
+      if (typeof v !== 'number') continue;
+      const ceiling = itemMax(q);
+      if (v >= ceiling) peakAlerts.push({ id: q.id, cluster: q.cluster, value: v, level: 'ceiling', label: q.patientText || q.id });
+      else if (v === ceiling - 1) peakAlerts.push({ id: q.id, cluster: q.cluster, value: v, level: 'severe', label: q.patientText || q.id });
+    }
+  }
+  // Escalate the displayed band floor to Mild–Moderate (BANDS index 1) when any
+  // peak is present — never downgrades a higher band, never touches `index`.
+  let dispBand = band;
+  let peakEscalated = false;
+  if (band && peakAlerts.length) {
+    const curIdx = BANDS.indexOf(band);
+    const floorIdx = 1; // 'Mild–Moderate'
+    if (curIdx > -1 && curIdx < floorIdx) { dispBand = BANDS[floorIdx]; peakEscalated = true; }
+  }
+  const severity = dispBand
+    ? Object.assign({}, dispBand, { index, provisional: false, desc: SEVERITY_DESC[dispBand.label], peakEscalated })
     : { index: null, label: null, provisional: true,
         desc: 'Core GI section not completed — no Gut Symptom Burden score available.' };
 
-  return { secScores, secNorm, secApplicableMax, bands, secAnswered, completeness, index, severity, bristolSignal, bristolAddPts, frequencyAddPts, nudgeAddPts, clusterAgg, clusterNorm, coreUnknown };
+  return { secScores, secNorm, secApplicableMax, bands, secAnswered, completeness, index, severity, bristolSignal, bristolAddPts, frequencyAddPts, nudgeAddPts, clusterAgg, clusterNorm, coreUnknown, peakAlerts, peakEscalated };
 }
 
 // Shared confidence descriptor (Phase 0.5 §3 mechanism).
@@ -4636,6 +4667,7 @@ function buildClinicianPrint(c) {
       ${heads.secondaryList.map(axisRow).join('')}
       <tr><td>Confidence</td><td colspan="3">${esc(conf.level)} · ${score.completeness}% complete</td></tr>
       ${score.coreUnknown ? '<tr><td colspan="4" style="color:#A32D2D;font-weight:600">⚠ Core GI section not answered — Gut Symptom Burden provisional</td></tr>' : ''}
+      ${(score.peakAlerts && score.peakAlerts.length) ? `<tr><td colspan="4" style="color:#A32D2D;font-weight:600">⚠ Peak-symptom alert: ${esc(score.peakAlerts.map(p => `${p.label} (${p.level === 'ceiling' ? 'very severe' : 'severe'})`).join(', '))}${score.peakEscalated ? ' — displayed band raised; raw index unchanged' : ''}</td></tr>` : ''}
     </tbody></table></div>`;
   if (conditions && conditions.list && conditions.list.length) {
     h += `<div class="pr-section"><div class="pr-sh">Known conditions reported</div>
@@ -4874,10 +4906,16 @@ function renderClinician() {
   // GSHS headline (four primary outputs) + symptom-burden detail
   root.appendChild(headlineCard(heads, rome));
   const hero = el('div', { class: 'card' });
+  const peaks = score.peakAlerts || [];
+  const peakLine = peaks.length
+    ? `<div style="font-size:11.5px;color:#A32D2D;margin-top:8px;line-height:1.5">⚠ Peak-symptom alert${peaks.length > 1 ? 's' : ''}: ${
+        peaks.map(p => `${esc(p.label)} (${p.level === 'ceiling' ? 'very severe' : 'severe'})`).join(', ')
+      }.${score.peakEscalated ? ' Displayed band raised to reflect an isolated high-severity symptom that the balanced mean would otherwise dilute (raw index unchanged).' : ''}</div>`
+    : '';
   hero.appendChild(el('div', { class: 'hero' },
     `<div><div class="big">${sv.index == null ? '—' : sv.index + '%'}</div><div class="sub">Gut Symptom Burden</div></div>
-     <div style="flex:1;min-width:160px">${sv.label ? `<span class="pill ${sv.cls || bandPillClass(sv.label)}">${esc(sv.label)}</span>` : ''}
-     <div style="font-size:12px;color:var(--inks);margin-top:8px;line-height:1.5">${esc(sv.desc || '')}</div>
+     <div style="flex:1;min-width:160px">${sv.label ? `<span class="pill ${sv.cls || bandPillClass(sv.label)}">${esc(sv.label)}${sv.peakEscalated ? ' ↑' : ''}</span>` : ''}
+     <div style="font-size:12px;color:var(--inks);margin-top:8px;line-height:1.5">${esc(sv.desc || '')}</div>${peakLine}
      <div class="conf-note">Confidence: <b>${esc(conf.level)}</b> · ${score.completeness}% complete</div></div>`));
   root.appendChild(hero);
 

@@ -419,6 +419,37 @@ const sIndigOnly = scoring.computeScores(indigOnly, {});
 ok(sRefluxOnly.index === sIndigOnly.index, 'cluster-balanced index: equal severity in different-size clusters yields equal index');
 ok(sRefluxOnly.index === 20, 'cluster-balanced index: one maxed cluster of five yields the expected 20% mean');
 
+// 30a-E4. Peak-override anti-dilution. A single ceiling (very-severe = 4) symptom
+// among otherwise-zero answers averages down into Minimal by the number, but the
+// DISPLAYED band floor is raised to Mild–Moderate and a peak alert is attached.
+// gsrs_bloating sits in the 4-item Indigestion cluster: 4/16 = 0.25 cluster norm,
+// mean over 5 clusters = 0.05 → raw index 5 (Minimal), escalated for display.
+const peakCeil = scoring.computeScores({ gsrs_heartburn: 0, gsrs_regurg: 0, gsrs_pain: 0, gsrs_hunger: 0, gsrs_nausea: 0,
+  gsrs_rumbling: 0, gsrs_bloating: 4, gsrs_burping: 0, gsrs_gas: 0, gsrs_diarrhoea: 0, gsrs_loose: 0,
+  gsrs_urgency: 0, gsrs_constip: 0, gsrs_hard: 0, gsrs_incomplete: 0 }, {});
+ok(peakCeil.index === 5, 'E4: raw index is UNCHANGED by peak-override (still 5 — the number never moves)');
+ok(peakCeil.peakAlerts.length === 1 && peakCeil.peakAlerts[0].level === 'ceiling' && peakCeil.peakAlerts[0].id === 'gsrs_bloating',
+  'E4: a ceiling (4) item produces a ceiling-level peak alert');
+ok(peakCeil.peakEscalated === true && peakCeil.severity.label === 'Mild–Moderate',
+  'E4: displayed band floored to Mild–Moderate (Minimal would have diluted the peak)');
+// INVARIANT: the raw cluster mean the pattern engine reads (secNorm.GI) is NOT lifted
+// by the peak — it stays the un-nudged 0.05, so no pattern gate can flip on a peak.
+ok(Math.abs(peakCeil.secNorm.GI - 0.05) < 1e-9, 'E4: secNorm.GI (pattern gate) untouched by peak-override — invariant holds');
+// A single Severe (3) item likewise escalates and is tagged 'severe'.
+const peakSev = scoring.computeScores({ gsrs_heartburn: 0, gsrs_regurg: 0, gsrs_pain: 0, gsrs_hunger: 0, gsrs_nausea: 0,
+  gsrs_rumbling: 0, gsrs_bloating: 3, gsrs_burping: 0, gsrs_gas: 0, gsrs_diarrhoea: 0, gsrs_loose: 0,
+  gsrs_urgency: 0, gsrs_constip: 0, gsrs_hard: 0, gsrs_incomplete: 0 }, {});
+ok(peakSev.peakAlerts.length === 1 && peakSev.peakAlerts[0].level === 'severe' && peakSev.peakEscalated === true,
+  'E4: a single Severe (3) item → severe-level alert + escalated band');
+// No peak → no escalation. All-Moderate (2) answers: no item at 3 or 4.
+const noPeak = scoring.computeScores(Object.fromEntries(GI_IDS.map(id => [id, 2])), {});
+ok(noPeak.peakAlerts.length === 0 && noPeak.peakEscalated === false,
+  'E4: no ceiling/severe item → no peak alerts, no escalation');
+// Higher band is never downgraded: a broadly-severe picture already in Significant/
+// Severe keeps its band; peak alerts are attached but peakEscalated stays false.
+const highBand = scoring.computeScores(Object.fromEntries(GI_IDS.map(id => [id, 4])), {});
+ok(highBand.peakAlerts.length > 0 && highBand.peakEscalated === false && highBand.severity.label === 'Severe',
+  'E4: peak-override never downgrades a higher band (Severe stays Severe, no false escalation)');
 // 30b. Bristol nudge scoped to bowel-habit clusters only — a pure-reflux
 // patient (Constipation/Diarrhoea genuinely unanswered) must see NO index
 // change from an abnormal Bristol type, since neither bowel cluster exists to
