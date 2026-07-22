@@ -523,20 +523,30 @@ ok(noPeak.peakAlerts.length === 0 && noPeak.peakEscalated === false,
 const highBand = scoring.computeScores(Object.fromEntries(GI_IDS.map(id => [id, 4])), {});
 ok(highBand.peakAlerts.length > 0 && highBand.peakEscalated === false && highBand.severity.label === 'Severe',
   'E4: peak-override never downgrades a higher band (Severe stays Severe, no false escalation)');
-// 30b. Bristol nudge scoped to bowel-habit clusters only — a pure-reflux
-// patient (Constipation/Diarrhoea genuinely unanswered) must see NO index
-// change from an abnormal Bristol type, since neither bowel cluster exists to
-// nudge. Previously the nudge was added to the whole GI norm regardless.
+// 30b. Bristol/frequency DECOUPLED from the Index (post-D0 follow-up): Bristol
+// now feeds Rome IV subtyping only; frequency feeds only the read-only
+// severity×frequency widget. Neither may move score.index anymore, on a pure-
+// reflux patient (bowel clusters unanswered) OR on a patient with bowel
+// clusters answered (previously the "positive nudge" case — now must be a
+// no-op too, since the nudge mechanism itself was removed, not just narrowed).
 const pureRefluxSparse = { gsrs_heartburn: 1, gsrs_regurg: 1 };
 const sNoBristol = scoring.computeScores(pureRefluxSparse, {});
 const sWithBristol = scoring.computeScores(pureRefluxSparse, { bristol: 1 });
-ok(sNoBristol.index === sWithBristol.index, 'Bristol nudge does not move the index when bowel-habit clusters are unanswered');
-ok((sWithBristol.bristolAddPts || 0) === 0, 'bristolAddPts is 0 when bowel-habit clusters are unanswered');
-// Positive case: an answered (even all-zero) bowel-habit cluster DOES get nudged.
+ok(sNoBristol.index === sWithBristol.index, 'Bristol does not move the index when bowel-habit clusters are unanswered (decoupled)');
+ok(sWithBristol.bristolAddPts === undefined && sWithBristol.bristolSignal === undefined,
+  'bristolAddPts/bristolSignal are no longer part of the score object (nudge mechanism removed)');
+// Bowel clusters answered: Bristol must STILL be a no-op (previously this was
+// the "positive nudge" case — decoupling means it's now a no-op everywhere).
 const bowelAnswered = { gsrs_constip: 0, gsrs_hard: 0, gsrs_incomplete: 0, gsrs_diarrhoea: 0, gsrs_loose: 0, gsrs_urgency: 0 };
 const sBowelNoBristol = scoring.computeScores(bowelAnswered, {});
-const sBowelWithBristol = scoring.computeScores(bowelAnswered, { bristol: 1 });
-ok(sBowelWithBristol.index > sBowelNoBristol.index, 'Bristol nudge raises the index when bowel-habit clusters are answered');
+const sBowelWithBristol1 = scoring.computeScores(bowelAnswered, { bristol: 1 });
+const sBowelWithBristol7 = scoring.computeScores(bowelAnswered, { bristol: 7 });
+ok(sBowelWithBristol1.index === sBowelNoBristol.index && sBowelWithBristol7.index === sBowelNoBristol.index,
+  'Bristol (any type, including the most abnormal 1/7) never moves the index when bowel-habit clusters are answered (decoupled)');
+// secNorm.GI and index are now literally the same value (× 100) — the plain
+// cluster-balanced mean, nothing else feeds it.
+ok(scoring.computeScores(bowelAnswered, { bristol: 1 }).index === Math.round(scoring.computeScores(bowelAnswered, { bristol: 1 }).secNorm.GI * 100),
+  'index === secNorm.GI × 100 exactly — no separate nudged/raw split remains');
 
 // 30c. Re-confirm the de-blend invariant survives the cluster-mean rewrite.
 ok(run(0, { im_food_react: 3, im_infections: 3 }, { pss4Score: 16 }).heads.primary.symptom.value === 0,
@@ -712,77 +722,74 @@ ok(/Probiotic/.test(ttNote) && /Low-FODMAP diet/.test(ttNote) && /acupuncture/.t
 ok(/tri\.bowelFreqNote/.test(html) && /tri\.smokingNote/.test(html) && /tri\.treatmentsTriedNote/.test(html),
   'bowelFreqNote/smokingNote/treatmentsTriedNote referenced in source (render wiring present)');
 
-// 33. Frequency dimension — per-cluster symptom frequency nudging the Index.
+// 33. Frequency dimension — DECOUPLED from the Index (post-D0 follow-up).
+// Per-cluster symptom frequency (clusterFreq) and Rome's romePainFreq used to
+// nudge the Index by up to FREQUENCY_ALPHA; that mechanism was removed along
+// with the Bristol nudge (see block 30b above) — frequency now feeds ONLY the
+// read-only Tranche G severity×frequency widget (severityFrequencyMatrix()),
+// never computeScores(). bristolAddPts/frequencyAddPts/nudgeAddPts no longer
+// exist on the score object at all.
 
-// 33a. Frequency-only nudge on a non-bowel cluster (no Bristol arm applies).
+// 33a. Frequency answers (any cluster, any level) must be a complete no-op on
+// the index — computeScores() doesn't even read opts.clusterFreq anymore.
 const refluxMild = { gsrs_heartburn: 1, gsrs_regurg: 1 };            // norm = 2/6 ≈ 0.333
 const refluxNoFreq = scoring.computeScores(refluxMild, {});
 const refluxWithFreq = scoring.computeScores(refluxMild, { clusterFreq: { Reflux: 3 } }); // Daily
-ok(refluxWithFreq.index > refluxNoFreq.index, 'frequency nudge raises the index on a non-bowel cluster');
-ok(refluxWithFreq.frequencyAddPts === 15, 'frequencyAddPts reports the full FREQUENCY_ALPHA lift (+15) when uncapped');
-ok(refluxWithFreq.index === refluxNoFreq.index + 15, 'index rise matches frequencyAddPts exactly');
+ok(refluxWithFreq.index === refluxNoFreq.index, 'frequency no longer moves the index on any cluster (decoupled)');
+ok(refluxWithFreq.frequencyAddPts === undefined && refluxWithFreq.nudgeAddPts === undefined,
+  'frequencyAddPts/nudgeAddPts are no longer part of the score object');
 
-// 33b. Frequency does not nudge an unanswered cluster.
+// 33b. Frequency on an unanswered cluster is (still, trivially) a no-op.
 const refluxOnlyNoConstipFreq = scoring.computeScores(refluxMild, { clusterFreq: { Constipation: 3 } });
 ok(refluxOnlyNoConstipFreq.index === refluxNoFreq.index, 'frequency on an unanswered cluster does not move the index');
 
-// 33c. Combined Bristol + frequency on the SAME bowel cluster is capped at
-// NUDGE_CAP_PER_CLUSTER (0.15), not the naive sum (0.30) — the case that
-// motivated nudgeAddPts as a separate, always-accurate combined-total field.
+// 33c. Bristol + frequency together on the same bowel cluster: still a no-op,
+// combined or alone — there is no cap logic left to test, only "never fires".
 const constipMild = { gsrs_constip: 1, gsrs_hard: 1, gsrs_incomplete: 1 }; // norm ≈ 0.333
-const bristolOnly = scoring.computeScores(constipMild, { bristol: 1 });          // Bristol type 1 → full BRISTOL_ALPHA
+const constipBaseline = scoring.computeScores(constipMild, {});
 const combined = scoring.computeScores(constipMild, { bristol: 1, clusterFreq: { Constipation: 3 } });
-ok(combined.index === bristolOnly.index, 'combined Bristol+frequency nudge on one cluster is capped, not additive (index unchanged vs Bristol alone)');
-ok(combined.nudgeAddPts === 15, 'nudgeAddPts reports the capped combined total (+15), not the naive sum (+30)');
-// Documented edge case: per-signal marginal isolation can both read 0 here —
-// this is correct (holding either signal fixed, the other alone already
-// saturates the cap) but must never be summed as a substitute for nudgeAddPts.
-ok(combined.bristolAddPts === 0 && combined.frequencyAddPts === 0,
-  'per-signal marginal AddPts both read 0 in the saturated case (documented, use nudgeAddPts instead)');
+ok(combined.index === constipBaseline.index, 'Bristol + frequency together still leave the index unchanged (fully decoupled, not just capped)');
 
-// 33d. Raw clusterNorm (read by patterns.js) is unaffected by frequency —
-// only clusterNormForIndex/secNorm.GI/index move. Same separation Bristol's
-// nudge already relies on, must hold for every nudge added to this mechanism.
+// 33d. Raw clusterNorm (read by patterns.js) was always unaffected by
+// frequency — now the Index is too, so this is a stronger invariant than
+// before: literally nothing about a cluster's scoring changes with frequency.
 ok(refluxWithFreq.clusterNorm.Reflux === refluxNoFreq.clusterNorm.Reflux,
-  'raw clusterNorm.Reflux is unaffected by the frequency nudge (patterns.js unaffected)');
+  'raw clusterNorm.Reflux is unaffected by frequency answers (patterns.js unaffected)');
 const pat33 = patterns.detectPatterns(refluxNoFreq, { dys: {} }, refluxMild);
 const pat33Freq = patterns.detectPatterns(refluxWithFreq, { dys: {} }, refluxMild);
 ok(JSON.stringify(pat33.map(p => p.id)) === JSON.stringify(pat33Freq.map(p => p.id)),
-  'pattern firing is identical with/without the frequency nudge (only the Index moved)');
+  'pattern firing is identical with/without frequency answers (frequency affects nothing in computeScores)');
 
-// 33d2 (A1 regression). secNorm.GI itself — which patterns.gi() reads directly
-// — must be the UN-NUDGED cluster mean. Construct a fixture whose raw GI mean
-// sits just under the giPresent threshold (0.2) used by nutrient_malabsorption,
-// diarrhoea_dominant-adjacent, gut_brain and inflammatory_immune, but which a
-// full frequency nudge alone would push over 0.2 if the bug were present.
-// Reflux only, sum=1/6 ≈ 0.167 raw; nudge alone can add up to +0.15 → 0.317 if
-// (bug) secNorm.GI were nudged. Pair with nu_known_def (lab-confirmed
-// deficiency) so nutrient_malabsorption's only remaining gate is giPresent.
-// Uses the proxyCount>=2 route (hair+iron, no lab-confirmed nu_known_def),
-// which still requires giPresent — B2 made nu_known_def alone fire
-// regardless of giPresent, so it can no longer isolate this gate.
+// 33d2 (A1 regression, now trivially true post-decoupling). secNorm.GI and
+// index are the SAME un-nudged value — a full frequency nudge can no longer
+// push secNorm.GI over the giPresent (0.2) gate even in principle, since
+// there is no nudge path left. Keep the fixture (Reflux-only, sum=1/6≈0.167,
+// paired with the proxyCount≥2 route via nu_hair/nu_iron) as a regression
+// guard against the nudge mechanism ever being reintroduced.
 const giGateAnswers = { gsrs_heartburn: 1, gsrs_regurg: 0, nu_hair: 2, nu_iron: 2 };
 const giGateNoFreq = scoring.computeScores(giGateAnswers, {});
 const giGateWithFreq = scoring.computeScores(giGateAnswers, { clusterFreq: { Reflux: 3 } });
 ok(giGateNoFreq.secNorm.GI < 0.2 && giGateWithFreq.secNorm.GI < 0.2,
   'secNorm.GI stays UN-NUDGED (below giPresent threshold) regardless of frequency answers — A1 regression');
-ok(giGateWithFreq.index > giGateNoFreq.index,
-  'the Index itself still rises with the frequency nudge (nudge still reaches score.index)');
+ok(giGateWithFreq.index === giGateNoFreq.index,
+  'the Index itself no longer rises with frequency answers (decoupled — was previously an intentional nudge, now fully removed)');
 const patGateNoFreq = patterns.detectPatterns(giGateNoFreq, { dys: {} }, giGateAnswers);
 const patGateWithFreq = patterns.detectPatterns(giGateWithFreq, { dys: {} }, giGateAnswers);
 ok(!patGateNoFreq.some(p => p.id === 'nutrient_malabsorption') && !patGateWithFreq.some(p => p.id === 'nutrient_malabsorption'),
   'nutrient_malabsorption does not fire on driver-only frequency answers alone (A1: no Tier-4-to-Tier-1 flip via secNorm.GI leak)');
 
 // A2 regression. trend.js's visitScore() must recompute the SAME index as the
-// live computeAll()/CSV path for the same visit — previously it dropped
-// clusterFreq/romePainFreq and could disagree by up to ~15 points (the hero
-// card showing one number, the progress/trend view showing another).
+// live computeAll()/CSV path for the same visit — historically this guarded
+// against clusterFreq/romePainFreq nudge parity; now that both are fully
+// decoupled from the index (no-ops), the invariant that matters is simpler
+// but still real: the two code paths must never silently diverge on the
+// SAME answers, whatever computeScores() does or doesn't read from opts.
 const a2Answers = { gsrs_heartburn: 2, gsrs_regurg: 2 };
 const a2Extras = { bristol: null, clusterFreq: { Reflux: 3 }, rome: { painFreq: null } };
 const a2Live = scoring.computeScores(a2Answers, { bristol: a2Extras.bristol, clusterFreq: a2Extras.clusterFreq, romePainFreq: a2Extras.rome.painFreq });
 const a2Trend = trend.visitScore({ id: 'v1', date: 1, answers: a2Answers, extras: a2Extras });
 ok(a2Trend.index === a2Live.index, `trend visitScore().index (${a2Trend.index}) matches live computeScores().index (${a2Live.index})`);
-ok(a2Trend.index > 0, 'sanity: the frequency nudge is actually present in this fixture (index > un-nudged baseline)');
+ok(a2Trend.index === 50, 'sanity: this fixture (Reflux cluster fully Moderate, 4/8) is the plain un-nudged 50% mean');
 
 // A3 regression. A Tier-1 (refer) result must not carry reassuring lower-tier
 // framing for the PATIENT — but the underlying candidacy data must still be
@@ -807,11 +814,14 @@ ok(a3TriMinimal.suppressAlsoConsiderForPatient === false, 'Tier 4 (Minimal) does
 ok(typeof a3TriSevere.alsoConsider === 'object', 'alsoConsider data itself is NOT deleted from the tri object at Tier 1 (clinician view keeps the full landscape)');
 ok(/suppressAlsoConsiderForPatient/.test(code) && code.includes('showAlsoConsider'), 'triageCard() render layer references the patient-suppression gate (source check)');
 
-// 33e. Backward compatibility — clusterFreq entirely absent from opts behaves
-// identically to the pre-change Bristol-only mechanism (same fixture as the
-// earlier Bristol-scoping regression test).
+// 33e. Every opts combination (bristol alone, clusterFreq alone, both, or
+// neither) must produce the SAME index for the same answers — there is no
+// longer any code path where an opts field changes score.index.
 const legacyNoFreqOpt = scoring.computeScores(bowelAnswered, { bristol: 1 });
-ok(legacyNoFreqOpt.index === sBowelWithBristol.index, 'omitting clusterFreq entirely behaves identically to pre-change Bristol-only behaviour');
+const noOptsAtAll = scoring.computeScores(bowelAnswered, {});
+const bothOpts = scoring.computeScores(bowelAnswered, { bristol: 1, clusterFreq: { Constipation: 3 }, romePainFreq: 5 });
+ok(legacyNoFreqOpt.index === noOptsAtAll.index && bothOpts.index === noOptsAtAll.index,
+  'every opts combination (bristol/clusterFreq/romePainFreq, alone or combined) yields the identical index');
 
 // 33f. UI wiring present in source.
 ok(/CLUSTER_FREQ_LEVELS/.test(html) && /clusterFreqCard/.test(html), 'clusterFreqCard + CLUSTER_FREQ_LEVELS present in source');
@@ -859,14 +869,15 @@ ok(RF.some(f => f.id === 'rf_vomiting') && RF.some(f => f.id === 'rf_hematemesis
 ok(!/GI_CLUSTERS\.forEach\(k => \{\s*body\.appendChild\(segRow\(GI_CLUSTER_FREQ_LABELS\[k\]/.test(html),
   'clusterFreqCard no longer iterates all 5 clusters unconditionally');
 ok(/GI_CLUSTERS\.filter\(k => k !== 'Pain'\)/.test(html), 'clusterFreqCard explicitly excludes Pain');
-// Frequency-only nudge on Pain driven by romePainFreq (0-5 Rome scale), not clusterFreq.Pain.
+// romePainFreq (0-5 Rome scale) is now a no-op on the index too (decoupled) —
+// Pain-cluster frequency feeds only Rome IV criteria matching / the severity×
+// frequency widget, not computeScores().
 const painMild = { gsrs_pain: 1, gsrs_hunger: 1, gsrs_nausea: 1 };
 const painNoFreq = scoring.computeScores(painMild, {});
 const painWithRomeFreq = scoring.computeScores(painMild, { romePainFreq: 5 });
-ok(painWithRomeFreq.index > painNoFreq.index, 'Pain cluster nudged by romePainFreq');
-ok(painWithRomeFreq.index === painNoFreq.index + 15, 'Pain romePainFreq nudge matches FREQUENCY_ALPHA magnitude (+15)');
+ok(painWithRomeFreq.index === painNoFreq.index, 'romePainFreq no longer nudges the Pain cluster / index (decoupled)');
 const painStaleClusterFreq = scoring.computeScores(painMild, { clusterFreq: { Pain: 3 } });
-ok(painStaleClusterFreq.index === painNoFreq.index, 'clusterFreq.Pain is ignored — Pain frequency only comes from romePainFreq');
+ok(painStaleClusterFreq.index === painNoFreq.index, 'clusterFreq.Pain is (still) ignored — Pain frequency was never wired through clusterFreq');
 
 // 34h. Duplication fix — Rome IV onset question removed from romeCard();
 // classifyRomeIV() falls back to sx_duration when rome.onset is unanswered.

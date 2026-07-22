@@ -51,7 +51,7 @@ Patients complete the questionnaire in a logical clinical order:
 4. **Gut Symptoms** (mandatory, 15 GSRS-derived core items + Bristol + frequency)
    - **Severity** (0–4 impact-anchored scale, 2-week recall): GSRS-derived, modified from the published 7-point instrument
    - **Bristol stool form** (types 1–7): Single current observation
-   - **Per-cluster symptom frequency** (5 new optional rows): "Over the last 2–3 months, how many days a week do you get [Reflux/Pain/Indigestion/Diarrhoea/Constipation]?" (0–3: 1–2 days/wk → daily). Each cluster's frequency adds up to +0.15 nudge to its norm (capped total with Bristol)
+   - **Per-cluster symptom frequency** (5 new optional rows): "Over the last 2–3 months, how many days a week do you get [Reflux/Pain/Indigestion/Diarrhoea/Constipation]?" (0–3: 1–2 days/wk → daily). Frequency does **not** affect the Index — it is decoupled and displayed only in the read-only severity×frequency widget, for context alongside (not blended into) the severity score
 5. **Lifestyle & Modifiable Drivers** (optional): Diet quality, activity level, alcohol frequency, sleep quality, PSS-4 stress (1-month recall), bowel-movement frequency (stools/week band), smoking status, caffeine intake, hydration level, microbiome exposures (antibiotics, PPI, NSAID, post-infectious onset)
 6. **Systemic Features** (mandatory baseline, adaptive expansion): Inflammatory markers, brain-gut/mood, nutrient status, functional impact, psychosocial stress
 7. **Adaptive Deep Dive** (optional, conditional): Revealed only when GI core triggers specialist pathways:
@@ -118,34 +118,23 @@ Constipation norm = mean(constipation, hard stools, incomplete evacuation)
 
 **Why cluster-balanced (not item-summed)?** Clusters have different item counts (Reflux: 2, Indigestion: 4). If we summed raw items, a patient with severe Indigestion alone would score higher than one with identical per-symptom severity in Reflux, purely from item count. Cluster norms (mean per cluster) prevent this bias — each cluster contributes equally regardless of size.
 
-**Step 2: Bristol stool-form nudge** (optional, augments but never replaces)
-Abnormal stool form (Bristol type 1–2: hard, or type 6–7: loose/liquid) slightly lifts the Constipation or Diarrhoea cluster norm:
-- Bristol 1–2 adds up to +0.15 to Constipation norm
-- Bristol 6–7 adds up to +0.15 to Diarrhoea norm
-- Captures the transit-quality signal not fully reflected in the "passing stool" item alone
-- Capped so Bristol alone cannot move someone from Minimal to higher band
+**Step 2: Bristol stool form and per-cluster symptom frequency are DECOUPLED from the Index**
+Neither Bristol stool form nor per-cluster/Rome pain frequency answers move the Index or any cluster norm. They are collected for two other, entirely separate purposes:
+- **Bristol stool form** feeds only Rome IV bowel-habit subtyping (IBS-C/D/M/U) — see Section 5.
+- **Per-cluster symptom frequency** (and the Rome pain-frequency item) feeds only the read-only severity×frequency 2-D widget in the clinician report — a display-only cross-tab, never blended back into the severity score.
 
-**Step 3: Per-cluster symptom-frequency nudge** (optional, 2–3 month recall)
-"How many days a week" each cluster's symptoms occur (separate window from the 2-week severity scale) adds up to +0.15 per cluster:
-- Frequency 0–1 (1–2 days/wk) = +0.0
-- Frequency 1–2 (3–4 days/wk) = +0.05
-- Frequency 2–3 (5–6 days/wk) = +0.10
-- Frequency 3 (daily) = +0.15
-- Combined Bristol + frequency per cluster capped at +0.15 total (so both can contribute but don't double)
+This decoupling is deliberate: an early version of the engine let Bristol/frequency nudge the matching cluster norm by up to +0.15 (capped). Sensitivity testing found that nudge alone could move the Index 6–12 points with *zero* change in reported symptom severity — a source of noise that could flip a longitudinal trend from "stable" to "meaningful change" on frequency/stool-form fluctuation alone, not real symptoms. The nudge was removed; severity now determines the Index on its own, and Bristol/frequency are surfaced as separate, clearly-labelled signals instead of being folded in silently.
 
-**Why separate recall windows?** Severity is validated to 2 weeks (recent acute experience). Frequency needs 2–3 months to capture the true habitual pattern — a patient in a good fortnight might under-report their real typical burden if asked only about the past 2 weeks.
-
-**Step 4: Final Index**
+**Step 3: Final Index**
 ```
-Gut Symptom Index = mean(Reflux nudged, Pain, Indigestion, Diarrhoea nudged, Constipation nudged) × 100
+Gut Symptom Index = mean(Reflux, Pain, Indigestion, Diarrhoea, Constipation) × 100
 = 0–100 scale
 ```
 
 **Worked Example** (0–4 scale, item max 4 per question):
 - Severity answers: Reflux 1/4, Pain 2/4, Indigestion 1/4, Diarrhoea 0/4, Constipation 2/4 → clusters [0.25, 0.50, 0.25, 0.0, 0.50]
-- Bristol type: 2 (hard) → +0.15 to Constipation → Constipation becomes 0.50 + 0.15 capped = 0.65
-- Frequency: Constipation daily → would add +0.15, but already capped at 0.15 by Bristol, so no additional nudge
-- Final: [0.25, 0.50, 0.25, 0.0, 0.65] → mean 0.33 → **33%** → **Mild–Moderate band** (nudged higher by Bristol signal, reflecting true habitual constipation burden)
+- Bristol type and per-cluster frequency, if answered, do not change these numbers — they are reported separately (Rome subtype, severity×frequency widget)
+- Final: [0.25, 0.50, 0.25, 0.0, 0.50] → mean 0.30 → **30%** → **Mild–Moderate band**
 
 ### The Four Bands (Clinical Severity)
 
@@ -160,12 +149,12 @@ Re-anchored for the 0–4 scale: because the Index is normalized (sum/max), wide
 
 **Peak-override anti-dilution**: the cluster-balanced mean is deliberately un-spiky, so a single incapacitating symptom (answered Severe/3 or Very severe/4) among otherwise-mild answers can average down into Minimal and hide a picture worth a clinician's eye. When any item is at ceiling (4) or Severe (3), the **displayed** band floor is raised to at least Mild–Moderate and an item-level peak alert is attached — the raw Index number and pattern-firing gate are never touched by this (a peak can annotate the band, never flip a pattern).
 
-**Validation status**: "GSRS-derived (modified 5-point 0–4 scale); index includes stool-form/frequency adjustments — provisional"
+**Validation status**: "GSRS-derived (modified 5-point 0–4 scale); severity-only index — provisional"
 
 What this means:
 - The 15-item/5-cluster structure is **derived from** the GSRS, not the unmodified validated instrument
 - The 5-point (0–4) modification (the published GSRS is 7-point, severity-only) is emerging
-- The Bristol + frequency nudges are evidence-informed but awaiting pilot recalibration
+- The Index is severity-only (Bristol and frequency are collected and reported, but do not feed the Index — see Step 2 above)
 - **Use as a screening-level severity measure**, not a diagnostic cutoff
 
 ---
@@ -481,7 +470,7 @@ Each axis measures a distinct health domain and is scored independently. A patie
 
 | Axis | Measures | Sample Items | Validated? | Scale | Clinical Use |
 |------|----------|--------------|-----------|-------|--------------|
-| **Symptom (Gut)** | GSRS-derived core severity (0–4) + per-cluster frequency (days/wk) | 15 GSRS-derived items (Reflux, Pain, Indigestion, Diarrhoea, Constipation) + per-cluster frequency (2–3 mo) | 🔵 Derived (GSRS-derived, modified 5-point scale; frequency nudge emerging) | 0–100% (Minimal → Severe) | Primary severity measure; Gut Symptom Burden headline; drives most patterns & urgency |
+| **Symptom (Gut)** | GSRS-derived core severity (0–4); per-cluster frequency (days/wk) reported separately | 15 GSRS-derived items (Reflux, Pain, Indigestion, Diarrhoea, Constipation); per-cluster frequency (2–3 mo) feeds only the severity×frequency widget, not the Index | 🔵 Derived (GSRS-derived, modified 5-point scale; severity-only Index) | 0–100% (Minimal → Severe) | Primary severity measure; Gut Symptom Burden headline; drives most patterns & urgency |
 | **Inflammatory** | Immune markers (food reactions, histamine, skin/joint) + known IA conditions | Food-digestive reactions, histamine reactions, skin rash, joint aches, diagnosed IA condition | ⚠️ Draft (screening-level) | 0–100% (Minimal → Severe) | Identifies immune-driven candidates; screens for elimination diet; drives coeliac workup |
 | **Nutrient** | Malabsorption proxies + lab-confirmed deficiency | Hair loss, anaemia signs (pallor, SOB), mouth changes (cheilitis), known deficiency (B12/iron/D/Mg) | ⚠️ Draft (screening-level) | 0–100% | Flags absorption risk; drives supplementation intensity; independent Tier escalator |
 | **Psychosocial** | Stress (PSS-4), anxiety, mood, fatigue, brain-fog | PSS-4 (4-item validated stress scale), anxiety, mood, fatigue, brain-fog items | ⚠️ PARTIAL (PSS-4 validated, others draft) | 0–100% | Identifies gut-brain candidates; stress a modifiable driver; gut-directed hypnotherapy/CBT candidacy |
@@ -543,8 +532,8 @@ Rome IV was validated on prospective diaries; a single tool snapshot gives a scr
 | gsrs_bloating, gsrs_gas, gsrs_burp, gsrs_rumble | GI core | Indigestion cluster (4 items) | Index + Indigestion cluster + bloating/fermentation pattern + UG reveal trigger | 2 weeks | Validated GSRS |
 | gsrs_diarr, gsrs_loose, gsrs_urgency | GI core | Diarrhoea cluster (3 items) | Index + Diarrhoea cluster + IBS-D pattern + AR reveal trigger | 2 weeks | Validated GSRS |
 | gsrs_constip, gsrs_hard, gsrs_incomplete | GI core | Constipation cluster (3 items) | Index + Constipation cluster + IBS-C pattern + AR reveal trigger + pelvic-floor pattern | 2 weeks | Validated GSRS |
-| bristol | Driver | Stool form type 1–7 (current observation) | IBS subtype primary input, Constipation/Diarrhoea nudge | Single visit | Non-scored driver |
-| clusterFreq_[cluster] (5 rows) | GI section | Per-cluster symptom frequency (days/week, 2–3 mo) | Index cluster nudge (up to +0.15 per cluster, capped with Bristol) | 2–3 months | Optional frequency nudge |
+| bristol | Driver | Stool form type 1–7 (current observation) | IBS subtype primary input (Rome IV subtyping only — does not affect the Index) | Single visit | Non-scored driver |
+| clusterFreq_[cluster] (5 rows) | GI section | Per-cluster symptom frequency (days/week, 2–3 mo) | Severity×frequency widget only — does not affect the Index | 2–3 months | Display-only frequency context |
 
 ### Systemic & Impact (Always Scored)
 
@@ -689,7 +678,7 @@ Major pattern (constipation/diarrhoea/reflux/malabsorption)?
 
 ### What the Tool Does NOT Do
 
-1. **No frequency-only assessment** — GSRS severity scale has no frequency axis. "Severe once a month" and "severe daily" score the same. Frequency items nudge but don't replace; use clinical history to contextualize.
+1. **No frequency-only assessment** — the Index itself has no frequency axis. "Severe once a month" and "severe daily" score the same. Frequency is captured separately (severity×frequency widget) but never blended into the Index; use clinical history to contextualize.
 
 2. **No imaging or objective testing** — Tool cannot detect polyps, inflammation on colonoscopy, or anatomical abnormality. Red flags + investigations are the safety valve.
 
