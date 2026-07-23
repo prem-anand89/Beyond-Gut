@@ -1728,7 +1728,9 @@ ok(/appendixToggleEl\(\)/.test(calcFn[0]) && /printSummary\(/.test(calcFn[0]), '
 ok(!!rcSrc, 'sanity: renderClinician() source captured');
 ok(/axisProfileCard\(/.test(rcSrc), 'renderClinician() still renders the axis profile card');
 ok(/domainBarsCard\(/.test(rcSrc), 'renderClinician() still renders the domain breakdown');
-ok(/riskMatrixCard\(/.test(rcSrc), 'renderClinician() still renders the risk matrix');
+// riskMatrixCard (Symptom x Dysbiosis-correlate quadrant) was deliberately
+// removed from the Clinician tab per direction — see the dedicated checks
+// below, not "still renders" (it never was in calc(), so nothing to compare).
 ok(/triageCard\(/.test(rcSrc), 'renderClinician() still renders the triage/Tier verdict');
 ok(/modifiableDriversCard\(/.test(rcSrc), 'renderClinician() still renders modifiable drivers');
 ok(/clinicianDetailCard\(/.test(rcSrc), "renderClinician() still renders the pattern-analysis appendix (clinicianDetailCard, superset of calc()'s old 'patterns to discuss')");
@@ -1757,6 +1759,27 @@ ok(!/Rome IV:.*criteria met \(single-visit estimate\)/.test(page1Src), 'print pa
 ok(!/Clinical flags:/.test(page1Src), 'print page 1 no longer shows the Clinical flags list');
 ok(!!printFn && /flagsBlock/.test(printFn[0]) && /Clinical flags:/.test(printFn[0]),
   'Clinical flags list still renders somewhere in the print report (moved to Context & drivers)');
+
+// ── Remove Symptom × Dysbiosis-correlate quadrant card; highlight the
+// correlate load in the headline instead (via its weighted E3 tier) ──
+ok(!/function riskMatrixCard\(/.test(html), 'riskMatrixCard() removed entirely (dead code after the Clinician-tab removal)');
+ok(!/function riskMatrixBodyHtml\(/.test(html), 'riskMatrixBodyHtml() removed entirely (was only used by riskMatrixCard)');
+ok(!/riskMatrixCard\(/.test(rcSrc), 'renderClinician() no longer renders the Symptom × Dysbiosis-correlate card');
+ok(!/Symptom × Dysbiosis-correlate read/.test(html), 'the "Symptom × Dysbiosis-correlate read" heading is gone entirely (on-screen and print never had it)');
+
+// headline correlate pill now uses the weighted E3 tier (High/Moderate/Low),
+// not a flat signal-count band — so a single MAJOR signal (weight 2.0, e.g.
+// post-infectious onset) is highlighted the same way triage already treats
+// it, instead of reading as a generic "Some" band.
+const rHighCorrelate = run(0, {}, { dys: { postInfectious: 1, fibreParadox: 1 } });
+ok(rHighCorrelate.heads.primary.correlate.tier === 'High' && rHighCorrelate.heads.primary.correlate.band === 'High',
+  'Dysbiosis Correlate Load: band now equals the weighted E3 tier (High), not a flat-count band');
+const rLowCorrelate = run(0, {}, { dys: {} });
+ok(rLowCorrelate.heads.primary.correlate.band === 'Low', 'no correlate signals → Low band');
+ok(/band === 'Significant' \|\| band === 'Elevated' \|\| band === 'High' \? 'sev-sig'/.test(html),
+  "bandPillClass() recognises 'High' as the significant/highlighted pill colour (previously fell through to the neutral default)");
+ok(/band === 'Mild–Moderate' \|\| band === 'Some' \|\| band === 'Moderate' \? 'sev-mod'/.test(html),
+  "bandPillClass() recognises 'Moderate' as the moderate pill colour");
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);
