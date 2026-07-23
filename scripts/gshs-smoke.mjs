@@ -406,58 +406,61 @@ ok(/Clinical impression/.test(ptSrc) && ptSrc.indexOf('Clinical impression') < p
 const clFn = html.match(/function buildClinicianPrint\(c\)\s*\{[\s\S]*?\n\}\n/);
 ok(!!clFn, 'buildClinicianPrint present');
 const clSrc = clFn ? clFn[0] : '';
-// Clinical impression (rendered as "Executive summary", item 2) follows the
-// safety-banner/triage item (1) — triage is deliberately read FIRST, so the
-// check is inverted from the original 5-section layout: triage precedes the
-// executive summary, not the other way.
+// Clinical impression (rendered as "Executive summary", item 2) sits BEFORE
+// the triage verdict (item 4) — report redesign v4, per user feedback that
+// the clinical picture (summary + severity×frequency matrix) should be read
+// before the recommended action, not after.
 ok(/clinicalImpression\(c\)/.test(clSrc), 'clinician: clinical impression generated');
-ok(clSrc.indexOf('pr-triage') < clSrc.indexOf('Executive summary'), 'clinician: triage (item 1) appears before the executive summary (item 2)');
+ok(clSrc.indexOf('Executive summary') < clSrc.indexOf('4 · Triage'), 'clinician: executive summary (item 2) appears before the triage verdict (item 4)');
 ok(/Screening synthesis only — not a diagnosis/.test(html), 'clinician: impression carries not-a-diagnosis caveat');
 
-// Report redesign v3 — 3-page/7-item structure, revised after user feedback
-// that page 1 was too text-heavy and the headline score was never actually
-// shown in print. A headline score hero now leads page 1 (before item 1);
-// item 1 is trimmed to just the safety banner + triage verdict (tier/action/
-// reasons — no investigations list); the detailed action lists (investigations
-// stay attached to the triage box, but physio candidacy + modifiable drivers)
-// move to a new item 5 "Recommended actions" on page 2, alongside the lenses
-// that motivate them; the trend engine and appendix are renumbered to 6 and 7.
+// Report redesign v4 — 3-page/8-item structure. Item 1 is red flags ONLY
+// (a same-day safety feature must never be buried, so it still leads);
+// items 2 (executive summary) and 3 (severity×frequency matrix) now sit
+// ABOVE the triage verdict, which moves to item 4; the detailed action
+// lists (investigations, physio, modifiable drivers) live in item 6
+// "Recommended actions" on page 2, alongside the lenses (item 5); the
+// trend engine and appendix are renumbered to 7 and 8.
 ok(/Page 1 · At-a-glance overview/.test(clSrc), 'clinician: Page 1 group header present');
 ok(/class="pr-hero"/.test(clSrc), 'clinician: headline score hero present in print (previously print had no visible score at all)');
-ok(/1 · Safety banner &amp; triage/.test(clSrc), 'clinician: item 1 (safety banner + triage) header present');
+ok(/1 · Safety banner</.test(clSrc), 'clinician: item 1 (safety banner, red flags only) header present');
 ok(/2 · Executive summary/.test(clSrc), 'clinician: item 2 (executive summary) header present');
 ok(/3 · Symptom burden — severity × frequency/.test(clSrc), 'clinician: item 3 (severity × frequency) header present');
+ok(/4 · Triage</.test(clSrc), 'clinician: item 4 (triage verdict) header present');
 ok(/Page 2 · Clinical deep dive &amp; trends/.test(clSrc), 'clinician: Page 2 group header present');
-ok(/4 · Active clinical lenses/.test(clSrc), 'clinician: item 4 (active clinical lenses) header present');
-ok(/5 · Recommended actions/.test(clSrc), 'clinician: item 5 (recommended actions) header present');
-ok(/6 · Longitudinal trend &amp; intervention overlay/.test(clSrc), 'clinician: item 6 (trend + intervention overlay) header present');
+ok(/5 · Active clinical lenses/.test(clSrc), 'clinician: item 5 (active clinical lenses) header present');
+ok(/6 · Recommended actions/.test(clSrc), 'clinician: item 6 (recommended actions) header present');
+ok(/7 · Longitudinal trend &amp; intervention overlay/.test(clSrc), 'clinician: item 7 (trend + intervention overlay) header present');
 ok(/Page 3\+ · Reference appendix/.test(clSrc), 'clinician: Page 3+ group header present');
-ok(/7 · Full item-level Q&amp;A/.test(clSrc), 'clinician: item 7 (full item-level Q&A) relabelled as the optional appendix');
+ok(/8 · Full item-level Q&amp;A/.test(clSrc), 'clinician: item 8 (full item-level Q&A) relabelled as the optional appendix');
 ok(clSrc.indexOf('class="pr-hero"') < clSrc.indexOf('1 · Safety banner'), 'clinician: headline score hero leads, ahead of item 1 (safety banner)');
-ok(clSrc.indexOf('1 · Safety banner') < clSrc.indexOf('2 · Executive summary'), 'clinician: red flags/triage (item 1) lead, ahead of the executive summary (item 2)');
+ok(clSrc.indexOf('1 · Safety banner') < clSrc.indexOf('2 · Executive summary'), 'clinician: red flags (item 1) lead, ahead of the executive summary (item 2)');
 ok(clSrc.indexOf('Page 1 ·') < clSrc.indexOf('Page 2 ·') && clSrc.indexOf('Page 2 ·') < clSrc.indexOf('Page 3+ ·'),
   'clinician: the 3 pages appear in order');
 ok(clSrc.indexOf('1 · Safety') < clSrc.indexOf('2 · Executive') && clSrc.indexOf('2 · Executive') < clSrc.indexOf('3 · Symptom burden')
-  && clSrc.indexOf('3 · Symptom burden') < clSrc.indexOf('4 · Active') && clSrc.indexOf('4 · Active') < clSrc.indexOf('5 · Recommended')
-  && clSrc.indexOf('5 · Recommended') < clSrc.indexOf('6 · Longitudinal') && clSrc.indexOf('6 · Longitudinal') < clSrc.indexOf('7 · Full item-level'),
-  'clinician: the 7 items appear in numeric order');
-// Item 1 is trimmed — the long investigations list, physio candidacy, and
-// modifiable-drivers table are no longer inside it; they moved to item 5.
-ok(!/1 · Safety banner &amp; triage[\s\S]{0,2000}Physiotherapy candidacy/.test(clSrc),
-  'clinician: physiotherapy candidacy no longer sits inside item 1 (moved to item 5)');
-ok(!/1 · Safety banner &amp; triage[\s\S]{0,3000}Modifiable drivers/.test(clSrc),
-  'clinician: modifiable drivers no longer sit inside item 1 (moved to item 5)');
-ok(clSrc.indexOf('5 · Recommended actions') < clSrc.indexOf('Physiotherapy candidacy') || !/Physiotherapy candidacy/.test(clSrc),
-  'clinician: physiotherapy candidacy (when present) sits inside item 5');
-ok(/5 · Recommended actions[\s\S]{0,1500}Modifiable drivers/.test(clSrc), 'clinician: modifiable drivers sit inside item 5');
+  && clSrc.indexOf('3 · Symptom burden') < clSrc.indexOf('4 · Triage') && clSrc.indexOf('4 · Triage') < clSrc.indexOf('5 · Active')
+  && clSrc.indexOf('5 · Active') < clSrc.indexOf('6 · Recommended') && clSrc.indexOf('6 · Recommended') < clSrc.indexOf('7 · Longitudinal')
+  && clSrc.indexOf('7 · Longitudinal') < clSrc.indexOf('8 · Full item-level'),
+  'clinician: the 8 items appear in numeric order');
+// Item 1 is red-flags-only — no triage/action text, investigations,
+// physio, or modifiable-drivers content sits inside it.
+ok(!/1 · Safety banner<[\s\S]{0,1500}pr-triage/.test(clSrc), 'clinician: triage box no longer sits inside item 1 (moved to item 4)');
+ok(!/1 · Safety banner<[\s\S]{0,2000}Physiotherapy candidacy/.test(clSrc),
+  'clinician: physiotherapy candidacy no longer sits inside item 1 (moved to item 6)');
+ok(!/1 · Safety banner<[\s\S]{0,3000}Modifiable drivers/.test(clSrc),
+  'clinician: modifiable drivers no longer sit inside item 1 (moved to item 6)');
+ok(clSrc.indexOf('4 · Triage') < clSrc.indexOf('pr-triage'), 'clinician: triage box sits inside item 4');
+ok(clSrc.indexOf('6 · Recommended actions') < clSrc.indexOf('Physiotherapy candidacy') || !/Physiotherapy candidacy/.test(clSrc),
+  'clinician: physiotherapy candidacy (when present) sits inside item 6');
+ok(/6 · Recommended actions[\s\S]{0,1500}Modifiable drivers/.test(clSrc), 'clinician: modifiable drivers sit inside item 6');
 // Lens reordering: named/actionable reads (Patterns, Rome IV, microbiome
-// correlates) lead item 4; supporting tables (axis profile, domain
+// correlates) lead item 5; supporting tables (axis profile, domain
 // breakdown) and history/context follow.
-ok(clSrc.indexOf('4 · Active clinical lenses') < clSrc.indexOf('>Patterns<'), 'clinician: Patterns sits inside item 4');
-ok(clSrc.indexOf('>Patterns<') < clSrc.indexOf('>Axis profile<'), 'clinician: Patterns leads Axis profile within item 4 (named/actionable reads first)');
-ok(clSrc.indexOf('Rome IV-informed bowel-pain pattern') < clSrc.indexOf('>Axis profile<'), 'clinician: Rome IV subtype leads Axis profile within item 4');
-ok(clSrc.indexOf('Microbiome-correlate signals') < clSrc.indexOf('>Axis profile<'), 'clinician: microbiome correlates lead Axis profile within item 4');
-ok(clSrc.indexOf('>Axis profile<') < clSrc.indexOf('>Domain breakdown<'), 'clinician: Axis profile (supporting table) leads Domain breakdown within item 4');
+ok(clSrc.indexOf('5 · Active clinical lenses') < clSrc.indexOf('>Patterns<'), 'clinician: Patterns sits inside item 5');
+ok(clSrc.indexOf('>Patterns<') < clSrc.indexOf('>Axis profile<'), 'clinician: Patterns leads Axis profile within item 5 (named/actionable reads first)');
+ok(clSrc.indexOf('Rome IV-informed bowel-pain pattern') < clSrc.indexOf('>Axis profile<'), 'clinician: Rome IV subtype leads Axis profile within item 5');
+ok(clSrc.indexOf('Microbiome-correlate signals') < clSrc.indexOf('>Axis profile<'), 'clinician: microbiome correlates lead Axis profile within item 5');
+ok(clSrc.indexOf('>Axis profile<') < clSrc.indexOf('>Domain breakdown<'), 'clinician: Axis profile (supporting table) leads Domain breakdown within item 5');
 ok((clSrc.match(/Symptom burden — severity × frequency/g) || []).length === 1, 'clinician: severity × frequency widget renders exactly once (no leftover duplicate)');
 
 // 28-unified. The clinician report is the single UNIFIED, LAYERED report: a
@@ -519,30 +522,33 @@ ok(rcSrc.indexOf('clinicalImpression') < rcSrc.indexOf('headlineCard(heads'), 'c
 ok(/physioCandidacy\(tri\)/.test(rcSrc) && /Physiotherapy candidacy/.test(rcSrc), 'clinician tab: physio candidacy callout');
 ok(/No red flags answered Yes/.test(rcSrc), 'clinician tab: foregrounded red-flags card (with none-reassurance)');
 ok(rcSrc.indexOf('Red flags') < rcSrc.indexOf('axisProfileCard'), 'clinician tab: red flags before axis profile');
-// Report redesign v3 — same 3-page/7-item grouping mirrored on-screen: a
+// Report redesign v4 — same 3-page/8-item grouping mirrored on-screen: a
 // headline score hero leads page 1 (before the red-flag card), item 1 is
-// trimmed to the safety banner + triage (investigations stay inside
-// triageCard on-screen, since splitting them out would also touch the
+// red flags ONLY, items 2 (executive summary) and 3 (severity×frequency)
+// sit above the triage verdict (item 4, investigations stay inside
+// triageCard on-screen since splitting them out would also touch the
 // shared patient-print caller), and physio candidacy + modifiable drivers
-// moved to a new item 5 "Recommended actions" alongside the lenses.
-['Page 1 · At-a-glance overview', '1 · Safety banner &amp; triage',
- '2 · Executive summary', '3 · Symptom burden — severity × frequency',
- 'Page 2 · Clinical deep dive &amp; trends', '4 · Active clinical lenses',
- '5 · Recommended actions', '6 · Longitudinal trend &amp; intervention overlay',
- 'Page 3+ · Reference appendix', '7 · Full clinical detail (optional)',
+// moved to item 6 "Recommended actions" alongside the lenses (item 5).
+['Page 1 · At-a-glance overview', '1 · Safety banner',
+ '2 · Executive summary', '3 · Symptom burden — severity × frequency', '4 · Triage',
+ 'Page 2 · Clinical deep dive &amp; trends', '5 · Active clinical lenses',
+ '6 · Recommended actions', '7 · Longitudinal trend &amp; intervention overlay',
+ 'Page 3+ · Reference appendix', '8 · Full clinical detail (optional)',
 ].forEach(txt => ok(rcSrc.includes(txt), `clinician tab: on-screen group header "${txt}" present`));
 ok(rcSrc.indexOf('class="hero"') < rcSrc.indexOf('rfCard'), 'clinician tab: headline score hero leads, before the red-flag card');
 ok(rcSrc.indexOf('rfCard') < rcSrc.indexOf('impCard'), 'clinician tab: red-flag card precedes the executive-summary card');
-ok(rcSrc.indexOf('triageCard(tri') < rcSrc.indexOf('2 · Executive summary'), 'clinician tab: triage card sits inside item 1');
-ok(rcSrc.indexOf('5 · Recommended actions') < rcSrc.lastIndexOf('modifiableDriversCard'), 'clinician tab: modifiable-driver card sits inside item 5');
-ok(rcSrc.indexOf('clinicianDetailCard(c)') > rcSrc.lastIndexOf('6 · Longitudinal'), 'clinician tab: clinicianDetailCard renders after item 6, under the Page 3+ appendix header');
+ok(rcSrc.indexOf('impCard') < rcSrc.indexOf('4 · Triage'), 'clinician tab: executive summary precedes the triage verdict (item 4)');
+ok(rcSrc.indexOf('3 · Symptom burden') < rcSrc.indexOf('4 · Triage'), 'clinician tab: severity × frequency matrix precedes the triage verdict (item 4)');
+ok(rcSrc.indexOf('4 · Triage') < rcSrc.indexOf('triageCard(tri'), 'clinician tab: triage card sits inside item 4');
+ok(rcSrc.indexOf('6 · Recommended actions') < rcSrc.lastIndexOf('modifiableDriversCard'), 'clinician tab: modifiable-driver card sits inside item 6');
+ok(rcSrc.indexOf('clinicianDetailCard(c)') > rcSrc.lastIndexOf('7 · Longitudinal'), 'clinician tab: clinicianDetailCard renders after item 7, under the Page 3+ appendix header');
 // De-dup — the buried red-flag block is gone from clinicianDetailCard.
 const cdFn = html.match(/function clinicianDetailCard\(c\)\s*\{[\s\S]*?\n\}\n/);
 ok(cdFn && !/Red flags — \$\{fired\.length\} answered Yes/.test(cdFn[0]), 'clinician detail: buried red-flag block removed (no duplication)');
-// De-dup — modifiable-driver raw values now live only in the item 5
+// De-dup — modifiable-driver raw values now live only in the item 6
 // standalone card, not duplicated inside the appendix detail card.
 ok(/function modifiableDriversCard\(driverExtras\)/.test(html), 'modifiableDriversCard() helper defined');
-ok(cdFn && !/Modifiable driver raw values/.test(cdFn[0]), 'clinician detail: modifiable-driver table removed from the appendix (moved to item 5)');
+ok(cdFn && !/Modifiable driver raw values/.test(cdFn[0]), 'clinician detail: modifiable-driver table removed from the appendix (moved to item 6)');
 
 // 30. Questionnaire & scoring audit fix pass.
 
