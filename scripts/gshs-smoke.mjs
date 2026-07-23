@@ -1329,6 +1329,22 @@ const d1DrvSiteMatches = html.match(/conditions: ex\.conditions, surgeries: ex\.
 ok(d1DrvSiteMatches.length === 2,
   'both CSV export AND trend.js visitScore() drv objects carry conditions/surgeries/anthro for pattern-firing parity (D1)');
 
+// computeAll()'s driverExtras must carry clusterFreq end-to-end — this is what
+// buildClinicianPrint/severityFrequencyCard read via severityFrequencyMatrix(score,
+// driverExtras). Without it, every cluster except Pain (which comes via rome.painFreq)
+// silently reads as "frequency not recorded" in the live report regardless of what
+// was actually entered on the clusterFreqCard — found by generating a fully-answered
+// sample report and seeing Reflux/Indigestion/Diarrhoea/Constipation frequency vanish
+// even though extras.clusterFreq had real values for them.
+ok(/driverExtras = \{[\s\S]{0,900}rome: extras\.rome, clusterFreq: extras\.clusterFreq,/.test(html),
+  'computeAll() driverExtras carries clusterFreq (severity×frequency widget reads it from driverExtras, not extras)');
+// Same bug class: buildClinicianPrint's "Interventions this visit" line reads
+// interventionSummary(driverExtras) — found alongside the clusterFreq gap by the
+// same fully-answered sample report (the line always read "None recorded" even
+// with extras.interventionChips/interventionNotes populated).
+ok(/driverExtras = \{[\s\S]{0,1000}interventionChips: extras\.interventionChips, interventionNotes: extras\.interventionNotes,/.test(html),
+  'computeAll() driverExtras carries interventionChips/interventionNotes (print "Interventions this visit" reads driverExtras, not extras)');
+
 // D3 regression. referredPainNote fires on low-back/abdominal pain location +
 // a prominent Pain cluster (>=0.5), same threshold as the existing Tier-2
 // "Prominent abdominal-pain cluster" check. Context note only, never a Tier

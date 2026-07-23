@@ -4091,9 +4091,10 @@ function computeAll() {
     sleep: extras.sleep,                                  // sleep driver — feeds the modifiable-factors card
     surgeries: extras.surgeries, surgeryOther: extras.surgeryOther,
     abxCourses: extras.abxCourses, dys: extras.dys,
-    rome: extras.rome,
+    rome: extras.rome, clusterFreq: extras.clusterFreq,
     medsOther: extras.medsOther,
     conditions: extras.conditions,
+    interventionChips: extras.interventionChips, interventionNotes: extras.interventionNotes,
     anthro,
   };
   const patterns = detectPatterns(score, driverExtras, answers);
