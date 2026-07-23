@@ -1533,7 +1533,8 @@ function axisProfile(score, ex, dys) {
                     band: psych != null ? (psych >= 50 ? 'Significant' : psych >= 25 ? 'Mild–Moderate' : 'Minimal') : null,
                     validated: 'partial', note: 'PSS-4 is validated; BG screen items are draft.' },
     // (microbiome read removed — superseded by the Disruption / Dysbiosis Correlate
-    // split in headlineOutputs() and the Symptom × Dysbiosis-correlate matrix.)
+    // split in headlineOutputs(), surfaced via the headline card's weighted
+    // correlate-tier pill.)
     impact:       { axis: 'impact',       label: 'Functional impact',      value: n('IMP'), band: bl('IMP'),
                     validated: false, note: 'New domain — no pilot data yet.' },
   };
@@ -4695,10 +4696,10 @@ function calc() {
   if (trendEl) out.appendChild(trendEl);              // progress over time
 
   // Everything else — axis profile, domain breakdown, modifiable drivers,
-  // detected patterns, the risk matrix, and the triage/Tier verdict — lives
-  // in the Clinician tab only (renderClinician(): hero, triageCard,
-  // headlineCard, axisProfileCard, domainBarsCard, modifiableDriversCard,
-  // riskMatrixCard, and the pattern-analysis table in clinicianDetailCard()).
+  // detected patterns, and the triage/Tier verdict — lives in the Clinician
+  // tab only (renderClinician(): hero, triageCard, headlineCard,
+  // axisProfileCard, domainBarsCard, modifiableDriversCard, and the
+  // pattern-analysis table in clinicianDetailCard()).
 
   // Save-a-visit + pilot-CSV download + print.
   const actions = el('div', { class: 'card row', style: 'justify-content:flex-end;gap:8px;flex-wrap:wrap' });
