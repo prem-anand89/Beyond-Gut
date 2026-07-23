@@ -1051,11 +1051,12 @@ ok(rome34h_toorecent.criteriaMet === false, 'classifyRomeIV onset-not-met correc
 const rome34h_explicit = rome.classifyRomeIV({ painFreq: 5, onset: 4, rm_assoc_defecation: true, rm_assoc_freqchange: true }, {}, 0);
 ok(rome34h_explicit.criteriaMet === true, 'explicit rome.onset still takes priority over sx_duration fallback when both present');
 
-// 34i. CSV export now passes clusterFreq + romePainFreq into computeScores()
-// (previously silently dropped, so exported index could disagree with the
-// on-screen index for any patient with frequency answers).
-ok(/computeScores\(a, \{ bristol: ex\.bristol, clusterFreq: ex\.clusterFreq, romePainFreq: ex\.rome/.test(html),
-  'CSV export computeScores() call includes clusterFreq + romePainFreq');
+// 34i. CSV export's computeScores(a) call takes only answers — bristol/
+// clusterFreq/romePainFreq never fed the Index (a leftover `opts` param that
+// was silently unused; removed as dead code). Recomputation now can't diverge
+// on those fields because there's nothing left for it to diverge on.
+ok(/const sc = computeScores\(a\)/.test(html), 'CSV export computeScores() call takes only answers (no unused opts)');
+ok(!/function computeScores\(answers, opts\)/.test(html), 'computeScores() no longer declares the unused opts parameter');
 
 // A5/A9 CSV regression. Header/row column-count parity, medsOther surfaced,
 // formula-injection guard, no literal "null" for a core-skipped visit, and

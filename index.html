@@ -1105,6 +1105,7 @@ function modifiableFactors(extras) {
   const sBurden = sleepBurden(ex.sleep);
   const sb = sleepBand(sBurden);
   const surg = surgicalFlags(ex);
+  const surgOther = (ex.surgeryOther || '').trim();
   const rows = [
     { icon: '🧠', label: 'Psychological load', band: pl ? pl.l : '—',
       score: plPct != null ? `${plPct}/100${ex.pss4Score != null ? ` · PSS-4 ${ex.pss4Score}/16` : ''}` : null,
@@ -1119,13 +1120,18 @@ function modifiableFactors(extras) {
       color: act ? '#117A8B' : '#999' },
     { icon: '🚰', label: 'Hydration & caffeine', band: hyd || '—', score: caf != null ? `Caffeine: ${caf}` : null, color: hyd ? '#117A8B' : '#999' },
     { icon: '😴', label: 'Sleep', band: sb ? sb.l : '—', score: sBurden != null ? `${Math.round(sBurden * 100)}/100 disturbance` : null, color: sb ? sb.c : '#999' },
-    { icon: '🔪', label: 'Surgical history', band: surg.count ? `${surg.count} noted` : 'None noted',
-      score: surg.count ? surg.list.join(', ') : null, color: surg.count ? '#185FA5' : '#999' },
+    // surgeryOther (free-text "Other" surgery) is display-only here — kept out
+    // of surgicalFlags()'s count/list so it can't silently inflate the
+    // pattern-firing / D1 malabsorption-signal checks that read that count.
+    { icon: '🔪', label: 'Surgical history',
+      band: (surg.count || surgOther) ? `${surg.count}${surgOther ? (surg.count ? ' + other' : 'Other') : ''} noted` : 'None noted',
+      score: [surg.count ? surg.list.join(', ') : null, surgOther ? `Other: ${surgOther}` : null].filter(Boolean).join(' · ') || null,
+      color: (surg.count || surgOther) ? '#185FA5' : '#999' },
   ];
   // Nothing meaningfully answered this visit — every driver is at its unset
   // default (meds/surgery "None"/"None noted" defaults don't count as data).
   rows.allEmpty = !(plPct != null || ex.nrsPain != null || bt || ex.meds || db ||
-    alc != null || act != null || smk != null || caf != null || hyd != null || sBurden != null || surg.count > 0);
+    alc != null || act != null || smk != null || caf != null || hyd != null || sBurden != null || surg.count > 0 || surgOther);
   return rows;
 }
 
@@ -1340,7 +1346,7 @@ const GI_CLUSTERS = ['Reflux', 'Pain', 'Indigestion', 'Diarrhoea', 'Constipation
 // frequency nudge inputs — they were decoupled from the Index (Bristol now
 // feeds Rome IV subtyping only; frequency feeds the read-only Tranche G
 // severity×frequency widget only, reading extras.clusterFreq directly).
-function computeScores(answers, opts) {
+function computeScores(answers) {
   const raw = Array.isArray(answers) ? (id) => answers[QID[id]] : (id) => answers[id];
 
   // GSRS-cluster aggregation — co-design output: per-cluster norms feed the
@@ -2351,12 +2357,14 @@ const { pss4Score, anthropometrics } = __req('scales.js');
 function visitScore(v) {
   const a = v.answers || {}, ex = v.extras || {};
   // Must mirror the live computeAll()/computeScores() call and the CSV export's
-  // drv object exactly (clusterFreq/romePainFreq feed the Index; rome feeds
-  // pattern confidence; conditions/surgeries/anthro feed nutrient_malabsorption's
-  // D1 signals) — otherwise this recomputation silently disagrees with the
-  // index/band/patterns shown on the results screen and in the pilot CSV for
-  // the very same visit (A2 regression: previously omitted, up to ~15pt drift).
-  const sc = computeScores(a, { bristol: ex.bristol, clusterFreq: ex.clusterFreq, romePainFreq: ex.rome && ex.rome.painFreq });
+  // drv object exactly (rome feeds pattern confidence; conditions/surgeries/
+  // anthro feed nutrient_malabsorption's D1 signals) — otherwise this
+  // recomputation silently disagrees with the index/band/patterns shown on
+  // the results screen and in the pilot CSV for the very same visit (A2
+  // regression: previously omitted, up to ~15pt drift). computeScores() takes
+  // only answers — bristol/clusterFreq/romePainFreq never fed it (decoupled,
+  // see the comment above the Index computation in scoring.js).
+  const sc = computeScores(a);
   const drv = {
     pss4Score: pss4Score(ex.pss4), bgAnxiety: a.bg_anxiety, bgMood: a.bg_mood,
     dietFibre: ex.dietFibre, dietProcessed: ex.dietProcessed,
@@ -2562,7 +2570,7 @@ function pilotExportCSV(db) {
   d.patients.forEach((p, pi) => {
     (p.visits || []).forEach(v => {
       const a = v.answers || {}, ex = v.extras || {}, meds = ex.meds || null, pss = ex.pss4 || [];
-      const live = computeScores(a, { bristol: ex.bristol, clusterFreq: ex.clusterFreq, romePainFreq: ex.rome && ex.rome.painFreq });
+      const live = computeScores(a);
       // P2 — export the frozen snapshot's index/severity/norms when the visit has
       // one (so the pilot CSV reflects what the patient saw, not a recomputed
       // value); everything else (bristolSignal, patterns) comes from the live
@@ -2653,7 +2661,7 @@ const blankExtras = () => ({
   bristol: null, bowelFreq: null,    // bowelFreq: stools/week band — paired with Bristol, context only
   bristolProps: { hardPct: null, loosePct: null }, // F1 — Rome IV stool-form proportions (% Bristol 1–2 / 6–7) for the >25% subtype rule
   interventionChips: [], interventionNotes: '', // Tranche G — interventions implemented this visit (post-intake, editable; annotation only)
-  clusterFreq: { Reflux: null, Pain: null, Indigestion: null, Diarrhoea: null, Constipation: null }, // per-cluster symptom-occurrence frequency — nudges the Index, see scoring.js
+  clusterFreq: { Reflux: null, Pain: null, Indigestion: null, Diarrhoea: null, Constipation: null }, // per-cluster symptom-occurrence frequency — display-only (severity × frequency matrix), never the Index or pattern-firing, see scoring.js
   pss4: [null, null, null, null], nrsPain: null, painRegion: null,
   meds: { abx: false, ppi: false, nsaid: false },
   dietFibre: null, dietProcessed: null, alcohol: null, activity: null,
@@ -2710,7 +2718,7 @@ function findPatient(db) {
 // was shown. Old visits (pre-snapshot) fall back to a live recompute everywhere.
 function buildScoreSnapshot(a, ex) {
   const arr = QUESTIONS.map(q => (a[q.id] == null ? null : a[q.id]));
-  const s = computeScores(arr, { bristol: ex.bristol, clusterFreq: ex.clusterFreq, romePainFreq: ex.rome && ex.rome.painFreq });
+  const s = computeScores(arr);
   return {
     index: s.index, severity: s.severity, secNorm: s.secNorm,
     clusterNorm: s.clusterNorm, coreUnknown: s.coreUnknown, completeness: s.completeness,
@@ -3337,7 +3345,7 @@ const CARD_REVEAL = {
 // elements keep any answers already given (they still feed scoring/patterns), they
 // just don't clutter the form. The manual toggle forces everything visible.
 function refreshReveals() {
-  const live = computeScores(QUESTIONS.map(q => (answers[q.id] == null ? null : answers[q.id])), { bristol: extras.bristol });
+  const live = computeScores(QUESTIONS.map(q => (answers[q.id] == null ? null : answers[q.id])));
   // pelvicRisk also folds in prior adhesion-risk surgery and a reported
   // endometriosis diagnosis (both independent pelvic-floor/visceral risk
   // factors) — not just obstetric history — so the AR (bowel-control /
@@ -4104,7 +4112,7 @@ function questionRow(q) {
 // regenerate results without re-running the render pipeline.
 function computeAll() {
   const answerArr = QUESTIONS.map(q => (answers[q.id] == null ? null : answers[q.id]));
-  const score = computeScores(answerArr, { bristol: extras.bristol, clusterFreq: extras.clusterFreq, romePainFreq: extras.rome.painFreq });
+  const score = computeScores(answerArr);
   const sv = score.severity;
   const conf = scoreConfidence(score);
   const ps = pss4Score(extras.pss4);
@@ -5060,6 +5068,13 @@ function buildClinicianPrint(c, opts) {
     if (meds && meds.list && meds.list.length) row('Medication confounders', esc(meds.list.map(m => m.label + (m.effect ? ` (${m.effect})` : '')).join('; ')));
     const medsOtherTxt = (driverExtras && driverExtras.medsOther || '').trim();
     if (medsOtherTxt) row('Other medications', esc(medsOtherTxt));
+    // Free-text detail on the two "known diagnosed condition" anchor items —
+    // previously captured but only visible in the opt-in appendix, unlike
+    // every other free-text field here (labs, treatments, other meds).
+    const knownDxWhich = (typeof answers.im_known_dx_which === 'string' ? answers.im_known_dx_which : '').trim();
+    if (knownDxWhich) row('Diagnosed immune/inflammatory condition', esc(knownDxWhich));
+    const knownDefWhich = (typeof answers.nu_known_def_which === 'string' ? answers.nu_known_def_which : '').trim();
+    if (knownDefWhich) row('Known nutrient deficiency', esc(knownDefWhich));
     // Reported abnormal labs + treatments already tried — moved here from the
     // triage box (they are context, not action-modifying flags).
     if (tri.labNote) row('Reported abnormal labs', esc(tri.labNote.replace(/^Patient-reported abnormal test result\(s\): /, '').replace(/\.$/, '')));
@@ -5068,11 +5083,15 @@ function buildClinicianPrint(c, opts) {
     const leftInner = (hxRows.length ? hxRows.join('') : `<div style="font-size:10.5px;color:#555">No additional history recorded.</div>`)
       + `<div style="font-size:10.5px;margin-top:6px"><b>Interventions this visit:</b> ${ivNow ? esc(ivNow) : '<span style="color:#555">none recorded</span>'}</div>`;
 
-    // Right column — modifiable drivers, compact one-line-per-factor readout.
+    // Right column — modifiable drivers, as a real 2-column table (Factor |
+    // Value) so the band/score lines up in one place across every row instead
+    // of trailing at whatever point the label text happens to end.
     const drivers = modifiableFactors(driverExtras);
     const rightInner = drivers.allEmpty
       ? `<div style="font-size:10.5px;color:#555">No modifiable-driver data recorded this visit.</div>`
-      : drivers.map(f => `<div style="font-size:10.5px;margin-bottom:2px">${factorIcon(f)}${esc(f.label)}: <b style="color:${f.color}">${esc(f.band)}</b>${f.score ? ` <span style="color:#777">· ${esc(f.score)}</span>` : ''}</div>`).join('');
+      : `<table class="pr-tbl" style="font-size:10.5px"><tbody>${drivers.map(f =>
+          `<tr><td style="white-space:nowrap">${factorIcon(f)}${esc(f.label)}</td><td><b style="color:${f.color}">${esc(f.band)}</b>${f.score ? ` <span style="color:#777">· ${esc(f.score)}</span>` : ''}</td></tr>`
+        ).join('')}</tbody></table>`;
 
     h += `<div style="display:flex;gap:18px;align-items:flex-start;page-break-inside:avoid;break-inside:avoid">
       <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:11px;margin-bottom:3px">History &amp; context</div>${leftInner}</div>
