@@ -4746,7 +4746,7 @@ const CONCERN_BANDS = new Set(['Significant', 'Severe', 'Elevated']);
 // profile for peak alerts, item 5 for the full pattern list, item 1/4 for
 // red flags and triage reasons), so this stays a synthesis, not a repeat.
 function clinicalImpression(c) {
-  const { score, sv, conf, fired, rome, tri, patterns } = c;
+  const { score, sv, conf, fired, rome, patterns } = c;
 
   // Line 1 — presentation: severity band + the leading pattern. Patterns are
   // already engine-ordered by priority then confidence, so [0] is the single
@@ -4766,17 +4766,17 @@ function clinicalImpression(c) {
     line1 = 'No prominent findings on this screen.';
   }
 
-  // Line 2 — bottom line: safety + triage, one sentence. Reasons and the
-  // full investigations list stay in items 1 and 4/6 — not repeated here.
+  // Line 2 — bottom line: safety only, one sentence. The tier/action verdict
+  // sits immediately below in item 4 (Triage) — repeating "Tier N, label" here
+  // duplicated it for no reason, so this stays red-flag-only now.
   let line2 = '';
   if (fired && fired.length) {
     // E2 — lead with the highest urgency tier present.
     const rank = { emergency: 3, urgent: 2, routine: 1 };
     const topUrg = fired.reduce((t, f) => (rank[f.urgency || 'routine'] > rank[t] ? (f.urgency || 'routine') : t), 'routine');
     const urgTxt = topUrg === 'emergency' ? 'same-day assessment' : topUrg === 'urgent' ? 'prompt assessment' : 'clinician review';
-    line2 = `${fired.length} safety feature${fired.length > 1 ? 's' : ''} present (${urgTxt} recommended)`;
+    line2 = `${fired.length} safety feature${fired.length > 1 ? 's' : ''} present (${urgTxt} recommended).`;
   }
-  if (tri) line2 += `${line2 ? ' — ' : ''}Tier ${tri.level}, ${tri.label}.`;
 
   const caveat = `Screening synthesis only — not a diagnosis.${conf ? ` Confidence ${conf.level}, ${score.completeness}% complete.` : ''} Apply clinical judgement.`;
   return { line1, line2, caveat };
@@ -4797,6 +4797,22 @@ function physioCandidacy(tri) {
   return all.filter(r => (r.axis === 'pelvic') || /manual[- ]therapy|fascial manual|pelvic-floor/i.test(r.text || ''))
     .filter(r => { if (seen.has(r.text)) return false; seen.add(r.text); return true; });
 }
+
+// Single source of truth for the report's item numbering/titles (items 1–7 —
+// item 8 is print/on-screen-specific, see each call site). Both surfaces read
+// from here so a renumber or retitle can't drift between print and on-screen,
+// or leave a cross-reference sentence (e.g. "...are in item 6") pointing at
+// the wrong item.
+const REPORT_ITEMS = {
+  1: 'Safety banner',
+  2: 'Executive summary',
+  3: 'Symptom burden — severity × frequency',
+  4: 'Triage',
+  5: 'Active clinical lenses',
+  6: 'Recommended actions',
+  7: 'Longitudinal trend &amp; intervention overlay',
+};
+function reportItemHeader(n) { return `${n} · ${REPORT_ITEMS[n]}`; }
 
 function buildClinicianPrint(c) {
   const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, meds, famhx, obstetric, anthro } = c;
@@ -4846,7 +4862,7 @@ function buildClinicianPrint(c) {
 
   // Item 1 — Safety banner (red flags only). A same-day safety feature must
   // never be buried, so this stays first regardless of what else moves.
-  h += `<div class="pr-section"><div class="pr-sh">1 · Safety banner</div>`;
+  h += `<div class="pr-section"><div class="pr-sh">${reportItemHeader(1)}</div>`;
   if (fired.length) {
     const top = topUrgency(redflags);
     const topMeta = top ? RF_URGENCY_META[top] : null;
@@ -4866,7 +4882,7 @@ function buildClinicianPrint(c) {
   // Item 2 — Executive summary (auto-synthesised, two-line clinical story:
   // presentation, then the safety/triage bottom line).
   const imp = clinicalImpression(c);
-  h += `<div class="pr-section"><div class="pr-sh">2 · Executive summary</div>
+  h += `<div class="pr-section"><div class="pr-sh">${reportItemHeader(2)}</div>
     <div style="font-size:11px;line-height:1.5">${esc(imp.line1)}</div>
     ${imp.line2 ? `<div style="font-size:11px;line-height:1.5;margin-top:3px">${esc(imp.line2)}</div>` : ''}
     <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:3px">${esc(imp.caveat)}</div></div>`;
@@ -4874,7 +4890,7 @@ function buildClinicianPrint(c) {
   // Item 3 — 2-D burden matrix: symptom severity × frequency. Read-only
   // cross-tab; frequency never re-enters the Index (see scoring.js) — no
   // blended "burden score" is computed here.
-  h += `<div class="pr-section"><div class="pr-sh">3 · Symptom burden — severity × frequency</div>`;
+  h += `<div class="pr-section"><div class="pr-sh">${reportItemHeader(3)}</div>`;
   {
     const sfCells = severityFrequencyMatrix(score, driverExtras);
     h += `<div style="page-break-inside:avoid;break-inside:avoid">${sevFreqBodyHtml(sfCells)}</div>`;
@@ -4887,16 +4903,17 @@ function buildClinicianPrint(c) {
   // Item 4 — Triage verdict (tier / action / reasons). Deliberately placed
   // AFTER the summary + matrix so the clinical picture is read before the
   // recommended action; the detailed investigations list lives in item 6.
-  h += `<div class="pr-section"><div class="pr-sh">4 · Triage</div>`;
+  h += `<div class="pr-section"><div class="pr-sh">${reportItemHeader(4)}</div>`;
   const tierCls = ['', 't1', 't2', 't3', 't4'][tri.level] || 't4';
   h += `<div class="pr-triage ${tierCls}">
       <div style="font-weight:700">Tier ${tri.level} — ${esc(tri.label)}</div>
       <div style="margin-top:3px;font-size:11px">${esc(tri.action)}</div>
       ${tri.reasons.length ? `<div style="font-size:10.5px;margin-top:4px">Reasons: ${tri.reasons.map(r => esc(r.text)).join(' · ')}</div>` : ''}
-      ${tri.alsoConsider.length ? `<div style="font-size:10.5px;margin-top:3px">Also consider: ${tri.alsoConsider.map(a => `${esc(a.label)} (${a.reasons.map(r => esc(r.text)).join('; ')})`).join(' / ')}</div>` : ''}
+      ${tri.alsoConsider.length ? `<div style="font-size:10.5px;margin-top:4px;font-weight:600">Also worth noting:</div>
+      ${tri.alsoConsider.map(a => `<div style="font-size:10.5px;padding-left:8px">• ${esc(a.label)} — ${a.reasons.map(r => esc(r.text)).join('; ')}</div>`).join('')}` : ''}
       ${[].concat(tri.conditionGuidance || [], tri.familyNotes || [], tri.conditionNote ? [tri.conditionNote] : [], tri.labNote ? [tri.labNote] : [], tri.autonomicNote ? [tri.autonomicNote] : [], tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [], tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : [], tri.durationNote ? [tri.durationNote] : [], tri.bowelFreqNote ? [tri.bowelFreqNote] : [], tri.smokingNote ? [tri.smokingNote] : [], tri.treatmentsTriedNote ? [tri.treatmentsTriedNote] : [], tri.coeliacTimingNote ? [tri.coeliacTimingNote] : [], tri.restrictionNote ? [tri.restrictionNote] : [], tri.referredPainNote ? [tri.referredPainNote] : [], tri.restrictionScreenNote ? [tri.restrictionScreenNote] : []).map(n => `<div style="font-size:10.5px;margin-top:3px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
     </div>
-    <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:4px">Full investigations / management list, physiotherapy candidacy, and modifiable drivers are in item 6 (Recommended actions), page 2.</div>`;
+    <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:4px">Full investigations / management list, physiotherapy candidacy, and modifiable drivers are in item 6 (${esc(REPORT_ITEMS[6])}), page 2.</div>`;
   h += `</div>`;
 
   // ============================================================
@@ -4911,7 +4928,7 @@ function buildClinicianPrint(c) {
   // Item 5 — Active clinical lenses. Named/actionable reads lead (Patterns,
   // Rome IV subtype, microbiome correlates); supporting tables (axis profile,
   // domain breakdown) and history/context follow.
-  h += `<div class="pr-section"><div class="pr-sh">5 · Active clinical lenses</div>`;
+  h += `<div class="pr-section"><div class="pr-sh">${reportItemHeader(5)}</div>`;
 
   // Patterns
   if (patterns.length) {
@@ -5028,7 +5045,7 @@ function buildClinicianPrint(c) {
   // list, physiotherapy candidacy, and modifiable drivers — moved off page 1
   // (where they crowded out the safety banner and made the headline score
   // hard to find) onto page 2, alongside the lenses that motivate them.
-  h += `<div class="pr-section"><div class="pr-sh">6 · Recommended actions</div>`;
+  h += `<div class="pr-section"><div class="pr-sh">${reportItemHeader(6)}</div>`;
   if (tri.investigations && tri.investigations.length) {
     h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Suggested investigations / management</div>
       <ul style="margin:0 0 4px 14px;font-size:10.5px;line-height:1.6">${tri.investigations.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
@@ -5053,7 +5070,7 @@ function buildClinicianPrint(c) {
   // Item 7 — Longitudinal trend engine & intervention overlay: what was
   // tried this visit, then the full progression with interventions overlaid
   // per point so burden change reads against what was actually tried.
-  h += `<div class="pr-section"><div class="pr-sh">7 · Longitudinal trend &amp; intervention overlay</div>`;
+  h += `<div class="pr-section"><div class="pr-sh">${reportItemHeader(7)}</div>`;
 
   // Tranche G — interventions recorded at THIS visit (annotation only).
   {
@@ -5234,7 +5251,7 @@ function renderClinician() {
   root.appendChild(hero);
 
   // Item 1 — Safety banner (red flags only).
-  root.appendChild(el('div', { class: 'grp-label' }, '1 · Safety banner'));
+  root.appendChild(el('div', { class: 'grp-label' }, reportItemHeader(1)));
   const rfCard = el('div', { class: 'card', style: `border-left:6px solid ${fired.length ? '#A32D2D' : '#0F6E56'}` });
   rfCard.appendChild(el('h2', {}, 'Red flags'));
   if (fired.length) {
@@ -5258,7 +5275,7 @@ function renderClinician() {
   root.appendChild(rfCard);
 
   // Item 2 — Executive summary (auto-synthesised narrative) + headline numbers.
-  root.appendChild(el('div', { class: 'grp-label' }, '2 · Executive summary'));
+  root.appendChild(el('div', { class: 'grp-label' }, reportItemHeader(2)));
   const imp = clinicalImpression(c);
   const impCard = el('div', { class: 'card', style: 'border-left:6px solid #185FA5' });
   impCard.appendChild(el('h2', {}, 'Executive summary'));
@@ -5271,13 +5288,13 @@ function renderClinician() {
 
   // Item 3 — 2-D burden matrix: symptom severity × frequency. Read-only
   // cross-tab — frequency never re-enters the Index (see scoring.js).
-  root.appendChild(el('div', { class: 'grp-label' }, '3 · Symptom burden — severity × frequency'));
+  root.appendChild(el('div', { class: 'grp-label' }, reportItemHeader(3)));
   const sfCard = severityFrequencyCard(score, extras); if (sfCard) root.appendChild(sfCard);
 
   // Item 4 — Triage verdict (tier / action / investigations). Deliberately
   // placed AFTER the summary + matrix so the clinical picture is read
   // before the recommended action.
-  root.appendChild(el('div', { class: 'grp-label' }, '4 · Triage'));
+  root.appendChild(el('div', { class: 'grp-label' }, reportItemHeader(4)));
   root.appendChild(triageCard(tri, rome, true));
 
   // ============================================================
@@ -5288,7 +5305,7 @@ function renderClinician() {
 
   // Item 5 — Active clinical lenses: axis profile, GSRS domain/cluster
   // breakdown, and the severity × dysbiosis-correlate quadrant read.
-  root.appendChild(el('div', { class: 'grp-label' }, '5 · Active clinical lenses'));
+  root.appendChild(el('div', { class: 'grp-label' }, reportItemHeader(5)));
   root.appendChild(axisProfileCard(profile, heads));
   root.appendChild(domainBarsCard(score, true));   // full domain breakdown incl. GSRS cluster shape
   root.appendChild(riskMatrixCard(sv, correlateLoad));
@@ -5297,7 +5314,7 @@ function renderClinician() {
   // drivers (the triage card in item 4 already carries the investigations/
   // management arm — kept there since splitting it out of triageCard would
   // also affect the shared patient-print caller).
-  root.appendChild(el('div', { class: 'grp-label' }, '6 · Recommended actions'));
+  root.appendChild(el('div', { class: 'grp-label' }, reportItemHeader(6)));
   const physio = physioCandidacy(tri);
   if (physio.length) {
     const phCard = el('div', { class: 'card', style: 'border-left:6px solid #7A4A8C' });
@@ -5311,7 +5328,7 @@ function renderClinician() {
   root.appendChild(modifiableDriversCard(driverExtras));
 
   // Item 7 — Longitudinal trend engine & intervention overlay.
-  root.appendChild(el('div', { class: 'grp-label' }, '7 · Longitudinal trend &amp; intervention overlay'));
+  root.appendChild(el('div', { class: 'grp-label' }, reportItemHeader(7)));
   // Tranche G — editable interventions for this visit (post-intake), overlaid on
   // the trend below so symptom change reads against what was tried.
   root.appendChild(interventionCard());

@@ -422,7 +422,7 @@ const clSrc = clFn ? clFn[0] : '';
 // the clinical picture (summary + severity×frequency matrix) should be read
 // before the recommended action, not after.
 ok(/clinicalImpression\(c\)/.test(clSrc), 'clinician: clinical impression generated');
-ok(clSrc.indexOf('Executive summary') < clSrc.indexOf('4 · Triage'), 'clinician: executive summary (item 2) appears before the triage verdict (item 4)');
+ok(clSrc.indexOf('reportItemHeader(2)') < clSrc.indexOf('reportItemHeader(4)'), 'clinician: executive summary (item 2) appears before the triage verdict (item 4)');
 ok(/Screening synthesis only — not a diagnosis/.test(html), 'clinician: impression carries not-a-diagnosis caveat');
 
 // Report redesign v4 — 3-page/8-item structure. Item 1 is red flags ONLY
@@ -432,47 +432,70 @@ ok(/Screening synthesis only — not a diagnosis/.test(html), 'clinician: impres
 // lists (investigations, physio, modifiable drivers) live in item 6
 // "Recommended actions" on page 2, alongside the lenses (item 5); the
 // trend engine and appendix are renumbered to 7 and 8.
+// Report headers are now generated via reportItemHeader(N), reading from the
+// single REPORT_ITEMS source of truth (items 1–7) instead of being hardcoded
+// per call site — so these checks match the reportItemHeader(N) call, not a
+// literal string, and a separate block below verifies REPORT_ITEMS' content.
 ok(/Page 1 · At-a-glance overview/.test(clSrc), 'clinician: Page 1 group header present');
 ok(/class="pr-hero"/.test(clSrc), 'clinician: headline score hero present in print (previously print had no visible score at all)');
-ok(/1 · Safety banner</.test(clSrc), 'clinician: item 1 (safety banner, red flags only) header present');
-ok(/2 · Executive summary/.test(clSrc), 'clinician: item 2 (executive summary) header present');
-ok(/3 · Symptom burden — severity × frequency/.test(clSrc), 'clinician: item 3 (severity × frequency) header present');
-ok(/4 · Triage</.test(clSrc), 'clinician: item 4 (triage verdict) header present');
+ok(/reportItemHeader\(1\)/.test(clSrc), 'clinician: item 1 (safety banner, red flags only) header present');
+ok(/reportItemHeader\(2\)/.test(clSrc), 'clinician: item 2 (executive summary) header present');
+ok(/reportItemHeader\(3\)/.test(clSrc), 'clinician: item 3 (severity × frequency) header present');
+ok(/reportItemHeader\(4\)/.test(clSrc), 'clinician: item 4 (triage verdict) header present');
 ok(/Page 2 · Clinical deep dive &amp; trends/.test(clSrc), 'clinician: Page 2 group header present');
-ok(/5 · Active clinical lenses/.test(clSrc), 'clinician: item 5 (active clinical lenses) header present');
-ok(/6 · Recommended actions/.test(clSrc), 'clinician: item 6 (recommended actions) header present');
-ok(/7 · Longitudinal trend &amp; intervention overlay/.test(clSrc), 'clinician: item 7 (trend + intervention overlay) header present');
+ok(/reportItemHeader\(5\)/.test(clSrc), 'clinician: item 5 (active clinical lenses) header present');
+ok(/reportItemHeader\(6\)/.test(clSrc), 'clinician: item 6 (recommended actions) header present');
+ok(/reportItemHeader\(7\)/.test(clSrc), 'clinician: item 7 (trend + intervention overlay) header present');
 ok(/Page 3\+ · Reference appendix/.test(clSrc), 'clinician: Page 3+ group header present');
 ok(/8 · Full item-level Q&amp;A/.test(clSrc), 'clinician: item 8 (full item-level Q&A) relabelled as the optional appendix');
-ok(clSrc.indexOf('class="pr-hero"') < clSrc.indexOf('1 · Safety banner'), 'clinician: headline score hero leads, ahead of item 1 (safety banner)');
-ok(clSrc.indexOf('1 · Safety banner') < clSrc.indexOf('2 · Executive summary'), 'clinician: red flags (item 1) lead, ahead of the executive summary (item 2)');
+ok(clSrc.indexOf('class="pr-hero"') < clSrc.indexOf('reportItemHeader(1)'), 'clinician: headline score hero leads, ahead of item 1 (safety banner)');
+ok(clSrc.indexOf('reportItemHeader(1)') < clSrc.indexOf('reportItemHeader(2)'), 'clinician: red flags (item 1) lead, ahead of the executive summary (item 2)');
 ok(clSrc.indexOf('Page 1 ·') < clSrc.indexOf('Page 2 ·') && clSrc.indexOf('Page 2 ·') < clSrc.indexOf('Page 3+ ·'),
   'clinician: the 3 pages appear in order');
-ok(clSrc.indexOf('1 · Safety') < clSrc.indexOf('2 · Executive') && clSrc.indexOf('2 · Executive') < clSrc.indexOf('3 · Symptom burden')
-  && clSrc.indexOf('3 · Symptom burden') < clSrc.indexOf('4 · Triage') && clSrc.indexOf('4 · Triage') < clSrc.indexOf('5 · Active')
-  && clSrc.indexOf('5 · Active') < clSrc.indexOf('6 · Recommended') && clSrc.indexOf('6 · Recommended') < clSrc.indexOf('7 · Longitudinal')
-  && clSrc.indexOf('7 · Longitudinal') < clSrc.indexOf('8 · Full item-level'),
+ok(clSrc.indexOf('reportItemHeader(1)') < clSrc.indexOf('reportItemHeader(2)') && clSrc.indexOf('reportItemHeader(2)') < clSrc.indexOf('reportItemHeader(3)')
+  && clSrc.indexOf('reportItemHeader(3)') < clSrc.indexOf('reportItemHeader(4)') && clSrc.indexOf('reportItemHeader(4)') < clSrc.indexOf('reportItemHeader(5)')
+  && clSrc.indexOf('reportItemHeader(5)') < clSrc.indexOf('reportItemHeader(6)') && clSrc.indexOf('reportItemHeader(6)') < clSrc.indexOf('reportItemHeader(7)')
+  && clSrc.indexOf('reportItemHeader(7)') < clSrc.indexOf('8 · Full item-level'),
   'clinician: the 8 items appear in numeric order');
+// REPORT_ITEMS is the single source of truth both surfaces read from — a
+// renumber/retitle can't drift between print and on-screen, or leave a
+// cross-reference sentence (e.g. "...are in item 6") pointing at the wrong item.
+const reportItemsMatch = html.match(/const REPORT_ITEMS = \{[\s\S]*?\n\};/);
+const reportItemsSrc = reportItemsMatch ? reportItemsMatch[0] : '';
+ok(!!reportItemsMatch, 'REPORT_ITEMS constant defined (single source of truth for item 1-7 headers/titles)');
+[[1, 'Safety banner'], [2, 'Executive summary'], [3, 'Symptom burden — severity × frequency'],
+ [4, 'Triage'], [5, 'Active clinical lenses'], [6, 'Recommended actions'],
+ [7, 'Longitudinal trend &amp; intervention overlay']].forEach(([n, title]) => {
+  ok(reportItemsSrc.includes(`${n}: '${title}'`), `REPORT_ITEMS[${n}] === '${title}'`);
+});
+ok(/function reportItemHeader\(n\)/.test(html), 'reportItemHeader() helper defined');
+ok(/are in item 6 \(\$\{esc\(REPORT_ITEMS\[6\]\)\}\)/.test(clSrc),
+  'clinician: item 4->6 cross-reference note derives its title from REPORT_ITEMS, not a hardcoded string');
 // Item 1 is red-flags-only — no triage/action text, investigations,
 // physio, or modifiable-drivers content sits inside it.
-ok(!/1 · Safety banner<[\s\S]{0,1500}pr-triage/.test(clSrc), 'clinician: triage box no longer sits inside item 1 (moved to item 4)');
-ok(!/1 · Safety banner<[\s\S]{0,2000}Physiotherapy candidacy/.test(clSrc),
+ok(!/reportItemHeader\(1\)<\/div>[\s\S]{0,1500}pr-triage/.test(clSrc), 'clinician: triage box no longer sits inside item 1 (moved to item 4)');
+ok(!/reportItemHeader\(1\)<\/div>[\s\S]{0,2000}Physiotherapy candidacy/.test(clSrc),
   'clinician: physiotherapy candidacy no longer sits inside item 1 (moved to item 6)');
-ok(!/1 · Safety banner<[\s\S]{0,3000}Modifiable drivers/.test(clSrc),
+ok(!/reportItemHeader\(1\)<\/div>[\s\S]{0,3000}Modifiable drivers/.test(clSrc),
   'clinician: modifiable drivers no longer sit inside item 1 (moved to item 6)');
-ok(clSrc.indexOf('4 · Triage') < clSrc.indexOf('pr-triage'), 'clinician: triage box sits inside item 4');
-ok(clSrc.indexOf('6 · Recommended actions') < clSrc.indexOf('Physiotherapy candidacy') || !/Physiotherapy candidacy/.test(clSrc),
+ok(clSrc.indexOf('reportItemHeader(4)') < clSrc.indexOf('pr-triage'), 'clinician: triage box sits inside item 4');
+// "Also consider" in print now renders one bulleted line per tier (matching
+// the on-screen triageCard()), instead of slash-joining every tier into one run-on line.
+ok(/Also worth noting:/.test(clSrc) && /• \$\{esc\(a\.label\)\} — \$\{a\.reasons/.test(clSrc),
+  'clinician: print "Also consider" renders as bulleted lines, not a single slash-joined line');
+ok(!/Also consider: \$\{tri\.alsoConsider/.test(clSrc), 'clinician: print no longer slash-joins alsoConsider entries into one line');
+ok(clSrc.indexOf('reportItemHeader(6)') < clSrc.indexOf('Physiotherapy candidacy') || !/Physiotherapy candidacy/.test(clSrc),
   'clinician: physiotherapy candidacy (when present) sits inside item 6');
-ok(/6 · Recommended actions[\s\S]{0,1500}Modifiable drivers/.test(clSrc), 'clinician: modifiable drivers sit inside item 6');
+ok(/reportItemHeader\(6\)[\s\S]{0,1500}Modifiable drivers/.test(clSrc), 'clinician: modifiable drivers sit inside item 6');
 // Lens reordering: named/actionable reads (Patterns, Rome IV, microbiome
 // correlates) lead item 5; supporting tables (axis profile, domain
 // breakdown) and history/context follow.
-ok(clSrc.indexOf('5 · Active clinical lenses') < clSrc.indexOf('>Patterns<'), 'clinician: Patterns sits inside item 5');
+ok(clSrc.indexOf('reportItemHeader(5)') < clSrc.indexOf('>Patterns<'), 'clinician: Patterns sits inside item 5');
 ok(clSrc.indexOf('>Patterns<') < clSrc.indexOf('>Axis profile<'), 'clinician: Patterns leads Axis profile within item 5 (named/actionable reads first)');
 ok(clSrc.indexOf('Rome IV-informed bowel-pain pattern') < clSrc.indexOf('>Axis profile<'), 'clinician: Rome IV subtype leads Axis profile within item 5');
 ok(clSrc.indexOf('Microbiome-correlate signals') < clSrc.indexOf('>Axis profile<'), 'clinician: microbiome correlates lead Axis profile within item 5');
 ok(clSrc.indexOf('>Axis profile<') < clSrc.indexOf('>Domain breakdown<'), 'clinician: Axis profile (supporting table) leads Domain breakdown within item 5');
-ok((clSrc.match(/Symptom burden — severity × frequency/g) || []).length === 1, 'clinician: severity × frequency widget renders exactly once (no leftover duplicate)');
+ok((clSrc.match(/reportItemHeader\(3\)/g) || []).length === 1, 'clinician: severity × frequency widget renders exactly once (no leftover duplicate)');
 
 // 28-unified. The clinician report is the single UNIFIED, LAYERED report: a
 // plain-language impression synthesis on top of the detailed clinical sections,
@@ -489,8 +512,13 @@ ok(!/peakAlerts\.map|score\.peakAlerts/.test(impSrc), 'unified: impression layer
 ok(/peakEscalated/.test(impSrc), 'unified: impression layer still flags a peak-escalated band via a short note, without repeating the item list');
 ok(/patterns \|\| \[\]\)\[0\]/.test(impSrc), 'unified: impression layer synthesises the single leading pattern (patterns[0]) into line 1, not an exhaustive list');
 ok(/same-day assessment|prompt assessment/.test(impSrc), 'unified: impression layer leads red flags with E2 urgency');
+// The tier verdict ("Tier N, label") is dropped from the executive summary —
+// item 4 (Triage) sits right below it and already states the tier, so
+// repeating it here was pure duplication.
+ok(!/Tier \$\{tri\.level\}, \$\{tri\.label\}/.test(impSrc), 'unified: impression layer no longer repeats the "Tier N, label" verdict (item 4 owns that)');
+ok(!/\btri\b/.test(impSrc.replace(/\/\/.*$/gm, '')), 'unified: impression layer no longer reads the triage object at all (code, not just comments)');
 // Advanced reads all present in the unified clinician report body.
-ok(/Symptom burden — severity × frequency/.test(clSrc), 'unified: report contains the Tranche G severity × frequency widget');
+ok(/reportItemHeader\(3\)/.test(clSrc), 'unified: report contains the Tranche G severity × frequency widget');
 ok(/Interventions this visit/.test(clSrc), 'unified: report contains the Tranche G interventions section');
 ok(/Peak-symptom alert/.test(clSrc), 'unified: report contains the E4 peak-symptom alert row');
 ok(/highest: \$\{esc\(topMeta\.label\)\}|firedByUrgency/.test(clSrc), 'unified: report groups red flags by E2 urgency tier');
@@ -546,19 +574,19 @@ ok(rcSrc.indexOf('Red flags') < rcSrc.indexOf('axisProfileCard'), 'clinician tab
 // triageCard on-screen since splitting them out would also touch the
 // shared patient-print caller), and physio candidacy + modifiable drivers
 // moved to item 6 "Recommended actions" alongside the lenses (item 5).
-['Page 1 · At-a-glance overview', '1 · Safety banner',
- '2 · Executive summary', '3 · Symptom burden — severity × frequency', '4 · Triage',
- 'Page 2 · Clinical deep dive &amp; trends', '5 · Active clinical lenses',
- '6 · Recommended actions', '7 · Longitudinal trend &amp; intervention overlay',
+['Page 1 · At-a-glance overview', 'reportItemHeader(1)',
+ 'reportItemHeader(2)', 'reportItemHeader(3)', 'reportItemHeader(4)',
+ 'Page 2 · Clinical deep dive &amp; trends', 'reportItemHeader(5)',
+ 'reportItemHeader(6)', 'reportItemHeader(7)',
  'Page 3+ · Reference appendix', '8 · Full clinical detail (optional)',
 ].forEach(txt => ok(rcSrc.includes(txt), `clinician tab: on-screen group header "${txt}" present`));
 ok(rcSrc.indexOf('class="hero"') < rcSrc.indexOf('rfCard'), 'clinician tab: headline score hero leads, before the red-flag card');
 ok(rcSrc.indexOf('rfCard') < rcSrc.indexOf('impCard'), 'clinician tab: red-flag card precedes the executive-summary card');
-ok(rcSrc.indexOf('impCard') < rcSrc.indexOf('4 · Triage'), 'clinician tab: executive summary precedes the triage verdict (item 4)');
-ok(rcSrc.indexOf('3 · Symptom burden') < rcSrc.indexOf('4 · Triage'), 'clinician tab: severity × frequency matrix precedes the triage verdict (item 4)');
-ok(rcSrc.indexOf('4 · Triage') < rcSrc.indexOf('triageCard(tri'), 'clinician tab: triage card sits inside item 4');
-ok(rcSrc.indexOf('6 · Recommended actions') < rcSrc.lastIndexOf('modifiableDriversCard'), 'clinician tab: modifiable-driver card sits inside item 6');
-ok(rcSrc.indexOf('clinicianDetailCard(c)') > rcSrc.lastIndexOf('7 · Longitudinal'), 'clinician tab: clinicianDetailCard renders after item 7, under the Page 3+ appendix header');
+ok(rcSrc.indexOf('impCard') < rcSrc.indexOf('reportItemHeader(4)'), 'clinician tab: executive summary precedes the triage verdict (item 4)');
+ok(rcSrc.indexOf('reportItemHeader(3)') < rcSrc.indexOf('reportItemHeader(4)'), 'clinician tab: severity × frequency matrix precedes the triage verdict (item 4)');
+ok(rcSrc.indexOf('reportItemHeader(4)') < rcSrc.indexOf('triageCard(tri'), 'clinician tab: triage card sits inside item 4');
+ok(rcSrc.indexOf('reportItemHeader(6)') < rcSrc.lastIndexOf('modifiableDriversCard'), 'clinician tab: modifiable-driver card sits inside item 6');
+ok(rcSrc.indexOf('clinicianDetailCard(c)') > rcSrc.lastIndexOf('reportItemHeader(7)'), 'clinician tab: clinicianDetailCard renders after item 7, under the Page 3+ appendix header');
 // De-dup — the buried red-flag block is gone from clinicianDetailCard.
 const cdFn = html.match(/function clinicianDetailCard\(c\)\s*\{[\s\S]*?\n\}\n/);
 ok(cdFn && !/Red flags — \$\{fired\.length\} answered Yes/.test(cdFn[0]), 'clinician detail: buried red-flag block removed (no duplication)');
