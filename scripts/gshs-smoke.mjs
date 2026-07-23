@@ -1651,5 +1651,46 @@ const overlapRefluxOnly = run(0, { gsrs_heartburn: 3, gsrs_regurg: 3 });
 ok(overlapRefluxOnly.pat.some(p => p.id === 'reflux_upper_gi') && !overlapRefluxOnly.pat.some(p => p.id === 'functional_dyspepsia' || p.id === 'bloating_fermentation'), 'sanity: reflux-only fixture fires just reflux_upper_gi');
 ok(overlapRefluxOnly.tri.patternOverlapNotes.length === 0, 'overlap note does NOT appear when only 1 group member fires');
 
+// ── Clinician-only wording pass: red-flag/Rome-IV labels ──
+// `label` is the actual intake-question text (redFlagCard()/romeCard() render
+// it as-is to the patient) and must stay unchanged; `clinLabel`, where
+// present, is a same-meaning clinical rewording used ONLY on clinician-only
+// surfaces. Verify: (a) id/urgency/label untouched — no behavioural change,
+// (b) clinLabel exists for the 6 flags + 1 Rome row that had "you/your"
+// wording, (c) the 4 clinician-only render sites actually prefer clinLabel,
+// (d) the 2 intake-form render sites still use plain label.
+const redflagsMod = req('redflags.js');
+const romeMod = req('romeiv.js');
+const RF_IDS_WITH_CLINLABEL = ['rf_bleeding', 'rf_weightloss', 'rf_nocturnal', 'rf_newonset50', 'rf_mass', 'rf_fever'];
+ok(RF_IDS_WITH_CLINLABEL.every(id => {
+  const f = redflagsMod.RED_FLAGS.find(x => x.id === id);
+  return f && typeof f.clinLabel === 'string' && f.clinLabel.length > 0 && !/\byou\b|\byour\b/i.test(f.clinLabel);
+}), 'the 6 red flags with patient-facing "you/your" wording each have a clinLabel with no second-person pronouns');
+ok(redflagsMod.RED_FLAGS.every(f => typeof f.label === 'string' && f.label.length > 0), 'sanity: every red flag still has its original patient-facing label');
+ok(redflagsMod.RED_FLAGS.length === 11, 'sanity: red-flag count unchanged (11) — this is a wording-only change');
+const rmFreqchange = romeMod.ROME_ASSOC.find(a => a.id === 'rm_assoc_freqchange');
+ok(rmFreqchange && rmFreqchange.clinLabel === 'Pain associated with a change in stool frequency', 'rm_assoc_freqchange has a clinical clinLabel');
+ok(/\byou\b|\byour\b/i.test(rmFreqchange.label), 'sanity: rm_assoc_freqchange.label (intake wording) is untouched');
+
+// Render-site checks (text-based, since these are DOM-building functions).
+const rfClinTabFn = html.match(/function renderClinician\(\)\s*\{[\s\S]*?\n\}/);
+ok(!!rfClinTabFn && /f\.clinLabel \|\| f\.label/.test(rfClinTabFn[0]), 'renderClinician() red-flag list prefers clinLabel');
+const printFn = html.match(/function buildClinicianPrint\([\s\S]*?\n\}/);
+ok(!!printFn && (printFn[0].match(/f\.clinLabel \|\| f\.label/g) || []).length >= 1, 'buildClinicianPrint() red-flag list prefers clinLabel');
+ok(!!printFn && (printFn[0].match(/a\.clinLabel \|\| a\.label/g) || []).length >= 1, 'buildClinicianPrint() Rome IV table prefers clinLabel');
+const detailFn = html.match(/function clinicianDetailCard\([\s\S]*?\n\}/);
+ok(!!detailFn && /a\.clinLabel \|\| a\.label/.test(detailFn[0]), 'clinicianDetailCard() Rome IV table prefers clinLabel');
+
+// Intake form must NOT be touched — it should still render plain label/label.
+const redFlagCardFn = html.match(/function redFlagCard\(\)\s*\{[\s\S]*?\n\}/);
+ok(!!redFlagCardFn && /esc\(f\.label\)/.test(redFlagCardFn[0]) && !/clinLabel/.test(redFlagCardFn[0]), 'redFlagCard() (intake form) still renders plain patient-facing label, untouched');
+const romeCardFn = html.match(/function romeCard\(\)\s*\{[\s\S]*?\n\}/);
+ok(!!romeCardFn && !/clinLabel/.test(romeCardFn[0]), 'romeCard() (intake form) untouched — no clinLabel reference');
+// calc()'s patient-results red-flag banner is intentionally patient-facing —
+// confirm it still uses plain label (not clinLabel), i.e. it was correctly
+// left alone rather than accidentally caught by a broad find/replace.
+const calcFn = html.match(/function calc\(\)\s*\{[\s\S]*?\n(?=function )/);
+ok(!!calcFn && /esc\(f\.label\)/.test(calcFn[0]) && !/f\.clinLabel/.test(calcFn[0]), "calc()'s patient-facing red-flag banner still uses plain label (correctly left alone)");
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

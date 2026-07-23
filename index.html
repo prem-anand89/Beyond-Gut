@@ -1243,16 +1243,26 @@ const RED_FLAGS = [
   // Lower-GI / colorectal alarm features
   // Combined item spans fresh rectal bleeding AND melena (black tarry) — the latter
   // is an acute upper-GI bleed, so the combined item errs to emergency (safe-side).
-  { id: 'rf_bleeding',   urgency: 'emergency', label: 'Blood in your stool, rectal bleeding, or black tarry stools' },
+  // `clinLabel` (where present) is a clinical third-person rewording of the same
+  // alarm feature, used ONLY on clinician-only surfaces (Clinician-tab red-flag
+  // card, printed report, Rome IV table) — `label` itself stays patient-facing
+  // and IS the actual intake question text (redFlagCard() renders it as-is), so
+  // it must never be reworded. Meaning is identical; only phrasing differs.
+  { id: 'rf_bleeding',   urgency: 'emergency', label: 'Blood in your stool, rectal bleeding, or black tarry stools',
+    clinLabel: 'Rectal bleeding or melena (black, tarry stools)' },
   // Quantified so self-report maps to the meaningful clinical threshold (~5% over
   // 6 months) rather than any trivial fluctuation. No fixed kg figure — 5% varies
   // by body size — with a concrete everyday cue instead.
-  { id: 'rf_weightloss', urgency: 'urgent',    label: 'Losing weight without trying — for example, your clothes feel looser, or you have lost more than about 5% of your body weight over the past 6 months' },
-  { id: 'rf_nocturnal',  urgency: 'urgent',    label: 'Gut symptoms that wake you from sleep at night' },
+  { id: 'rf_weightloss', urgency: 'urgent',    label: 'Losing weight without trying — for example, your clothes feel looser, or you have lost more than about 5% of your body weight over the past 6 months',
+    clinLabel: 'Unintentional weight loss (>5% of body weight over 6 months)' },
+  { id: 'rf_nocturnal',  urgency: 'urgent',    label: 'Gut symptoms that wake you from sleep at night',
+    clinLabel: 'Nocturnal symptoms (waking from sleep)' },
   // Threshold lowered to 45 and reframed around persistence (≥6 weeks) — early-onset
   // colorectal cancer is rising and a sustained change warrants review at any age.
-  { id: 'rf_newonset50', urgency: 'urgent',    label: 'A new, persistent change in your bowel habit lasting 6 weeks or more. This applies at any age, but is especially important if you are over 45.' },
-  { id: 'rf_mass',       urgency: 'urgent',    label: 'A lump or mass you (or a doctor) can feel in your abdomen' },
+  { id: 'rf_newonset50', urgency: 'urgent',    label: 'A new, persistent change in your bowel habit lasting 6 weeks or more. This applies at any age, but is especially important if you are over 45.',
+    clinLabel: 'New, persistent change in bowel habit (≥ 6 weeks), especially if age > 45' },
+  { id: 'rf_mass',       urgency: 'urgent',    label: 'A lump or mass you (or a doctor) can feel in your abdomen',
+    clinLabel: 'Palpable abdominal mass' },
   // (Family history moved out of acute red flags — it's a risk factor, not an acute
   // alarm. Captured as a Family-history chip set and wired in triage instead.)
   // Upper-GI alarm features
@@ -1262,7 +1272,8 @@ const RED_FLAGS = [
   // Systemic / other
   { id: 'rf_anaemia',    urgency: 'urgent',    label: 'Diagnosed iron-deficiency anaemia without a clear cause' },
   { id: 'rf_jaundice',   urgency: 'emergency', label: 'Yellowing of the skin or eyes (jaundice)' },
-  { id: 'rf_fever',      urgency: 'urgent',    label: 'Fever accompanying your gut symptoms' },
+  { id: 'rf_fever',      urgency: 'urgent',    label: 'Fever accompanying your gut symptoms',
+    clinLabel: 'Fever accompanying GI symptoms' },
 ];
 const RF_URGENCY_RANK = { emergency: 3, urgent: 2, routine: 1 };
 const RF_URGENCY_META = {
@@ -1646,7 +1657,10 @@ const ROME_ONSET = [
 const ROME_ONSET_MET = 2; // index >= this meets Rome IV's "onset ≥6 months ago"
 const ROME_ASSOC = [
   { id: 'rm_assoc_defecation', label: 'Pain is better or worse around a bowel movement' },
-  { id: 'rm_assoc_freqchange', label: 'Pain comes with a change in how often you pass stool' },
+  // clinLabel: clinical rewording for clinician-only surfaces (Rome IV table) —
+  // label itself stays patient-facing (romeCard() renders it as the intake chip).
+  { id: 'rm_assoc_freqchange', label: 'Pain comes with a change in how often you pass stool',
+    clinLabel: 'Pain associated with a change in stool frequency' },
   { id: 'rm_assoc_formchange', label: 'Pain comes with a change in stool consistency/appearance' },
 ];
 
@@ -4901,7 +4915,7 @@ function clinicianDetailCard(c) {
   const rRows = [
     ['Pain frequency', r.painFreq != null ? `${r.painFreq} — ${esc(ROME_FREQ[r.painFreq] || '')}` : '—'],
     ['Onset', onsetIdx != null ? `${onsetIdx} — ${esc(ROME_ONSET[onsetIdx] || '')}` : '—'],
-    ...ROME_ASSOC.map(a => [esc(a.label), r[a.id] ? '<b>Yes</b>' : 'No']),
+    ...ROME_ASSOC.map(a => [esc(a.clinLabel || a.label), r[a.id] ? '<b>Yes</b>' : 'No']),
     ['Result', rome.criteriaMet
       ? `<b style="color:#185FA5">Criteria met — ${esc(rome.subtype || '')}</b>`
       : rome.answered ? 'Criteria not met' : '<span style="color:#999">Not answered</span>'],
@@ -5223,7 +5237,7 @@ function buildClinicianPrint(c, opts) {
     if (topMeta) h += `<div style="font-size:10px;color:#7A1F1F;margin:2px 0 4px">${esc(topMeta.headline)}</div>`;
     h += groups.map(g =>
       `<div style="margin-top:4px"><div style="font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#7A1F1F">${esc(g.meta.label)}</div>` +
-      `<ul style="margin:2px 0 0 14px;font-size:10.5px">${g.flags.map(f => `<li>${esc(f.label)}</li>`).join('')}</ul></div>`
+      `<ul style="margin:2px 0 0 14px;font-size:10.5px">${g.flags.map(f => `<li>${esc(f.clinLabel || f.label)}</li>`).join('')}</ul></div>`
     ).join('');
     h += `</div>`;
   } else {
@@ -5341,7 +5355,7 @@ function buildClinicianPrint(c, opts) {
       <table class="pr-tbl"><tbody>
         <tr><td>Pain frequency</td><td>${r.painFreq != null ? `${r.painFreq} — ${esc(ROME_FREQ[r.painFreq] || '')} ${checkTag(freqMetNow)} <span style="color:#888;font-size:9.5px">(needs ≥1 day/wk)</span>` : '—'}</td></tr>
         <tr><td>Onset</td><td>${onsetIdx != null ? `${onsetIdx} — ${esc(ROME_ONSET[onsetIdx] || '')} ${checkTag(onsetMetNow)} <span style="color:#888;font-size:9.5px">(needs ≥6 months)</span>` : '—'}</td></tr>
-        ${ROME_ASSOC.map(a => `<tr><td>${esc(a.label)}</td><td>${r[a.id] ? '<b>Yes</b>' : 'No'}</td></tr>`).join('')}
+        ${ROME_ASSOC.map(a => `<tr><td>${esc(a.clinLabel || a.label)}</td><td>${r[a.id] ? '<b>Yes</b>' : 'No'}</td></tr>`).join('')}
         <tr><td>Associations</td><td>${rome.assocCount || 0}/${ROME_ASSOC.length} ${checkTag(assocMetNow)} <span style="color:#888;font-size:9.5px">(needs ≥2)</span></td></tr>
         <tr><td><b>Result</b></td><td><b>${rome.criteriaMet ? `Criteria met — ${esc(rome.subtype)}` : `Criteria not met${failReason ? ` — ${esc(failReason)}` : ''}`}</b></td></tr>
       </tbody></table>
@@ -5662,7 +5676,7 @@ function renderClinician() {
       if (!grp.length) return;
       rfCard.appendChild(el('div', { style: 'font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#7A1F1F;margin-top:6px' }, esc(RF_URGENCY_META[tier].label)));
       rfCard.appendChild(el('ul', { style: 'font-size:12.5px;padding-left:18px;color:#A32D2D;margin:2px 0 0' },
-        grp.map(f => `<li>${esc(f.label)}</li>`).join('')));
+        grp.map(f => `<li>${esc(f.clinLabel || f.label)}</li>`).join('')));
     });
   } else {
     rfCard.appendChild(el('div', { style: 'display:flex;align-items:center;gap:6px;font-size:12.5px;color:#2C7A63' },
