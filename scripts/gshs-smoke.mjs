@@ -242,6 +242,17 @@ const sfNoFreq = scoring.computeScores(Object.fromEntries(GI_IDS.map(id => [id, 
 ok(typeof sfNoFreq.index === 'number', 'G: index computes independent of the frequency dimension');
 ok(/function severityFrequencyCard/.test(html) && /Symptom severity × frequency/.test(html),
   'G: severity × frequency widget rendered in the clinician surfaces');
+
+// G2. Shared sevFreqBodyHtml renderer: no-frequency fallback vs 2D quadrant grid,
+// used identically by both the on-screen card and buildClinicianPrint (item 3).
+ok(/function sevFreqBodyHtml\(cells\)/.test(html), 'G2: shared severity×frequency body renderer exists');
+ok(/sevFreqBodyHtml\(sfCells\)/.test(html), 'G2: print item 3 uses the shared renderer (not its own flat table)');
+const sfBodyFn = html.match(/function sevFreqBodyHtml\(cells\)\s*\{[\s\S]*?\n\}\n/)[0];
+ok(/Frequency: Not recorded this visit/.test(sfBodyFn), 'G2: no-frequency-anywhere state renders the clean fallback header');
+ok(/grid-template-columns/.test(sfBodyFn) && /Episodic/.test(sfBodyFn) && /Frequent/.test(sfBodyFn), 'G2: frequency-present state renders a real 2D quadrant grid');
+// No-frequency-anywhere fixture (severity only, no clusterFreq/painFreq answered).
+const sfAllNoFreq = scoring.severityFrequencyMatrix(sfScore, {});
+ok(sfAllNoFreq.length > 0 && sfAllNoFreq.every(c => c.freqIdx == null), 'G2: fixture with no frequency answers has every cell freqIdx null');
 // Low severity + low frequency → low quadrant.
 const sfLow = scoring.computeScores({ gsrs_bloating: 1 }, {});
 const sfLowCells = scoring.severityFrequencyMatrix(sfLow, { clusterFreq: { Indigestion: 0 } });
@@ -468,9 +479,15 @@ ok((clSrc.match(/Symptom burden — severity × frequency/g) || []).length === 1
 // and it must surface every advanced lens (E2–F2 + Tranche G).
 const impFn = html.match(/function clinicalImpression\(c\)\s*\{[\s\S]*?\n\}\n/);
 const impSrc = impFn ? impFn[0] : '';
-ok(/peakAlerts/.test(impSrc), 'unified: impression layer surfaces E4 peak-symptom alerts');
-ok(/pelvic_floor_paradox/.test(impSrc), 'unified: impression layer surfaces the F2 paradoxical pelvic-floor read');
-ok(/correlateLoad.*tier|tier === 'High'/.test(impSrc), 'unified: impression layer surfaces the E3 weighted Dys-R tier');
+// The impression layer is a terse 2-line synthesis (line1/line2/caveat), not an
+// exhaustive checklist of every advanced lens — E4's itemized peak-alert list and
+// the F2/E3 explicit pattern-ID/tier mentions were deliberately dropped in favour
+// of a generic "leading pattern" clause; each fact still lives in full elsewhere
+// (Axis profile for peak alerts, item 5 for the full pattern/lens list).
+ok(/line1/.test(impSrc) && /line2/.test(impSrc) && /caveat/.test(impSrc), 'unified: impression layer returns a two-line clinical story ({line1, line2, caveat})');
+ok(!/peakAlerts\.map|score\.peakAlerts/.test(impSrc), 'unified: impression layer no longer duplicates the itemized E4 peak-symptom alert list (lives exclusively in Axis profile now)');
+ok(/peakEscalated/.test(impSrc), 'unified: impression layer still flags a peak-escalated band via a short note, without repeating the item list');
+ok(/patterns \|\| \[\]\)\[0\]/.test(impSrc), 'unified: impression layer synthesises the single leading pattern (patterns[0]) into line 1, not an exhaustive list');
 ok(/same-day assessment|prompt assessment/.test(impSrc), 'unified: impression layer leads red flags with E2 urgency');
 // Advanced reads all present in the unified clinician report body.
 ok(/Symptom burden — severity × frequency/.test(clSrc), 'unified: report contains the Tranche G severity × frequency widget');
@@ -758,6 +775,12 @@ ok(baselineIdx === idxWithNewFields, 'new coverage-gap fields do not touch compu
 const mfBase = scales.modifiableFactors({});
 const lifestyleRowBase = mfBase.find(f => f.label === 'Lifestyle');
 ok(lifestyleRowBase && lifestyleRowBase.band === '—' && lifestyleRowBase.score === null, 'Lifestyle row shows — / null when unset');
+// modifiableFactors({}).allEmpty flags the "nothing answered" empty state so the
+// clinician surfaces can render a one-line fallback instead of a 9-row —-filled table.
+ok(mfBase.allEmpty === true, 'modifiableFactors({}): allEmpty is true when nothing was recorded');
+ok(scales.modifiableFactors({ nrsPain: 4 }).allEmpty === false, 'modifiableFactors(): allEmpty is false once any driver is recorded');
+ok(/allEmpty/.test(html) && /No modifiable-driver data recorded this visit/.test(html),
+  'modifiable-driver fallback copy present in the report source');
 const hydRowBase = mfBase.find(f => f.label === 'Hydration & caffeine');
 ok(hydRowBase && hydRowBase.band === '—' && hydRowBase.score === null, 'Hydration & caffeine row shows — / null when unset');
 const mfSet = scales.modifiableFactors({ alcohol: 1, smoking: 2, activity: 3, caffeine: 3, hydration: 0 });

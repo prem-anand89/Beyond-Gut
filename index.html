@@ -1104,7 +1104,7 @@ function modifiableFactors(extras) {
   const sBurden = sleepBurden(ex.sleep);
   const sb = sleepBand(sBurden);
   const surg = surgicalFlags(ex);
-  return [
+  const rows = [
     { icon: '🧠', label: 'Psychological load', band: pl ? pl.l : '—',
       score: plPct != null ? `${plPct}/100${ex.pss4Score != null ? ` · PSS-4 ${ex.pss4Score}/16` : ''}` : null,
       color: pl ? pl.c : '#999' },
@@ -1121,6 +1121,11 @@ function modifiableFactors(extras) {
     { icon: '🔪', label: 'Surgical history', band: surg.count ? `${surg.count} noted` : 'None noted',
       score: surg.count ? surg.list.join(', ') : null, color: surg.count ? '#185FA5' : '#999' },
   ];
+  // Nothing meaningfully answered this visit — every driver is at its unset
+  // default (meds/surgery "None"/"None noted" defaults don't count as data).
+  rows.allEmpty = !(plPct != null || ex.nrsPain != null || bt || ex.meds || db ||
+    alc != null || act != null || smk != null || caf != null || hyd != null || sBurden != null || surg.count > 0);
+  return rows;
 }
 
 __e.SCALES = SCALES; __e.scaleFor = scaleFor; __e.RECALL_NOTE = RECALL_NOTE;
@@ -2967,34 +2972,57 @@ const SEVFREQ_QUAD = {
   'frequent-mild':     { t: 'Frequent but milder',          c: '#BA7517' },
   low:                 { t: 'Low burden',                   c: '#0F6E56' },
 };
+// Shared renderer for both the on-screen card and the print section — returns
+// an HTML string so both call sites (el(...).innerHTML and the print string
+// builder) stay in lockstep. Two states: no frequency data recorded anywhere
+// this visit (clean severity-only list, no empty-looking grid), or a real 2×2
+// quadrant grid plotting every cluster that has both dimensions.
+function sevFreqBodyHtml(cells) {
+  if (!cells.length) return '<div style="font-size:11px;color:#555">Not enough data yet — answer per-cluster frequency to populate this matrix.</div>';
+  const hasFreq = cells.some(c => c.freqIdx != null);
+  if (!hasFreq) {
+    const rows = cells.filter(c => c.severity != null).map(c =>
+      `<div style="display:flex;justify-content:space-between;padding:4px 6px;border-bottom:1px solid #E1E5EB;font-size:12px">
+        <span style="font-weight:600">${esc(c.cluster)}</span>
+        <span>${Math.round(c.severity * 100)}%${c.sevHi ? ' <b style="color:#A32D2D">▲ severe</b>' : ''}</span></div>`).join('');
+    return `<div style="font-size:11px;font-weight:700;color:#555;margin-bottom:5px">Frequency: Not recorded this visit</div>
+      <div>${rows || '<div style="font-size:11px;color:#555">No severity data recorded.</div>'}</div>`;
+  }
+  const byQuad = { priority: [], 'severe-intermittent': [], 'frequent-mild': [], low: [] };
+  const incomplete = [];
+  cells.forEach(c => { if (c.quadrant) byQuad[c.quadrant].push(c); else incomplete.push(c); });
+  const quadCell = key => {
+    const q = SEVFREQ_QUAD[key], items = byQuad[key], active = items.length > 0;
+    return `<div style="padding:8px;border-radius:6px;line-height:1.4;min-height:44px;
+        background:${active ? q.c : '#F2F4F7'};color:${active ? '#fff' : '#8A93A0'};
+        border:${active ? '2px solid ' + q.c : '1px solid #E1E5EB'}">
+      <div style="font-weight:700;font-size:10.5px;margin-bottom:3px">${esc(q.t)}</div>
+      ${active ? items.map(c => `<div style="font-size:11px">${esc(c.cluster)} (${Math.round(c.severity * 100)}%)</div>`).join('') : '<div style="font-size:10.5px;opacity:.75">—</div>'}
+    </div>`;
+  };
+  let out = `<div style="display:grid;grid-template-columns:66px 1fr 1fr;gap:4px;font-size:12px">
+    <div></div>
+    <div style="font-weight:600;text-align:center;color:#333">Episodic</div>
+    <div style="font-weight:600;text-align:center;color:#333">Frequent</div>
+    <div style="font-weight:600;display:flex;align-items:center;color:#333">Severe</div>
+    ${quadCell('severe-intermittent')}${quadCell('priority')}
+    <div style="font-weight:600;display:flex;align-items:center;color:#333">Milder</div>
+    ${quadCell('low')}${quadCell('frequent-mild')}
+  </div>`;
+  if (incomplete.length) out += `<div style="font-size:9px;color:#888;margin-top:6px">Incomplete data — not plotted: ${incomplete.map(c => esc(c.cluster)).join(', ')}.</div>`;
+  return out;
+}
 function severityFrequencyCard(score, extras) {
-  const { ROME_FREQ } = __req('romeiv.js');
   const cells = severityFrequencyMatrix(score, extras);
   if (!cells.length) return null;
   const card = el('div', { class: 'card', style: 'border-left:6px solid #185FA5' });
   card.appendChild(el('h2', {}, 'Symptom severity × frequency'));
   card.appendChild(el('div', { class: 'q-sub', style: 'margin-bottom:6px' },
-    'How bad each symptom cluster is, crossed with how often it happens. Severe-and-frequent clusters (top-right) are the ones to prioritise. Frequency is shown here only — it does not change the score.'));
-  const anyPriority = cells.some(c => c.quadrant === 'priority');
-  const rows = cells.map(c => {
-    const sevTxt = c.severity == null ? '—' : Math.round(c.severity * 100) + '%';
-    const freqTxt = c.freqIdx == null ? '—'
-      : (c.cluster === 'Pain' ? ROME_FREQ[c.freqIdx] : CLUSTER_FREQ_LEVELS[c.freqIdx]) || String(c.freqIdx);
-    const q = c.quadrant ? SEVFREQ_QUAD[c.quadrant] : null;
-    const pill = q ? `<span style="display:inline-block;padding:1px 7px;border-radius:10px;background:${q.c};color:#fff;font-size:10.5px;font-weight:600">${esc(q.t)}</span>` : '<span style="color:#8A93A0;font-size:11px">incomplete</span>';
-    return `<tr>
-      <td style="padding:4px 6px;font-weight:600">${esc(c.cluster)}</td>
-      <td style="padding:4px 6px">${sevTxt}${c.sevHi ? ' <b style="color:#A32D2D">▲</b>' : ''}</td>
-      <td style="padding:4px 6px">${esc(freqTxt)}${c.freqHi ? ' <b style="color:#A32D2D">▲</b>' : ''}</td>
-      <td style="padding:4px 6px">${pill}</td></tr>`;
-  }).join('');
-  const tbl = el('div', {});
-  tbl.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
-    <thead><tr style="color:var(--inkt);font-size:10.5px;text-align:left">
-      <th style="padding:2px 6px">Cluster</th><th style="padding:2px 6px">Severity</th><th style="padding:2px 6px">Frequency</th><th style="padding:2px 6px">Read</th></tr></thead>
-    <tbody>${rows}</tbody></table>`;
-  card.appendChild(tbl);
-  if (anyPriority) card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;font-weight:600;color:#A32D2D' },
+    'How bad each symptom cluster is, crossed with how often it happens. Severe-and-frequent clusters are the ones to prioritise. Frequency is shown here only — it does not change the score.'));
+  const body = el('div', {});
+  body.innerHTML = sevFreqBodyHtml(cells);
+  card.appendChild(body);
+  if (cells.some(c => c.quadrant === 'priority')) card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-weight:600;color:#A32D2D' },
     '▲ One or more clusters are both severe and frequent — prioritise these.'));
   return card;
 }
@@ -4176,7 +4204,12 @@ function domainBarsCard(score, withClusters) {
 function modifiableDriversCard(driverExtras) {
   const card = el('div', { class: 'card' });
   card.appendChild(el('h2', {}, 'Modifiable drivers'));
-  const rows = modifiableFactors(driverExtras).map(f =>
+  const factors = modifiableFactors(driverExtras);
+  if (factors.allEmpty) {
+    card.appendChild(el('div', { class: 'q-sub' }, 'No modifiable-driver data recorded this visit.'));
+    return card;
+  }
+  const rows = factors.map(f =>
     `<tr><td>${factorIcon(f)}${esc(f.label)}</td><td style="color:${f.color}">${esc(f.band)}</td><td>${esc(f.score || '')}</td></tr>`
   ).join('');
   const t = el('table', { class: 'clin-tbl' });
@@ -4267,12 +4300,17 @@ function calc() {
   const driv = el('div', { class: 'card' });
   driv.appendChild(el('h2', {}, 'Modifiable drivers'));
   driv.appendChild(el('div', { class: 'q-sub' }, 'Shown for context — not added to the GI Symptom Burden score. These feed the pattern & triage guidance.'));
-  const dg = el('div', { class: 'drivers' });
-  modifiableFactors(driverExtras).forEach(f => dg.appendChild(el('div', { class: 'driver' },
-    `<div class="dl" style="font-weight:600;margin-bottom:2px">${factorIcon(f)}${esc(f.label)}</div>
-     <div class="dv" style="color:${f.color}">${esc(f.band)}</div>
-     ${f.score ? `<div class="dl">${esc(f.score)}</div>` : ''}`)));
-  driv.appendChild(dg);
+  const driverFactors = modifiableFactors(driverExtras);
+  if (driverFactors.allEmpty) {
+    driv.appendChild(el('div', { class: 'q-sub' }, 'No modifiable-driver data recorded this visit.'));
+  } else {
+    const dg = el('div', { class: 'drivers' });
+    driverFactors.forEach(f => dg.appendChild(el('div', { class: 'driver' },
+      `<div class="dl" style="font-weight:600;margin-bottom:2px">${factorIcon(f)}${esc(f.label)}</div>
+       <div class="dv" style="color:${f.color}">${esc(f.band)}</div>
+       ${f.score ? `<div class="dl">${esc(f.score)}</div>` : ''}`)));
+    driv.appendChild(dg);
+  }
 
   // Patterns — first-cut clinical-discussion patterns from drivers + clusters
   // (computed above with the triage inputs). Conservatively framed; confidence
@@ -4582,7 +4620,8 @@ function buildPatientPrint(c) {
   // ── Section 0 — Clinical impression (auto-synthesis) ───────────────────────
   const imp = clinicalImpression(c);
   h += `<div class="pr-section"><div class="pr-sh">Clinical impression</div>
-    <div style="font-size:11px;line-height:1.5">${esc(imp.txt)}</div>
+    <div style="font-size:11px;line-height:1.5">${esc(imp.line1)}</div>
+    ${imp.line2 ? `<div style="font-size:11px;line-height:1.5;margin-top:3px">${esc(imp.line2)}</div>` : ''}
     <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:3px">${esc(imp.caveat)}</div></div>`;
 
   // ── Section 1 — Your results at a glance (4 primary outputs) ─────────────────
@@ -4701,41 +4740,46 @@ const CONCERN_BANDS = new Set(['Significant', 'Severe', 'Elevated']);
 // a restatement of computed findings — no inference beyond what each axis/pattern
 // already says — and always closed with an explicit "screening, not diagnosis"
 // caveat so it can never read as a clinical conclusion.
+// Two-line clinical story: line 1 is the presentation (severity + leading
+// pattern), line 2 is the bottom line (safety + triage). Deliberately terse —
+// every fact mentioned here is shown again in full detail elsewhere (Axis
+// profile for peak alerts, item 5 for the full pattern list, item 1/4 for
+// red flags and triage reasons), so this stays a synthesis, not a repeat.
 function clinicalImpression(c) {
-  const { score, sv, conf, fired, rome, tri, heads, correlateLoad, patterns } = c;
-  const bits = [];
+  const { score, sv, conf, fired, rome, tri, patterns } = c;
+
+  // Line 1 — presentation: severity band + the leading pattern. Patterns are
+  // already engine-ordered by priority then confidence, so [0] is the single
+  // most actionable finding — naming more than one turns this back into a list.
+  let line1;
   if (sv && sv.label) {
-    // E4 — reflect a peak-escalated band in the readable layer so the plain-
-    // language summary matches the escalated display, not the raw number alone.
-    const peakNote = (sv.peakEscalated) ? ' (raised for an isolated high-severity symptom)' : '';
-    bits.push(`${sv.label.toLowerCase()} gut-symptom burden${score.index != null ? ` (index ${score.index}%)` : ''}${peakNote}`);
+    // E4 — flag a peak-escalated band without repeating the item list (that
+    // detail lives exclusively in the Axis profile peak-alert row now).
+    const peakNote = sv.peakEscalated ? ' (raised for an isolated high-severity symptom)' : '';
+    const idxTxt = score.index != null ? ` (${score.index}%)` : '';
+    const top = (patterns || [])[0];
+    const patternClause = top ? `, most consistent with a ${top.label.toLowerCase()}` : '';
+    const romeClause = (rome && rome.criteriaMet && rome.subtype && !(top && top.label.includes(rome.subtype)))
+      ? ` (Rome IV-consistent with ${rome.subtype})` : '';
+    line1 = `${sv.label} gut-symptom burden${idxTxt}${peakNote}${patternClause}${romeClause}.`;
+  } else {
+    line1 = 'No prominent findings on this screen.';
   }
-  if (rome && rome.criteriaMet && rome.subtype) bits.push(`pattern consistent with ${rome.subtype}`);
-  // F2 — call out the paradoxical pelvic-floor read explicitly (management differs).
-  if (patterns && patterns.some(p => p.id === 'pelvic_floor_paradox')) bits.push('paradoxical pelvic-floor (dyssynergic) features');
-  // E3 — weighted Dys-R tier when Moderate/High.
-  if (correlateLoad && (correlateLoad.tier === 'High' || correlateLoad.tier === 'Moderate')) bits.push(`${correlateLoad.tier.toLowerCase()} dysbiosis-correlate load`);
-  const elevated = [];
-  if (heads) {
-    const nut = heads.primary && heads.primary.nutrient;
-    if (nut && CONCERN_BANDS.has(nut.band)) elevated.push('possible malabsorption');
-    (heads.secondaryList || []).forEach(o => { if (CONCERN_BANDS.has(o.band)) elevated.push(o.label.toLowerCase()); });
-  }
-  if (elevated.length) bits.push(`elevated systemic reads (${elevated.join(', ')})`);
-  let txt = bits.length ? `${bits.join('; ')}.` : 'No prominent findings on this screen.';
-  txt = txt.charAt(0).toUpperCase() + txt.slice(1);
-  // E4 — surface an isolated peak symptom even when the averaged burden is modest.
-  if (score.peakAlerts && score.peakAlerts.length) txt += ` ⚠ Peak-symptom alert: ${score.peakAlerts.map(p => `${p.label} (${p.level === 'ceiling' ? 'very severe' : 'severe'})`).join(', ')}.`;
+
+  // Line 2 — bottom line: safety + triage, one sentence. Reasons and the
+  // full investigations list stay in items 1 and 4/6 — not repeated here.
+  let line2 = '';
   if (fired && fired.length) {
-    // E2 — lead the red-flag mention with the highest urgency tier present.
+    // E2 — lead with the highest urgency tier present.
     const rank = { emergency: 3, urgent: 2, routine: 1 };
-    const top = fired.reduce((t, f) => (rank[f.urgency || 'routine'] > rank[t] ? (f.urgency || 'routine') : t), 'routine');
-    const urg = top === 'emergency' ? ' — same-day assessment' : top === 'urgent' ? ' — prompt assessment' : '';
-    txt += ` ⚠ ${fired.length} red-flag item${fired.length > 1 ? 's' : ''} answered Yes${urg} (see Red flags).`;
+    const topUrg = fired.reduce((t, f) => (rank[f.urgency || 'routine'] > rank[t] ? (f.urgency || 'routine') : t), 'routine');
+    const urgTxt = topUrg === 'emergency' ? 'same-day assessment' : topUrg === 'urgent' ? 'prompt assessment' : 'clinician review';
+    line2 = `${fired.length} safety feature${fired.length > 1 ? 's' : ''} present (${urgTxt} recommended)`;
   }
-  if (tri) txt += ` Suggested triage: Tier ${tri.level} — ${tri.label}.`;
+  if (tri) line2 += `${line2 ? ' — ' : ''}Tier ${tri.level}, ${tri.label}.`;
+
   const caveat = `Screening synthesis only — not a diagnosis.${conf ? ` Confidence ${conf.level}, ${score.completeness}% complete.` : ''} Apply clinical judgement.`;
-  return { txt, caveat };
+  return { line1, line2, caveat };
 }
 
 // Pull every pelvic-floor / visceral-fascial manual-therapy candidacy out of the
@@ -4819,10 +4863,12 @@ function buildClinicianPrint(c) {
   }
   h += `</div>`;
 
-  // Item 2 — Executive summary (auto-synthesised narrative).
+  // Item 2 — Executive summary (auto-synthesised, two-line clinical story:
+  // presentation, then the safety/triage bottom line).
   const imp = clinicalImpression(c);
   h += `<div class="pr-section"><div class="pr-sh">2 · Executive summary</div>
-    <div style="font-size:11px;line-height:1.5">${esc(imp.txt)}</div>
+    <div style="font-size:11px;line-height:1.5">${esc(imp.line1)}</div>
+    ${imp.line2 ? `<div style="font-size:11px;line-height:1.5;margin-top:3px">${esc(imp.line2)}</div>` : ''}
     <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:3px">${esc(imp.caveat)}</div></div>`;
 
   // Item 3 — 2-D burden matrix: symptom severity × frequency. Read-only
@@ -4831,21 +4877,9 @@ function buildClinicianPrint(c) {
   h += `<div class="pr-section"><div class="pr-sh">3 · Symptom burden — severity × frequency</div>`;
   {
     const sfCells = severityFrequencyMatrix(score, driverExtras);
-    if (sfCells.length) {
-      const sfRows = sfCells.map(cc => {
-        const sevTxt = cc.severity == null ? '—' : Math.round(cc.severity * 100) + '%';
-        const freqTxt = cc.freqIdx == null ? '—' : (cc.cluster === 'Pain' ? ROME_FREQ[cc.freqIdx] : CLUSTER_FREQ_LEVELS[cc.freqIdx]) || String(cc.freqIdx);
-        const q = cc.quadrant ? SEVFREQ_QUAD[cc.quadrant] : null;
-        return `<tr><td style="padding:2px 6px;font-weight:600">${esc(cc.cluster)}</td>
-          <td style="padding:2px 6px">${sevTxt}${cc.sevHi ? ' ▲' : ''}</td>
-          <td style="padding:2px 6px">${esc(freqTxt)}${cc.freqHi ? ' ▲' : ''}</td>
-          <td style="padding:2px 6px;color:${q ? q.c : '#888'}">${q ? esc(q.t) : 'incomplete'}</td></tr>`;
-      }).join('');
-      h += `<table class="pr-tbl"><thead><tr><th>Cluster</th><th>Severity</th><th>Frequency</th><th>Read</th></tr></thead>
-        <tbody>${sfRows}</tbody></table>
-        <div style="font-size:9px;color:#888;margin-top:2px">Frequency is a reported dimension only — it does not change the Index. ▲ = high. Priority = severe and frequent.</div>`;
-    } else {
-      h += `<div style="font-size:11px;color:#555">Not enough data yet — answer per-cluster frequency to populate this matrix.</div>`;
+    h += `<div style="page-break-inside:avoid;break-inside:avoid">${sevFreqBodyHtml(sfCells)}</div>`;
+    if (sfCells.length && sfCells.some(c => c.freqIdx != null)) {
+      h += `<div style="font-size:9px;color:#888;margin-top:4px">Frequency is a reported dimension only — it does not change the Index. Priority = severe and frequent.</div>`;
     }
   }
   h += `</div>`;
@@ -5006,10 +5040,14 @@ function buildClinicianPrint(c) {
       <ul style="margin:0 0 0 14px;font-size:10.5px;line-height:1.6">${physio.map(r => `<li>${esc(r.text)}</li>`).join('')}</ul>
       <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:2px">An adjunct after medical assessment — not a substitute for it.</div></div>`;
   }
-  h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Modifiable drivers</div>
-    <table class="pr-tbl"><thead><tr><th>Factor</th><th>Band</th><th>Score</th></tr></thead><tbody>
-      ${modifiableFactors(driverExtras).map(f => `<tr><td>${factorIcon(f)}${esc(f.label)}</td><td style="color:${f.color}">${esc(f.band)}</td><td>${esc(f.score || '')}</td></tr>`).join('')}
-    </tbody></table></div>`;
+  {
+    const drivers = modifiableFactors(driverExtras);
+    h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Modifiable drivers</div>
+      ${drivers.allEmpty ? `<div style="font-size:10.5px;color:#555">No modifiable-driver data recorded this visit.</div>` :
+      `<table class="pr-tbl"><thead><tr><th>Factor</th><th>Band</th><th>Score</th></tr></thead><tbody>
+      ${drivers.map(f => `<tr><td>${factorIcon(f)}${esc(f.label)}</td><td style="color:${f.color}">${esc(f.band)}</td><td>${esc(f.score || '')}</td></tr>`).join('')}
+    </tbody></table>`}</div>`;
+  }
   h += `</div>`;
 
   // Item 7 — Longitudinal trend engine & intervention overlay: what was
@@ -5185,17 +5223,13 @@ function renderClinician() {
   root.appendChild(el('div', { class: 'rpt-grp' }, 'Page 1 · At-a-glance overview'));
 
   // Headline score — big number + band, unmissable at the top of the report.
-  const peaks = score.peakAlerts || [];
-  const peakLine = peaks.length
-    ? `<div style="font-size:11.5px;color:#A32D2D;margin-top:8px;line-height:1.5">⚠ Peak-symptom alert${peaks.length > 1 ? 's' : ''}: ${
-        peaks.map(p => `${esc(p.label)} (${p.level === 'ceiling' ? 'very severe' : 'severe'})`).join(', ')
-      }.${score.peakEscalated ? ' Displayed band raised to reflect an isolated high-severity symptom that the balanced mean would otherwise dilute (raw index unchanged).' : ''}</div>`
-    : '';
+  // Peak-symptom detail lives exclusively in the Axis profile (item 5) now —
+  // the "↑" on the pill is just a pointer to it, not a repeat of the text.
   const hero = el('div', { class: 'card' });
   hero.appendChild(el('div', { class: 'hero' },
     `<div><div class="big">${sv.index == null ? '—' : sv.index + '%'}</div><div class="sub">Gut Symptom Burden</div></div>
      <div style="flex:1;min-width:160px">${sv.label ? `<span class="pill ${sv.cls || bandPillClass(sv.label)}">${esc(sv.label)}${sv.peakEscalated ? ' ↑' : ''}</span>` : ''}
-     <div style="font-size:12px;color:var(--inks);margin-top:8px;line-height:1.5">${esc(sv.desc || '')}</div>${peakLine}
+     <div style="font-size:12px;color:var(--inks);margin-top:8px;line-height:1.5">${esc(sv.desc || '')}</div>
      <div class="conf-note">Confidence: <b>${esc(conf.level)}</b> · ${score.completeness}% complete</div></div>`));
   root.appendChild(hero);
 
@@ -5228,7 +5262,8 @@ function renderClinician() {
   const imp = clinicalImpression(c);
   const impCard = el('div', { class: 'card', style: 'border-left:6px solid #185FA5' });
   impCard.appendChild(el('h2', {}, 'Executive summary'));
-  impCard.appendChild(el('div', { style: 'font-size:13px;line-height:1.5' }, esc(imp.txt)));
+  impCard.appendChild(el('div', { style: 'font-size:13px;line-height:1.5' }, esc(imp.line1)));
+  if (imp.line2) impCard.appendChild(el('div', { style: 'font-size:13px;line-height:1.5;margin-top:3px' }, esc(imp.line2)));
   impCard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:4px;font-style:italic' }, esc(imp.caveat)));
   root.appendChild(impCard);
 
