@@ -259,6 +259,17 @@ const sfLowCells = scoring.severityFrequencyMatrix(sfLow, { clusterFreq: { Indig
 const lowIndig = sfLowCells.find(c => c.cluster === 'Indigestion');
 ok(lowIndig && lowIndig.quadrant === 'low', 'G: mild + infrequent cluster → low quadrant');
 
+// G3. Fix: clusters with severity but no matching frequency answer used to be
+// dumped into a name-only "not plotted" footnote, silently dropping their
+// severity % — common since frequency rows are optional (source-level checks,
+// matching the existing G2 convention above for this non-exported renderer).
+ok(/function dominantClusterLine\(cells\)/.test(html), 'G3: dominantClusterLine() helper exists');
+ok(/domLine\}<div style="display:grid/.test(html) && /\$\{domLine\}<div style="font-size:10\.5px;font-weight:700;color:#777/.test(html),
+  'G3: dominant-cluster line is prepended in both the no-frequency and quadrant layouts');
+ok(/incompleteWithSev\.length.*Frequency not recorded \(severity only\)/s.test(sfBodyFn) || /incompleteWithSev/.test(sfBodyFn),
+  'G3: clusters with severity but no frequency answer keep their % (no longer silently dropped into a name-only footnote)');
+ok(/incompleteNoData/.test(sfBodyFn), 'G3: clusters with genuinely no data are still distinguished from severity-only clusters');
+
 // 15e. Tranche G — intervention overlay (annotation only, never scored).
 ok(scales.interventionSummary({}) === null, 'G: no interventions → null summary');
 ok(scales.interventionSummary({ interventionChips: ['diet_lowfodmap', 'pelvic_pt'] }) === 'Low-FODMAP trial, Pelvic-floor physiotherapy',
@@ -1717,10 +1728,65 @@ ok(/appendixToggleEl\(\)/.test(calcFn[0]) && /printSummary\(/.test(calcFn[0]), '
 ok(!!rcSrc, 'sanity: renderClinician() source captured');
 ok(/axisProfileCard\(/.test(rcSrc), 'renderClinician() still renders the axis profile card');
 ok(/domainBarsCard\(/.test(rcSrc), 'renderClinician() still renders the domain breakdown');
-ok(/riskMatrixCard\(/.test(rcSrc), 'renderClinician() still renders the risk matrix');
+// riskMatrixCard (Symptom x Dysbiosis-correlate quadrant) was deliberately
+// removed from the Clinician tab per direction — see the dedicated checks
+// below, not "still renders" (it never was in calc(), so nothing to compare).
 ok(/triageCard\(/.test(rcSrc), 'renderClinician() still renders the triage/Tier verdict');
 ok(/modifiableDriversCard\(/.test(rcSrc), 'renderClinician() still renders modifiable drivers');
 ok(/clinicianDetailCard\(/.test(rcSrc), "renderClinician() still renders the pattern-analysis appendix (clinicianDetailCard, superset of calc()'s old 'patterns to discuss')");
+
+// ── Fix: 0–4 scale answer buttons wrapping to a second row ──
+// .opts used a hardcoded repeat(4,1fr), a leftover from the 0–3 scale (4
+// options); DEFAULT is now 5 options (0–4), so the 5th wrapped onto its own
+// row. Fixed via a --n-opts custom property set per-question from
+// labels.length, so any scale length (DEFAULT's 5, DURATION's 6) lays out in
+// one row on wide screens without a hardcoded column count.
+ok(/\.opts\{display:grid;grid-template-columns:repeat\(var\(--n-opts,4\),1fr\)/.test(html), '.opts grid-template-columns is driven by --n-opts, not a hardcoded column count');
+ok(/style: `--n-opts:\$\{labels\.length\}`/.test(html), 'questionRow() sets --n-opts from the scale\'s actual option count');
+ok(/@media\(max-width:520px\)\{\.opts\{grid-template-columns:repeat\(2,1fr\)\}\}/.test(html), 'mobile 2-column override is untouched and still applies regardless of --n-opts');
+
+// ── Clinician-tab provisional caveat (was calc()-only, screen looked broken
+// when incomplete since empty cards had no explanation) ──
+ok(/score\.completeness < 80\) hero\.appendChild\(el\('div', \{ class: 'prov-caveat' \}/.test(rcSrc),
+  'renderClinician() hero now shows the same conditional provisional caveat as calc() (only when completeness < 80)');
+
+// ── Print page-1 trim: "Also noted" pattern-names line + Rome IV one-liner
+// removed from page 1; Clinical flags moved from page 1 to Context & drivers
+// (page 2) rather than appearing on both. ──
+const page1Src = html.slice(html.indexOf("h += `<div class=\"pr-grp\">Page 1"), html.indexOf('PAGE 2 — Assessment'));
+ok(!/Also noted:/.test(page1Src), 'print page 1 no longer shows the "Also noted" extra-pattern-names line');
+ok(!/Rome IV:.*criteria met \(single-visit estimate\)/.test(page1Src), 'print page 1 no longer shows the Rome IV one-liner');
+ok(!/Clinical flags:/.test(page1Src), 'print page 1 no longer shows the Clinical flags list');
+ok(!!printFn && /flagsBlock/.test(printFn[0]) && /Clinical flags:/.test(printFn[0]),
+  'Clinical flags list still renders somewhere in the print report (moved to Context & drivers)');
+
+// ── Remove Symptom × Dysbiosis-correlate quadrant card; highlight the
+// correlate load in the headline instead (via its weighted E3 tier) ──
+ok(!/function riskMatrixCard\(/.test(html), 'riskMatrixCard() removed entirely (dead code after the Clinician-tab removal)');
+ok(!/function riskMatrixBodyHtml\(/.test(html), 'riskMatrixBodyHtml() removed entirely (was only used by riskMatrixCard)');
+ok(!/riskMatrixCard\(/.test(rcSrc), 'renderClinician() no longer renders the Symptom × Dysbiosis-correlate card');
+ok(!/Symptom × Dysbiosis-correlate read/.test(html), 'the "Symptom × Dysbiosis-correlate read" heading is gone entirely (on-screen and print never had it)');
+
+// headline correlate pill now uses the weighted E3 tier (High/Moderate/Low),
+// not a flat signal-count band — so a single MAJOR signal (weight 2.0, e.g.
+// post-infectious onset) is highlighted the same way triage already treats
+// it, instead of reading as a generic "Some" band.
+const rHighCorrelate = run(0, {}, { dys: { postInfectious: 1, fibreParadox: 1 } });
+ok(rHighCorrelate.heads.primary.correlate.tier === 'High' && rHighCorrelate.heads.primary.correlate.band === 'High',
+  'Dysbiosis Correlate Load: band now equals the weighted E3 tier (High), not a flat-count band');
+const rLowCorrelate = run(0, {}, { dys: {} });
+ok(rLowCorrelate.heads.primary.correlate.band === 'Low', 'no correlate signals → Low band');
+ok(/band === 'Significant' \|\| band === 'Elevated' \|\| band === 'High' \? 'sev-sig'/.test(html),
+  "bandPillClass() recognises 'High' as the significant/highlighted pill colour (previously fell through to the neutral default)");
+ok(/band === 'Mild–Moderate' \|\| band === 'Some' \|\| band === 'Moderate' \? 'sev-mod'/.test(html),
+  "bandPillClass() recognises 'Moderate' as the moderate pill colour");
+
+// ── severityFrequencyCard(): never silently return null; add to calc() too ──
+ok(!/if \(!cells\.length\) return null;/.test(html.match(/function severityFrequencyCard\(score, extras\)\s*\{[\s\S]*?\n\}\n/)[0]),
+  'severityFrequencyCard() no longer returns null on empty data (was silently vanishing on the Clinician tab)');
+const calcFn2 = html.match(/function calc\(\)\s*\{[\s\S]*?\n(?=function )/);
+ok(!!calcFn2 && /severityFrequencyCard\(score, extras\)/.test(calcFn2[0]),
+  'calc() (patient-facing screen) now renders the symptom severity × frequency card, per direction');
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

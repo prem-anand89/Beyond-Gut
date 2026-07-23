@@ -59,7 +59,12 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 .q:last-child{border-bottom:none}
 .q-txt{font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:2px}
 .q-sub{font-size:11.5px;color:var(--inkt);margin-bottom:8px}
-.opts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+/* --n-opts is set per-question (labels.length) in questionRow() — the 0–4
+   scale migration widened DEFAULT from 4 to 5 options, and a hardcoded
+   repeat(4,1fr) here made the 5th option wrap onto its own row. Driven by a
+   custom property (not an inline grid-template-columns) so the mobile
+   media query below can still override it uniformly regardless of scale length. */
+.opts{display:grid;grid-template-columns:repeat(var(--n-opts,4),1fr);gap:6px}
 .opt{border:1.5px solid var(--bdr);background:var(--surf);border-radius:8px;padding:9px 6px;text-align:center;font-size:11.5px;font-weight:600;color:var(--inks);line-height:1.25;transition:all .12s}
 .opt:hover{border-color:var(--bdrm)}
 .opt .on{display:block;font-size:14px;font-weight:800;margin-bottom:2px}
@@ -1528,7 +1533,8 @@ function axisProfile(score, ex, dys) {
                     band: psych != null ? (psych >= 50 ? 'Significant' : psych >= 25 ? 'Mild–Moderate' : 'Minimal') : null,
                     validated: 'partial', note: 'PSS-4 is validated; BG screen items are draft.' },
     // (microbiome read removed — superseded by the Disruption / Dysbiosis Correlate
-    // split in headlineOutputs() and the Symptom × Dysbiosis-correlate matrix.)
+    // split in headlineOutputs(), surfaced via the headline card's weighted
+    // correlate-tier pill.)
     impact:       { axis: 'impact',       label: 'Functional impact',      value: n('IMP'), band: bl('IMP'),
                     validated: false, note: 'New domain — no pilot data yet.' },
   };
@@ -1572,8 +1578,13 @@ function headlineOutputs(score, ex, dys) {
                   value: ax.nutrient.value, band: ax.nutrient.band, validated: false, sub: ax.nutrient },
     disruption: { key: 'disruption_load', label: 'Disruption Load', value: disruption.length,
                   band: loadBandFor(disruption.length), validated: false, signals: disruption },
+    // band drives the headline pill's colour (bandPillClass) — uses the E3
+    // weighted tier (High/Moderate/Low, off signal SEVERITY) instead of a flat
+    // signal COUNT, so a single major signal (e.g. post-infectious onset,
+    // weight 2.0) is highlighted the same way triage/Context & drivers already
+    // treat it, rather than looking identical to a single minor one.
     correlate:  { key: 'dysbiosis_correlate_load', label: 'Dysbiosis Correlate Load', value: correlate.length,
-                  band: loadBandFor(correlate.length), validated: false, signals: correlate,
+                  band: correlateTier, validated: false, signals: correlate,
                   weightedScore: correlateScore, tier: correlateTier },
   };
   const secondary = {
@@ -3163,9 +3174,13 @@ function patientBanner() {
 // Band → pill class, reused by the headline + axis cards so draft axes get the
 // same visual language as the validated Symptom Burden.
 function bandPillClass(band) {
+  // 'High'/'Moderate' are the E3 weighted Dys-R tier vocabulary (Dysbiosis
+  // Correlate Load's headline pill) — added alongside the pre-existing
+  // Severe/Significant/Elevated/Mild-Moderate/Some band vocabularies used
+  // elsewhere, so a High correlate tier is highlighted, not shown neutral.
   return band === 'Severe' ? 'sev-sev'
-    : band === 'Significant' || band === 'Elevated' ? 'sev-sig'
-    : band === 'Mild–Moderate' || band === 'Some' ? 'sev-mod'
+    : band === 'Significant' || band === 'Elevated' || band === 'High' ? 'sev-sig'
+    : band === 'Mild–Moderate' || band === 'Some' || band === 'Moderate' ? 'sev-mod'
     : 'sev-min';
 }
 // Small "validated / draft / partial" provenance tag, reusing the .opt-tag class.
@@ -3226,51 +3241,6 @@ function axisProfileCard(profile, heads) {
   return card;
 }
 
-function riskMatrixCard(severity, micro) {
-  const sevHigh  = severity.label === 'Significant' || severity.label === 'Severe';
-  const riskHigh = micro.count >= 2;
-  const CELLS = {
-    LL: { t: 'Reassure & monitor',                    c: '#0F6E56' },
-    LH: { t: 'Early / post-disruptor — watch & support', c: '#BA7517' },
-    HL: { t: 'Symptom-led management',                c: '#C2622E' },
-    HH: { t: 'Strong microbiome-support candidate',   c: '#A32D2D' },
-  };
-  const activeKey = (sevHigh ? 'H' : 'L') + (riskHigh ? 'H' : 'L');
-  const card = el('div', { class: 'card', style: 'border-left:6px solid #185FA5' });
-  card.appendChild(el('h2', {}, 'Symptom × Dysbiosis-correlate read'));
-  // Two independent axes — symptom severity vs the Dysbiosis Correlate Load
-  // (the same inferred-correlate count shown in the headline; objective exposure
-  // history is the separate Disruption Load and is not mixed in here).
-  card.appendChild(el('div', { class: 'row', style: 'gap:10px;flex-wrap:wrap;margin:4px 0 8px' },
-    `<span class="pill ${severity.cls || bandPillClass(severity.label)}">Symptom: ${severity.index == null ? '—' : severity.index + '%'} · ${esc(severity.label || '—')}</span>
-     <span class="pill" style="background:#185FA5;color:#fff">Dysbiosis-correlate: ${micro.count} · ${riskHigh ? 'Elevated' : 'Low'}</span>`));
-
-  const grid = el('div', { style: 'display:grid;grid-template-columns:96px 1fr 1fr;gap:4px;font-size:12px;margin-top:4px' });
-  grid.appendChild(el('div', {}, ''));
-  grid.appendChild(el('div', { style: 'font-weight:600;text-align:center;color:var(--inks)' }, 'Low correlate'));
-  grid.appendChild(el('div', { style: 'font-weight:600;text-align:center;color:var(--inks)' }, 'High correlate'));
-  [['High severity', 'H'], ['Low severity', 'L']].forEach(([rlab, rs]) => {
-    grid.appendChild(el('div', { style: 'font-weight:600;display:flex;align-items:center;color:var(--inks)' }, rlab));
-    ['L', 'H'].forEach(cs => {
-      const k = rs + cs, cell = CELLS[k], active = k === activeKey;
-      grid.appendChild(el('div', { style:
-        `padding:8px;border-radius:6px;text-align:center;line-height:1.3;` +
-        `background:${active ? cell.c : '#F2F4F7'};color:${active ? '#fff' : '#8A93A0'};` +
-        `font-weight:${active ? '600' : '400'};border:${active ? '2px solid ' + cell.c : '1px solid #E1E5EB'}` },
-        esc(cell.t) + (active ? ' ◀ you' : '')));
-    });
-  });
-  card.appendChild(grid);
-
-  if (micro.count > 0) {
-    card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-weight:600' }, 'Dysbiosis-correlate signals:'));
-    card.appendChild(el('ul', { class: 'rf-list' }, micro.signals.map(s => `<li>${esc(s.label)}</li>`).join('')));
-  }
-  card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-style:italic;color:#999' },
-    'Two independent reads — symptom severity (GI score) and an inferred dysbiosis-correlate count (NOT a dysbiosis diagnosis; validate against stool testing). For discussion, not prescription.'));
-  return card;
-}
-
 // Tranche G — Symptom severity × frequency (2-D). Frequency is a REPORTED
 // dimension in its own right, crossed with severity per cluster: the
 // high-severity × high-frequency clusters are the priority quadrant. Read-only
@@ -3290,8 +3260,19 @@ const SEVFREQ_QUAD = {
 // builder) stay in lockstep. Two states: no frequency data recorded anywhere
 // this visit (a compact severity bar-chart, one row per cluster), or a real
 // 2×2 quadrant grid plotting every cluster that has both dimensions.
+// Dominant-cluster callout — a single explicit "which cluster is driving this"
+// line, shown above both layout modes below so the per-cluster GSRS read is
+// never dependent on scanning a bar list or a quadrant cell to find it.
+function dominantClusterLine(cells) {
+  const withSev = (cells || []).filter(c => c.severity != null);
+  if (!withSev.length) return '';
+  const top = withSev.reduce((a, b) => (b.severity > a.severity ? b : a));
+  return `<div style="font-size:11px;margin-bottom:6px"><span style="font-weight:600;color:#333">Dominant cluster:</span> ${esc(top.cluster)} <span style="color:#777;font-variant-numeric:tabular-nums">(${Math.round(top.severity * 100)}%)</span></div>`;
+}
+
 function sevFreqBodyHtml(cells) {
   if (!cells.length) return '<div style="font-size:11px;color:#555">Not enough data yet — answer per-cluster frequency to populate this matrix.</div>';
+  const domLine = dominantClusterLine(cells);
   const hasFreq = cells.some(c => c.freqIdx != null);
   if (!hasFreq) {
     const rows = cells.filter(c => c.severity != null).map(c => {
@@ -3302,12 +3283,23 @@ function sevFreqBodyHtml(cells) {
         <span style="flex:1;height:8px;background:#EDEDE8;border-radius:4px;overflow:hidden"><span style="display:block;height:100%;width:${pct}%;background:${barColor};border-radius:4px"></span></span>
         <span style="width:70px;flex:none;text-align:right;font-variant-numeric:tabular-nums">${pct}%${c.sevHi ? ' <b style="color:#A9463F">▲</b>' : ''}</span></div>`;
     }).join('');
-    return `<div style="font-size:10.5px;font-weight:700;color:#777;margin-bottom:5px">Frequency: Not recorded this visit — severity only</div>
+    return `${domLine}<div style="font-size:10.5px;font-weight:700;color:#777;margin-bottom:5px">Frequency: Not recorded this visit — severity only</div>
       <div>${rows || '<div style="font-size:11px;color:#555">No severity data recorded.</div>'}</div>`;
   }
   const byQuad = { priority: [], 'severe-intermittent': [], 'frequent-mild': [], low: [] };
-  const incomplete = [];
-  cells.forEach(c => { if (c.quadrant) byQuad[c.quadrant].push(c); else incomplete.push(c); });
+  // Clusters with severity but no matching frequency answer (frequency rows
+  // are optional, so this is common — e.g. only Rome's pain-frequency was
+  // answered) have quadrant == null. They used to be dumped into a
+  // name-only "not plotted" footnote, silently dropping their severity %.
+  // Now split further: still-visible-with-a-number if severity exists,
+  // vs. genuinely no data.
+  const incompleteWithSev = [];
+  const incompleteNoData = [];
+  cells.forEach(c => {
+    if (c.quadrant) byQuad[c.quadrant].push(c);
+    else if (c.severity != null) incompleteWithSev.push(c);
+    else incompleteNoData.push(c);
+  });
   const quadCell = key => {
     const q = SEVFREQ_QUAD[key], items = byQuad[key], active = items.length > 0;
     return `<div style="padding:7px 8px;border-radius:6px;line-height:1.4;min-height:44px;
@@ -3317,7 +3309,7 @@ function sevFreqBodyHtml(cells) {
       ${active ? items.map(c => `<div style="font-size:11px;color:#333">${esc(c.cluster)} <span style="color:#777;font-variant-numeric:tabular-nums">(${Math.round(c.severity * 100)}%)</span></div>`).join('') : '<div style="font-size:10.5px;opacity:.75">—</div>'}
     </div>`;
   };
-  let out = `<div style="display:grid;grid-template-columns:64px 1fr 1fr;gap:5px;font-size:12px">
+  let out = `${domLine}<div style="display:grid;grid-template-columns:64px 1fr 1fr;gap:5px;font-size:12px">
     <div></div>
     <div style="font-weight:700;text-align:center;color:#555;font-size:10px;text-transform:uppercase;letter-spacing:.03em;align-self:end;padding-bottom:2px">Episodic</div>
     <div style="font-weight:700;text-align:center;color:#555;font-size:10px;text-transform:uppercase;letter-spacing:.03em;align-self:end;padding-bottom:2px">Frequent</div>
@@ -3326,7 +3318,10 @@ function sevFreqBodyHtml(cells) {
     <div style="font-weight:700;display:flex;align-items:center;color:#555;font-size:10px;text-transform:uppercase;letter-spacing:.03em">Milder</div>
     ${quadCell('low')}${quadCell('frequent-mild')}
   </div>`;
-  if (incomplete.length) out += `<div style="font-size:9px;color:#888;margin-top:6px">Incomplete data — not plotted: ${incomplete.map(c => esc(c.cluster)).join(', ')}.</div>`;
+  // Severity is still shown for clusters missing only frequency — previously
+  // these silently lost their % entirely.
+  if (incompleteWithSev.length) out += `<div style="font-size:10px;color:#666;margin-top:6px">Frequency not recorded (severity only): ${incompleteWithSev.map(c => `${esc(c.cluster)} (${Math.round(c.severity * 100)}%)`).join(', ')}.</div>`;
+  if (incompleteNoData.length) out += `<div style="font-size:9px;color:#888;margin-top:2px">No data: ${incompleteNoData.map(c => esc(c.cluster)).join(', ')}.</div>`;
   return out;
 }
 
@@ -3377,7 +3372,12 @@ function schedulingPriorityHtml(tri, cells) {
 
 function severityFrequencyCard(score, extras) {
   const cells = severityFrequencyMatrix(score, extras);
-  if (!cells.length) return null;
+  // Previously returned null (silently vanishing, heading and all) when no
+  // cluster had any severity data yet — inconsistent with print, which
+  // always shows the card and lets sevFreqBodyHtml's own "Not enough data
+  // yet" placeholder handle the empty case. An incomplete screen used to
+  // read as "the Clinician tab is missing Symptom burden" rather than
+  // "not enough data recorded yet."
   const card = el('div', { class: 'card', style: 'border-left:6px solid #185FA5' });
   card.appendChild(el('h2', {}, 'Symptom severity × frequency'));
   card.appendChild(el('div', { class: 'q-sub', style: 'margin-bottom:6px' },
@@ -4417,7 +4417,10 @@ function questionRow(q) {
     return row;
   }
   const labels = scaleFor(q.scale);
-  const opts = el('div', { class: 'opts', role: 'group', 'aria-labelledby': `q-${q.id}` });
+  // --n-opts drives .opts' grid-template-columns so every scale (DEFAULT's 5
+  // options, DURATION's 6, or any future length) lays out in one row on wide
+  // screens, without hardcoding a column count that only fit the old 0–3 scale.
+  const opts = el('div', { class: 'opts', role: 'group', 'aria-labelledby': `q-${q.id}`, style: `--n-opts:${labels.length}` });
   const naBtn = q.optional ? el('button', { class: `chip-opt na-opt${answers[q.id] === 'na' ? ' sel' : ''}`, type: 'button', 'aria-pressed': answers[q.id] === 'na', 'aria-label': `${q.patientText}: Not applicable` }, 'Not applicable') : null;
   labels.forEach((lab, v) => {
     const sel = answers[q.id] === v ? ' sel' : '';
@@ -4672,6 +4675,13 @@ function calc() {
     `Provisional result — ${score.completeness}% of scored items answered.`));
   out.appendChild(hero);
 
+  // Symptom severity × frequency — per-cluster detail on the same headline
+  // score above (which cluster is driving it, how often it happens). Kept on
+  // the patient-facing screen per direction — unlike the Tier verdict or
+  // pattern-level clinical reasoning, this is a direct breakdown of answers
+  // the patient just gave, not a referral/management recommendation.
+  out.appendChild(severityFrequencyCard(score, extras));
+
   // Live trend preview: if this patient reference has prior visits, show the
   // trajectory. For a freshly-completed questionnaire the current visit is
   // appended as 'unsaved'; for a loaded saved visit it's already in the DB so
@@ -4686,10 +4696,10 @@ function calc() {
   if (trendEl) out.appendChild(trendEl);              // progress over time
 
   // Everything else — axis profile, domain breakdown, modifiable drivers,
-  // detected patterns, the risk matrix, and the triage/Tier verdict — lives
-  // in the Clinician tab only (renderClinician(): hero, triageCard,
-  // headlineCard, axisProfileCard, domainBarsCard, modifiableDriversCard,
-  // riskMatrixCard, and the pattern-analysis table in clinicianDetailCard()).
+  // detected patterns, and the triage/Tier verdict — lives in the Clinician
+  // tab only (renderClinician(): hero, triageCard, headlineCard,
+  // axisProfileCard, domainBarsCard, modifiableDriversCard, and the
+  // pattern-analysis table in clinicianDetailCard()).
 
   // Save-a-visit + pilot-CSV download + print.
   const actions = el('div', { class: 'card row', style: 'justify-content:flex-end;gap:8px;flex-wrap:wrap' });
@@ -5161,7 +5171,7 @@ function buildClinicianPrint(c, opts) {
   // ============================================================
   // PAGE 1 — Safety & acute presentation, in three sections:
   //   1 (top)    Headline score, Triage tier + care-track badges, Red flags.
-  //   2 (middle) Clinical impression, Peak-symptom alert, Clinical flags.
+  //   2 (middle) Clinical impression, Peak-symptom alert.
   //   3 (bottom) 2-D symptom burden matrix (severity × frequency).
   // The full plan text (reasons detail, investigations/management) lives on
   // page 2 — page 1 carries only the verdict + the caveats that change it.
@@ -5206,11 +5216,11 @@ function buildClinicianPrint(c, opts) {
   }
   h += `</div>`;
 
-  // ── Section 2 — Clinical impression, Peak-symptom alert, Clinical flags. ──
+  // ── Section 2 — Clinical impression + Peak-symptom alert only (page 1). ──
   // "Clinical flags" = only the notes that CHANGE management (caveats/medication
-  // risks). The pure fact restatements (conditions, meds, anthropometrics,
-  // duration, bowel frequency, reported labs, treatments tried) are NOT repeated
-  // here — they live once, in Context & drivers on page 2.
+  // risks); computed here but rendered in Context & drivers on page 2, not on
+  // page 1, alongside the pure fact restatements (conditions, meds,
+  // anthropometrics, duration, bowel frequency, reported labs, treatments tried).
   const imp = clinicalImpression(c);
   const planFlags = dedupeList([].concat(
     tri.conditionGuidance || [], tri.familyNotes || [],
@@ -5219,29 +5229,16 @@ function buildClinicianPrint(c, opts) {
     tri.autonomicNote ? [tri.autonomicNote] : [], tri.gynNote ? [tri.gynNote] : [],
     tri.pelvicNote ? [tri.pelvicNote] : [], tri.smokingNote ? [tri.smokingNote] : []));
   const flagCap = capList(planFlags, 8);
-  // Compact "at a glance" pointer to the full evidence on page 2: pattern NAMES
-  // only (rationale stays in the Interpretation table) and a one-line Rome IV
-  // read when criteria are met. Kept to a single line each — the full tables
-  // don't fit page 1's budget without pushing the report past 2 pages, and a
-  // clinician scanning page 1 needs the names, not the rationale, to orient.
-  // imp.line1 above already narrates patterns[0] by name in prose ("Most
-  // consistent with a ... pattern") — skip it here so a single-pattern screen
-  // doesn't print the same name twice one line apart; only the ADDITIONAL
-  // patterns (if any) are worth surfacing again.
-  const extraPatNames = (patterns || []).slice(1, 4).map(p => p.label);
-  const patternsLine = extraPatNames.length
-    ? `<div style="margin-top:5px;font-size:10.5px"><span style="font-weight:600;color:#555">Also noted:</span> ${extraPatNames.map(esc).join(' · ')}${patterns.length > extraPatNames.length + 1 ? ` <span style="color:#888">+${patterns.length - extraPatNames.length - 1} more (page 2)</span>` : ''}</div>`
-    : '';
-  const romeLine = (rome && rome.criteriaMet)
-    ? `<div style="margin-top:2px;font-size:10.5px"><span style="font-weight:600;color:#555">Rome IV:</span> ${esc(rome.subtype)} pattern — criteria met (single-visit estimate)</div>`
-    : '';
+  // Page 1 keeps only the plain-language pattern narrative (imp.line1/line2)
+  // and the peak-symptom alert. The extra-pattern-names line, the Rome IV
+  // one-liner, and the Clinical flags list were trimmed off page 1 — all
+  // three are redundant with (or a preview of) content already on page 2
+  // (Interpretation's pattern table, the Rome IV table, and Context &
+  // drivers' Clinical flags list respectively).
   h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('impression')}</div>
     <div style="font-size:11px;line-height:1.5">${esc(imp.line1)}</div>
     ${imp.line2 ? `<div style="font-size:11px;line-height:1.5;margin-top:3px">${esc(imp.line2)}</div>` : ''}
-    ${patternsLine}${romeLine}
     ${peakAlertBoxHtml(score)}
-    ${planFlags.length ? `<div style="font-size:10.5px;margin-top:8px;font-weight:600">Clinical flags:</div>
-    ${flagCap.shown.map(n => `<div style="font-size:10.5px;padding-left:8px;margin-top:2px;color:#5A3A10">• ${esc(n)}</div>`).join('')}${flagCap.extra ? `<div style="font-size:9.5px;padding-left:8px;color:#888;margin-top:2px">+${flagCap.extra} more flag${flagCap.extra > 1 ? 's' : ''} (see Context &amp; drivers)</div>` : ''}` : ''}
     </div>`;
 
   // ── Section 3 — 2-D symptom burden matrix (severity × frequency). ─────────
@@ -5420,8 +5417,18 @@ function buildClinicianPrint(c, opts) {
     if (tri.labNote) row('Reported abnormal labs', esc(tri.labNote.replace(/^Patient-reported abnormal test result\(s\): /, '').replace(/\.$/, '')));
     if (tri.treatmentsTriedNote) row('Already tried', esc(tri.treatmentsTriedNote.replace(/^Already tried: /, '').replace(/\.$/, '')));
     const ivNow = interventionSummary(driverExtras);
+    // Clinical flags (management-changing notes — coeliac timing, restriction
+    // screen, referred pain, autonomic overlap, etc.) — moved here from page 1
+    // (was a preview list under Clinical impression; now lives once, with the
+    // rest of the context/drivers detail it's part of).
+    const flagsBlock = flagCap.shown.length
+      ? `<div style="font-size:10.5px;margin-top:6px"><b>Clinical flags:</b>
+          ${flagCap.shown.map(n => `<div style="padding-left:8px;margin-top:2px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
+          ${flagCap.extra ? `<div style="padding-left:8px;color:#888;margin-top:2px">+${flagCap.extra} more flag${flagCap.extra > 1 ? 's' : ''}</div>` : ''}</div>`
+      : '';
     const leftInner = (hxRows.length ? hxRows.join('') : `<div style="font-size:10.5px;color:#555">No additional history recorded.</div>`)
-      + `<div style="font-size:10.5px;margin-top:6px"><b>Interventions this visit:</b> ${ivNow ? esc(ivNow) : '<span style="color:#555">none recorded</span>'}</div>`;
+      + `<div style="font-size:10.5px;margin-top:6px"><b>Interventions this visit:</b> ${ivNow ? esc(ivNow) : '<span style="color:#555">none recorded</span>'}</div>`
+      + flagsBlock;
 
     // Right column — modifiable drivers, as a real 2-column table (Factor |
     // Value) so the band/score lines up in one place across every row instead
@@ -5575,7 +5582,7 @@ function renderClinician() {
     return;
   }
   const c = lastCalc;
-  const { score, sv, conf, lens, rome, tri, profile, heads, correlateLoad, fired, driverExtras } = c;
+  const { score, sv, conf, lens, rome, tri, profile, heads, fired, driverExtras } = c;
 
   // Identity + print header
   const who = (session.name || '').trim() || (session.ref || '').trim() || 'Anonymous screen';
@@ -5600,7 +5607,7 @@ function renderClinician() {
   // ============================================================
   // PAGE 1 — Safety & acute presentation (mirrors the print hybrid layout):
   // headline score, Triage tier + care-track badges, Red flags, then Clinical
-  // impression + Peak-symptom alert + Clinical flags, then the burden matrix.
+  // impression + Peak-symptom alert, then the burden matrix.
   // The full investigations/management list lives in Suggested Actions on
   // page 2 — page 1 carries only the verdict + the caveats that change it.
   // ============================================================
@@ -5613,6 +5620,11 @@ function renderClinician() {
     `<div><div class="big">${sv.index == null ? '—' : sv.index + '%'}</div><div class="sub">Gut Symptom Burden</div></div>
      <div style="flex:1;min-width:160px">${sv.label ? `<span class="pill ${sv.cls || bandPillClass(sv.label)}">${esc(sv.label)}${sv.peakEscalated ? ' ↑' : ''}</span>` : ''}
      <div class="conf-note">Confidence: <b>${esc(conf.level)}</b> · ${score.completeness}% complete</div></div>`));
+  // Only shown when the screen is genuinely incomplete — explains why the
+  // cards below may read as empty/dashed rather than looking like a broken
+  // report. Mirrors calc()'s equivalent caveat on the patient-facing screen.
+  if (score.completeness < 80) hero.appendChild(el('div', { class: 'prov-caveat' },
+    `Provisional result — ${score.completeness}% of scored items answered.`));
   root.appendChild(hero);
 
   // Assessment & plan — triage verdict + care-track badges, leads page 1 (the
@@ -5661,7 +5673,7 @@ function renderClinician() {
   // Symptom burden — 2-D severity × frequency matrix (read-only; frequency never
   // re-enters the Index). The single home for per-cluster severity.
   root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('burden')));
-  const sfCard = severityFrequencyCard(score, extras); if (sfCard) root.appendChild(sfCard);
+  root.appendChild(severityFrequencyCard(score, extras));
 
   // ============================================================
   // PAGE 2 — Assessment & clinical detail. The tier verdict already led on
@@ -5672,13 +5684,15 @@ function renderClinician() {
   root.appendChild(el('div', { class: 'rpt-grp' }, 'Page 2 · Assessment & clinical detail'));
 
   // Interpretation — the reads behind the verdict: headline axis reads, axis
-  // profile, GSRS domain/cluster breakdown, and the severity × dysbiosis-correlate
-  // quadrant read.
+  // profile, and GSRS domain/cluster breakdown. The Symptom x Dysbiosis-
+  // correlate quadrant card was removed — the Dysbiosis Correlate Load
+  // number in the headline card above now carries the same weighted E3 tier
+  // (High/Moderate/Low) as its pill colour, so an elevated correlate load is
+  // already highlighted there without a second card repeating it.
   root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('interp')));
   root.appendChild(headlineCard(heads, rome));
   root.appendChild(axisProfileCard(profile, heads));
   root.appendChild(domainBarsCard(score, true));   // full domain breakdown incl. GSRS cluster shape
-  root.appendChild(riskMatrixCard(sv, correlateLoad));
 
   // Context & drivers — modifiable driver readout (on-screen keeps the full
   // history/context in the appendix detail card below; the print report combines
