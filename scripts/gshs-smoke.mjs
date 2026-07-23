@@ -388,30 +388,16 @@ ok(rAnthro.tri.level === run(0).tri.level, 'anthropometrics does not change the 
 ok(['GI','IM','BG','NU','IMP','AR','UG','SY'].every(id => schema.SECTIONS.some(s => s.id === id)), 'all sections still present after reorg');
 ok(run(0, { im_food_react: 3, im_histamine: 3, sk_skin: 3 }, { heightCm: 100, weightKg: 30, waistCm: 70 }).heads.primary.symptom.value === 0, 'GSRS Index unchanged by anthropometrics / systemic answers');
 
-// 27. Patient summary report — structure (source-level; buildPatientPrint is a
-// DOM renderer not loadable in this dependency-free harness, but its data inputs
-// — heads / rome / patterns / anthro — are engine-tested above).
-const ptFn = html.match(/function buildPatientPrint\(c\)\s*\{[\s\S]*?\n\}/);
-ok(!!ptFn, 'buildPatientPrint present');
-const ptSrc = ptFn ? ptFn[0] : '';
-ok(/\bheads\b/.test(ptSrc) && /\banthro\b/.test(ptSrc) && /\brome\b/.test(ptSrc) && /\bpatterns\b/.test(ptSrc),
-   'patient print uses heads, anthro, rome, patterns from c');
-ok(/Your results at a glance/.test(ptSrc), 'patient print: four-output glance grid heading');
-ok(/heads\.primaryList\.forEach/.test(ptSrc), 'patient print: iterates the 4 primary outputs');
-ok(/heads\.secondaryList\.filter/.test(ptSrc), 'patient print: shows secondary axes (answered only)');
-ok(/What this means for you/.test(ptSrc), 'patient print: plain-language triage heading');
-ok(/conditionGuidance[\s\S]*familyNotes[\s\S]*anthroNote/.test(ptSrc), 'patient print: surfaces triage notes as bullets');
-ok(/rome && rome\.criteriaMet/.test(ptSrc), 'patient print: Rome subtype shown only when criteria met');
-ok(/patterns\.length/.test(ptSrc), 'patient print: patterns section gated on any fired');
-ok(/Symptom breakdown/.test(ptSrc), 'patient print: per-area bars renamed to Symptom breakdown');
-ok(/Body measurements/.test(ptSrc) && /anthro\.bmi != null/.test(ptSrc), 'patient print: anthropometrics block gated on entered values');
-ok(/Modifiable factors/.test(ptSrc), 'patient print: lifestyle factors renamed to Modifiable factors');
-// Plain-language maps present and jargon-free.
-ok(/PT_HEAD_DESC/.test(html) && /PT_SUBTYPE_DESC/.test(html), 'patient print: plain-language description maps defined');
-const headDesc = html.match(/const PT_HEAD_DESC = \{[\s\S]*?\};/);
-ok(headDesc && !/GSRS|axis|norm|cluster/i.test(headDesc[0]), 'patient head descriptions are jargon-free');
-ok(/clinicalImpression\(c\)/.test(ptSrc), 'patient print: clinical impression synthesized');
-ok(/Clinical impression/.test(ptSrc) && ptSrc.indexOf('Clinical impression') < ptSrc.indexOf('Your results at a glance'), 'patient print: clinical impression appears before results');
+// 27. Clinician-only tool — the patient summary print has been removed. There is
+// a single (clinician) report; no buildPatientPrint / patient-facing copy maps /
+// "Patient summary" button, and printSummary() takes no mode argument.
+ok(!/function buildPatientPrint/.test(html), 'patient summary print removed (buildPatientPrint gone)');
+ok(!/PT_HEAD_DESC|PT_SUBTYPE_DESC/.test(html), 'patient-only copy maps removed (PT_HEAD_DESC / PT_SUBTYPE_DESC gone)');
+ok(!/Patient summary/.test(html), 'the "Patient summary" print button is gone');
+ok(!/printSummary\('patient'\)|printSummary\('clinician'\)/.test(html), 'printSummary() is mode-less (clinician-only)');
+ok(/function printSummary\(\)/.test(html) && /area\.appendChild\(buildClinicianPrint\(lastCalc\)\)/.test(html),
+  'printSummary() renders the clinician report directly');
+ok(!/CONCERN_BANDS/.test(html), 'dead CONCERN_BANDS set removed');
 
 // 28. Clinician report — structure (source-level; DOM renderer not loadable here).
 const clFn = html.match(/function buildClinicianPrint\(c\)\s*\{[\s\S]*?\n\}\n/);
@@ -1046,7 +1032,6 @@ ok(!/(^|,)null(,|$)/.test(csvEmptyRow), 'core-skipped visit does not export the 
 // tri.conditionNote (previously present in the on-screen triageCard but
 // silently dropped from both print builders' note concats). Clinician print
 // must also surface driverExtras.medsOther.
-ok(/tri\.autonomicNote/.test(ptSrc) && /tri\.conditionNote/.test(ptSrc), 'patient print includes autonomicNote + conditionNote (A7)');
 ok(/tri\.autonomicNote/.test(clSrc) && /tri\.conditionNote/.test(clSrc), 'clinician print includes autonomicNote + conditionNote (A7)');
 ok(/medsOther/.test(clSrc), 'clinician print surfaces driverExtras.medsOther (A5)');
 
@@ -1141,16 +1126,16 @@ ok(/immuneKnownDx/.test(html), 'immuneKnownDx opt wired through computeAll() →
 // work-up is plausible: nutrient_malabsorption/inflammatory_immune firing,
 // OR coeliac already flagged via reported condition or family history — and
 // is null otherwise.
-ok(b2Tri.coeliacTimingNote && /keep eating gluten/.test(b2Tri.coeliacTimingNote),
+ok(b2Tri.coeliacTimingNote && /gluten[\s\S]*false-negative/.test(b2Tri.coeliacTimingNote),
   'coeliacTimingNote fires when nutrient_malabsorption fires (B3)');
 const b3TriNone = triage(scoring.computeScores({ gsrs_heartburn: 1 }, {}), [], [], { count: 0 }, {});
 ok(b3TriNone.coeliacTimingNote === null, 'coeliacTimingNote is null with no malabsorption/inflammatory pattern and no coeliac flag');
 const b3TriFamily = triage(scoring.computeScores({ gsrs_heartburn: 1 }, {}), [], [], { count: 0 },
   { knownConditions: { list: [] }, family: { list: ['Coeliac disease'] } });
-ok(b3TriFamily.coeliacTimingNote && /keep eating gluten/.test(b3TriFamily.coeliacTimingNote),
+ok(b3TriFamily.coeliacTimingNote && /gluten[\s\S]*false-negative/.test(b3TriFamily.coeliacTimingNote),
   'coeliacTimingNote fires from family-history coeliac flag alone, even with no pattern firing (B3)');
-ok(/tri\.coeliacTimingNote/.test(ptSrc) && /tri\.coeliacTimingNote/.test(clSrc) && /tri\.coeliacTimingNote/.test(html.match(/function triageCard\(tri, rome, showInvestigations\)[\s\S]*?\n\}/)[0]),
-  'coeliacTimingNote wired into all three render sites (triageCard, patient print, clinician print)');
+ok(/tri\.coeliacTimingNote/.test(clSrc) && /tri\.coeliacTimingNote/.test(html.match(/function triageCard\(tri, rome, showInvestigations\)[\s\S]*?\n\}/)[0]),
+  'coeliacTimingNote wired into both render sites (triageCard + clinician print)');
 
 // B4 regression. Unsupervised-restriction note fires when Low-FODMAP or
 // Elimination diet is in the resolved treatmentsTried label list — a
@@ -1166,8 +1151,7 @@ ok(b4TriElim.restrictionNote && /dietitian/.test(b4TriElim.restrictionNote),
 const b4TriNone = triage(scoring.computeScores({ gsrs_heartburn: 1 }, {}), [], [], { count: 0 },
   { treatmentsTried: ['Probiotic', 'PPI / acid suppressant'] });
 ok(b4TriNone.restrictionNote === null, 'restrictionNote is null when no restrictive diet is in treatmentsTried');
-ok(/tri\.restrictionNote/.test(ptSrc) && /tri\.restrictionNote/.test(clSrc),
-  'restrictionNote wired into both print builders');
+ok(/tri\.restrictionNote/.test(clSrc), 'restrictionNote wired into the clinician print');
 
 // C1 regression. romeDisplaySubtype() layers Bristol on top of bowelSubtype()
 // for the DISPLAYED Rome subtype only — bowelSubtype() itself (pattern-firing
@@ -1237,14 +1221,11 @@ ok(/This applies at any age, but is especially important if you are over 45\./.t
   'rf_newonset50 age cue is its own sentence, not a parenthetical qualifier (C4)');
 ok(/lasting 6 weeks or more\./.test(rfNewonset50.label), 'rf_newonset50 still states the 6-week persistence threshold (C4)');
 
-// De-jargon: gut_symptom_burden patient copy no longer claims an unqualified
-// "validated questionnaire" (same overclaim as C2, different string).
-ok(!/'How heavy your gut symptoms feel overall, from a validated questionnaire\.'/.test(html),
-  'gut_symptom_burden patient-copy overclaim removed (C4)');
-ok(/'How heavy your gut symptoms feel overall, based on a widely-used symptom questionnaire\.'/.test(html),
-  'gut_symptom_burden patient copy uses accurate wording (C4)');
-ok(/dysbiosis_correlate_load: 'Symptom patterns often seen alongside changes in gut bacteria\.'/.test(html),
-  'dysbiosis_correlate_load patient copy stays plain-language (C4, confirmed already jargon-free)');
+// De-jargon (C4): the "validated questionnaire" overclaim must stay gone. (The
+// patient-facing PT_HEAD_DESC map that carried the accurate replacement copy was
+// removed with the patient summary — the clinician report uses the axis-profile
+// provenance tags instead, checked elsewhere.)
+ok(!/from a validated questionnaire/.test(html), 'gut_symptom_burden "validated questionnaire" overclaim stays removed (C4)');
 
 // D5 regression. FIT added to both the family-cancer-history investigation and
 // diarrhoea_dominant's investigation list.
@@ -1353,8 +1334,7 @@ const d3MildPainScore = scoring.computeScores(d3MildPainAnswers, {});
 ok((d3MildPainScore.clusterNorm.Pain || 0) < 0.5, 'sanity: d3MildPainAnswers fixture keeps the Pain cluster below 0.5');
 const d3TriMild = triage(d3MildPainScore, [], [], { count: 0 }, { painRegion: 'low_back' });
 ok(d3TriMild.referredPainNote === null, 'referredPainNote does not fire on painRegion alone without a prominent Pain cluster (D3)');
-ok(/tri\.referredPainNote/.test(ptSrc) && /tri\.referredPainNote/.test(clSrc),
-  'referredPainNote wired into both print builders (D3)');
+ok(/tri\.referredPainNote/.test(clSrc), 'referredPainNote wired into the clinician print (D3)');
 
 // D6 regression. restrictionScreenNote fires on imp_food>=2 AND (a restrictive
 // diet history OR low BMI) — a wiring-only note, not a new screening instrument.
@@ -1366,8 +1346,7 @@ const d6ImpFoodOnly = triage(scoring.computeScores({ gsrs_heartburn: 1 }, {}), [
 ok(d6ImpFoodOnly.restrictionScreenNote === null, 'restrictionScreenNote is null when imp_food>=2 alone (no restrictive history/low BMI) (D6)');
 const d6RestrictOnly = triage(scoring.computeScores({ gsrs_heartburn: 1 }, {}), [], [], { count: 0 }, { treatmentsTried: ['Low-FODMAP diet'] });
 ok(d6RestrictOnly.restrictionScreenNote === null, 'restrictionScreenNote is null when restrictive history alone (no imp_food>=2) (D6)');
-ok(/tri\.restrictionScreenNote/.test(ptSrc) && /tri\.restrictionScreenNote/.test(clSrc),
-  'restrictionScreenNote wired into both print builders (D6)');
+ok(/tri\.restrictionScreenNote/.test(clSrc), 'restrictionScreenNote wired into the clinician print (D6)');
 
 // D2 follow-up (browser-caught). conditionsCard()'s chip toggle must call
 // refreshReveals() — pelvicRisk now depends on extras.conditions (endo), so
@@ -1409,7 +1388,7 @@ ok(rCal.tri.labNote && /calprotectin/i.test(rCal.tri.labNote), 'labNote summaris
 ok(run(0, {}).tri.labNote == null, 'labNote null when no labs reported');
 // Wired into all three render sites + de-identified CSV columns.
 ok(/tri\.labNote/.test(html), 'labNote referenced in a UI render site');
-ok(/ptNotes = \[\]\.concat\([\s\S]{0,220}tri\.labNote/.test(html), 'labNote in patient-print notes concat');
+ok(/tri\.labNote \? \[tri\.labNote\] : \[\]/.test(clSrc), 'labNote in the clinician-print notes concat');
 ok(/ex_lab_' \+ L\.id/.test(html) && /\(ex\.knownLabs \|\| \[\]\)\.includes\(L\.id\)/.test(html),
   'M2 labs exported as de-identified yes/no CSV columns (free-text excluded)');
 ok(/knownLabs: \[\]/.test(html) && /knownLabsDetail: \{\}/.test(html), 'blankExtras seeds knownLabs / knownLabsDetail');
