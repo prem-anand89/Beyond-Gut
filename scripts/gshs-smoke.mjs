@@ -573,27 +573,32 @@ ok(!!rcFn, 'renderClinician present');
 const rcSrc = rcFn ? rcFn[0] : '';
 ok(/clinicalImpression\(c\)/.test(rcSrc), 'clinician tab: clinical impression added');
 ok(rcSrc.indexOf('clinicalImpression') < rcSrc.indexOf('headlineCard(heads'), 'clinician tab: impression above the headline');
-ok(/physioCandidacy\(tri\)/.test(rcSrc) && /Physiotherapy candidacy/.test(rcSrc), 'clinician tab: physio candidacy callout');
-ok(/No red flags answered Yes/.test(rcSrc), 'clinician tab: foregrounded red-flags card (with none-reassurance)');
+// Physio candidacy folded into the on-screen Suggested Actions card too (no
+// separate heading), same as print — see actionColumnsHtml.
+ok(/physioCandidacy\(tri\)/.test(rcSrc) && /actionColumnsHtml\(tri, physio\)/.test(rcSrc), 'clinician tab: physio candidacy folded into Suggested Actions');
+ok(/No red flags identified this visit/.test(rcSrc), 'clinician tab: foregrounded red-flags card (with none-reassurance)');
 ok(rcSrc.indexOf(`sectionTitle('flags')`) < rcSrc.indexOf('axisProfileCard'), 'clinician tab: red flags (page 1) before axis profile (page 2)');
-// Same descriptive-section grouping mirrored on-screen: page 1 is at-a-glance
-// (hero → red flags → impression → burden matrix), page 2 reunites the triage
-// verdict + plan then the interpretation reads / drivers / trend, and page 3 is
-// the appendix (which on-screen also carries the history & context detail card).
-['Page 1 · At a glance', `sectionTitle('flags')`,
+// Same hybrid page-1 layout mirrored on-screen (matches the print reorg):
+// page 1 = hero → Triage/plan + care-track badges → red flags → impression +
+// peak alert → burden matrix; page 2 opens with interpretation → context →
+// trend → Suggested Actions (last); page 3 is the appendix (which on-screen
+// also carries the history & context detail card).
+['Page 1 · At a glance', `sectionTitle('plan')`, `sectionTitle('flags')`,
  `sectionTitle('impression')`, `sectionTitle('burden')`,
- 'Page 2 · Assessment & clinical detail', `sectionTitle('plan')`,
- `sectionTitle('interp')`, `sectionTitle('context')`, `sectionTitle('trend')`,
+ 'Page 2 · Assessment & clinical detail',
+ `sectionTitle('interp')`, `sectionTitle('context')`, `sectionTitle('trend')`, `sectionTitle('actions')`,
  'Page 3+ · Appendix', `sectionTitle('appendix')`,
 ].forEach(txt => ok(rcSrc.includes(txt), `clinician tab: on-screen section header "${txt}" present`));
-ok(rcSrc.indexOf('class="hero"') < rcSrc.indexOf('rfCard'), 'clinician tab: headline score hero leads, before the red-flag card');
+ok(rcSrc.indexOf('class="hero"') < rcSrc.indexOf('triageCard(tri'), 'clinician tab: headline score hero leads, before the triage/plan card');
+ok(rcSrc.indexOf('triageCard(tri') < rcSrc.indexOf('rfCard'), 'clinician tab: triage/plan card precedes the red-flag card');
 ok(rcSrc.indexOf('rfCard') < rcSrc.indexOf('impCard'), 'clinician tab: red-flag card precedes the impression card');
 ok(rcSrc.indexOf('impCard') < rcSrc.indexOf('severityFrequencyCard'), 'clinician tab: impression precedes the burden matrix');
-ok(rcSrc.indexOf('severityFrequencyCard') < rcSrc.indexOf('triageCard(tri'), 'clinician tab: burden matrix (page 1) precedes the triage/plan (page 2)');
+ok(rcSrc.indexOf('severityFrequencyCard') < rcSrc.indexOf('Page 2 ·'), 'clinician tab: burden matrix is the last page-1 element');
 ok(rcSrc.indexOf(`sectionTitle('plan')`) < rcSrc.indexOf('triageCard(tri'), 'clinician tab: triage card sits inside the plan section');
 ok(rcSrc.indexOf(`sectionTitle('interp')`) < rcSrc.indexOf('headlineCard(heads'), 'clinician tab: headline/axis reads sit inside the interpretation section');
 ok(rcSrc.indexOf(`sectionTitle('context')`) < rcSrc.lastIndexOf('modifiableDriversCard'), 'clinician tab: modifiable-driver card sits inside the context section');
-ok(rcSrc.indexOf('clinicianDetailCard(c)') > rcSrc.lastIndexOf(`sectionTitle('trend')`), 'clinician tab: clinicianDetailCard renders after the trend section, under the appendix header');
+ok(rcSrc.indexOf(`sectionTitle('actions')`) < rcSrc.indexOf('Page 3+'), 'clinician tab: Suggested Actions sits before the appendix');
+ok(rcSrc.indexOf('clinicianDetailCard(c)') > rcSrc.lastIndexOf(`sectionTitle('actions')`), 'clinician tab: clinicianDetailCard renders after Suggested Actions, under the appendix header');
 // De-dup — the buried red-flag block is gone from clinicianDetailCard.
 const cdFn = html.match(/function clinicianDetailCard\(c\)\s*\{[\s\S]*?\n\}\n/);
 ok(cdFn && !/Red flags — \$\{fired\.length\} answered Yes/.test(cdFn[0]), 'clinician detail: buried red-flag block removed (no duplication)');
@@ -1168,7 +1173,7 @@ const b3TriFamily = triage(scoring.computeScores({ gsrs_heartburn: 1 }, {}), [],
   { knownConditions: { list: [] }, family: { list: ['Coeliac disease'] } });
 ok(b3TriFamily.coeliacTimingNote && /gluten[\s\S]*false-negative/.test(b3TriFamily.coeliacTimingNote),
   'coeliacTimingNote fires from family-history coeliac flag alone, even with no pattern firing (B3)');
-ok(/tri\.coeliacTimingNote/.test(clSrc) && /tri\.coeliacTimingNote/.test(html.match(/function triageCard\(tri, rome, showInvestigations\)[\s\S]*?\n\}/)[0]),
+ok(/tri\.coeliacTimingNote/.test(clSrc) && /tri\.coeliacTimingNote/.test(html.match(/function triageCard\(tri, rome, showInvestigations, includeInvestigationsList\)[\s\S]*?\n\}/)[0]),
   'coeliacTimingNote wired into both render sites (triageCard + clinician print)');
 
 // B4 regression. Unsupervised-restriction note fires when Low-FODMAP or
