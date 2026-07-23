@@ -1692,5 +1692,35 @@ ok(!!romeCardFn && !/clinLabel/.test(romeCardFn[0]), 'romeCard() (intake form) u
 const calcFn = html.match(/function calc\(\)\s*\{[\s\S]*?\n(?=function )/);
 ok(!!calcFn && /esc\(f\.label\)/.test(calcFn[0]) && !/f\.clinLabel/.test(calcFn[0]), "calc()'s patient-facing red-flag banner still uses plain label (correctly left alone)");
 
+// ── Tier B: tighten the patient-facing gate ──
+// calc() (the immediate post-submit screen — may be seen by an unsupervised
+// patient) should show only: applicability note, red-flag banner, headline
+// card, hero score card, trend (if tracked), and the actions row. Axis
+// profile, domain breakdown, modifiable drivers, detected patterns, the risk
+// matrix, and the triage/Tier verdict move to Clinician-tab-only.
+ok(!!calcFn, 'sanity: calc() function body captured');
+ok(!/axisProfileCard\(/.test(calcFn[0]), 'calc() no longer renders the axis profile card');
+ok(!/domainBarsCard\(/.test(calcFn[0]), 'calc() no longer renders the domain breakdown bars');
+ok(!/riskMatrixCard\(/.test(calcFn[0]), 'calc() no longer renders the risk matrix');
+ok(!/triageCard\(/.test(calcFn[0]), 'calc() no longer renders the triage/Tier verdict card');
+ok(!/Patterns to discuss/.test(calcFn[0]), 'calc() no longer renders the "patterns to discuss" card');
+ok(!/'Modifiable drivers'/.test(calcFn[0]), 'calc() no longer renders the inline modifiable-drivers card');
+// Still present: the safety-critical and reassurance-level (Tier B) content.
+ok(/headlineCard\(heads, rome\)/.test(calcFn[0]), 'calc() still renders the headline card');
+ok(/Gut Symptom Burden/.test(calcFn[0]), 'calc() still renders the hero score card');
+ok(/trendCard\(/.test(calcFn[0]), 'calc() still renders the trend card when prior visits exist');
+ok(/anyRedFlag\(redflags\)/.test(calcFn[0]), 'calc() still renders the red-flag banner');
+ok(/appendixToggleEl\(\)/.test(calcFn[0]) && /printSummary\(/.test(calcFn[0]), 'calc() still exposes the Clinician-report print button (kept on the immediate screen per direction)');
+
+// Nothing was lost — renderClinician() must still render every card removed
+// from calc() above (in full, or a richer equivalent).
+ok(!!rcSrc, 'sanity: renderClinician() source captured');
+ok(/axisProfileCard\(/.test(rcSrc), 'renderClinician() still renders the axis profile card');
+ok(/domainBarsCard\(/.test(rcSrc), 'renderClinician() still renders the domain breakdown');
+ok(/riskMatrixCard\(/.test(rcSrc), 'renderClinician() still renders the risk matrix');
+ok(/triageCard\(/.test(rcSrc), 'renderClinician() still renders the triage/Tier verdict');
+ok(/modifiableDriversCard\(/.test(rcSrc), 'renderClinician() still renders modifiable drivers');
+ok(/clinicianDetailCard\(/.test(rcSrc), "renderClinician() still renders the pattern-analysis appendix (clinicianDetailCard, superset of calc()'s old 'patterns to discuss')");
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

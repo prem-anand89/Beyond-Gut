@@ -590,8 +590,8 @@ The Index (0–100) never includes stress, sleep, or other systemic domains. Thi
 **3. Patterns don't diagnose**  
 Tool outputs "pattern consistent with IBS-D criteria" or "nutrient-malabsorption signal detected," not "IBS-D diagnosis." Interpretation is the clinician's responsibility. No diagnostic label is made.
 
-**4. Pattern confidence is clinician-only**  
-Patients see "Pelvic-floor dysfunction pattern noted," clinicians see "Confidence: Moderate (4 of 6 signals answered)." Confidence describes data completeness, not clinical certainty. Clinician applies judgment.
+**4. Patterns, the Tier verdict, and confidence are clinician-only — NEW (Tier B gate)**  
+The immediate post-submit screen (`calc()`, `#patient-results`) may be seen by a patient without a clinician present — the tool supports both a clinician-administered workflow and unsupervised patient self-completion, and doesn't assume which. That screen is deliberately trimmed to the red-flag banner, the applicability note, the headline score/band, and (if tracked) the trend — nothing prescriptive. Detected patterns (with their confidence badges), the domain-by-domain breakdown, modifiable drivers, the risk matrix, and the triage/Tier verdict + investigations all live in the **Clinician tab only** (`renderClinician()`), which requires an explicit tab switch to reach. Confidence badges describe data completeness, not clinical certainty, either way — clinician applies judgment.
 
 **5. Triage notes don't automatically escalate tiers**  
 Most safety insights (e.g., "endometriosis → pelvic adhesion risk," "cyclical pain + menstrual cycle → gynaecological overlap") are delivered as **clinician notes**, not as automatic tier escalations. This keeps the Tier focused on urgency while still surfacing context.

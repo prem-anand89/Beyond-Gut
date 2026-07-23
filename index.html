@@ -4608,7 +4608,12 @@ function modifiableDriversCard(driverExtras) {
 function calc() {
   const c = computeAll();
   lastCalc = c;
-  const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, correlateLoad } = c;
+  // Tier B (patient-facing gate): only score, rome (for the headline card),
+  // and confidence/completeness are needed here — axis profile, domain
+  // breakdown, drivers, patterns, risk matrix, and the triage/Tier verdict
+  // moved to Clinician-tab-only (renderClinician() already renders all of
+  // them, in full or richer detail — nothing here duplicates them anymore).
+  const { score, sv, conf, rome, heads } = c;
 
   const out = document.getElementById('patient-results');
   out.innerHTML = '';
@@ -4644,11 +4649,14 @@ function calc() {
 
   if (score.completeness < 80) toast(`${score.completeness}% complete — result shown as provisional.`);
 
-  // Patient-facing results only. The clinical summary (item-level detail,
-  // investigations) lives in the Clinician tab — no inline toggle here, so
-  // clinical content no longer spills under the questionnaire.
+  // Patient-facing gate (Tier B): this screen shows the headline score, band,
+  // and (if tracked) trend only. Everything clinically prescriptive — the
+  // triage/Tier verdict, detected patterns, domain-by-domain breakdown,
+  // modifiable drivers, the risk matrix, and investigations — lives in the
+  // Clinician tab only, since this screen may be seen by a patient without a
+  // clinician present.
   out.appendChild(el('div', { class: 'q-sub', style: 'text-align:right;margin-bottom:6px' },
-    'For the full clinical summary, open the <b>Clinician</b> tab.'));
+    'For the full clinical summary — patterns, domain breakdown, and suggested next step — open the <b>Clinician</b> tab.'));
 
   // GSHS headline — the four PRIMARY outputs (Option A).
   out.appendChild(headlineCard(heads, rome));
@@ -4664,10 +4672,6 @@ function calc() {
     `Provisional result — ${score.completeness}% of scored items answered.`));
   out.appendChild(hero);
 
-  // Score-then-story order: the cards below are BUILT here but appended in a
-  // single ordered block lower down (headline → symptom detail → by-domain →
-  // secondary axes → patterns → symptom×microbiome → next step → drivers → trend).
-
   // Live trend preview: if this patient reference has prior visits, show the
   // trajectory. For a freshly-completed questionnaire the current visit is
   // appended as 'unsaved'; for a loaded saved visit it's already in the DB so
@@ -4679,56 +4683,13 @@ function calc() {
   } else {
     if (prior.length >= 1) trendEl = trendCard(prior.concat([currentVisit()]), true);
   }
-
-  const bars = domainBarsCard(score, false);
-
-  // Modifiable drivers — context, not part of the Index (computed above with the
-  // triage inputs; rendered here).
-  const driv = el('div', { class: 'card' });
-  driv.appendChild(el('h2', {}, 'Modifiable drivers'));
-  driv.appendChild(el('div', { class: 'q-sub' }, 'Shown for context — not added to the GI Symptom Burden score. These feed the pattern & triage guidance.'));
-  const driverFactors = modifiableFactors(driverExtras);
-  if (driverFactors.allEmpty) {
-    driv.appendChild(el('div', { class: 'q-sub' }, 'No modifiable-driver data recorded this visit.'));
-  } else {
-    const dg = el('div', { class: 'drivers' });
-    driverFactors.forEach(f => dg.appendChild(el('div', { class: 'driver' },
-      `<div class="dl" style="font-weight:600;margin-bottom:2px">${factorIcon(f)}${esc(f.label)}</div>
-       <div class="dv" style="color:${f.color}">${esc(f.band)}</div>
-       ${f.score ? `<div class="dl">${esc(f.score)}</div>` : ''}`)));
-    driv.appendChild(dg);
-  }
-
-  // Patterns — first-cut clinical-discussion patterns from drivers + clusters
-  // (computed above with the triage inputs). Conservatively framed; confidence
-  // reflects how much supporting data was answered.
-  let patternsEl = null;
-  if (patterns.length > 0) {
-    const pcard = el('div', { class: 'card' });
-    pcard.appendChild(el('h2', {}, 'Patterns to discuss with your clinician'));
-    pcard.appendChild(el('div', { class: 'q-sub' }, 'First-cut patterns from your answers and drivers. These are not diagnoses — they are starting points for a conversation with your clinician.'));
-    patterns.forEach(p => {
-      pcard.appendChild(el('div', { class: 'pat', style: 'padding:12px 14px;border:1px solid #E1E5EB;border-radius:8px;margin-top:10px;background:#F9FAFB' },
-        `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-           <div style="font-weight:600">${esc(p.label)}</div>
-           <span style="font-size:11px;padding:2px 8px;border-radius:999px;background:${p.confColor};color:#fff">${esc(p.confidence)} confidence</span>
-         </div>
-         <div class="q-sub" style="margin-top:6px;color:var(--inks);line-height:1.5">${esc(p.desc)}</div>`));
-    });
-    patternsEl = pcard;
-  }
-
-  // ── Ordered render (score-then-story) ──────────────────────────────────────
-  out.appendChild(axisProfileCard(profile, heads));   // secondary axes
-  out.appendChild(bars);                              // by-domain breakdown (between secondary axes and drivers)
-  out.appendChild(driv);                              // modifiable drivers
-  if (patternsEl) out.appendChild(patternsEl);        // patterns to discuss
-  out.appendChild(riskMatrixCard(sv, correlateLoad)); // symptom × dysbiosis-correlate
-  out.appendChild(triageCard(tri, rome, false));      // suggested next step
   if (trendEl) out.appendChild(trendEl);              // progress over time
 
-  // Clinician detail (item-level responses, Rome IV raw, investigations) lives in
-  // the Clinician tab — intentionally not rendered in the patient results.
+  // Everything else — axis profile, domain breakdown, modifiable drivers,
+  // detected patterns, the risk matrix, and the triage/Tier verdict — lives
+  // in the Clinician tab only (renderClinician(): hero, triageCard,
+  // headlineCard, axisProfileCard, domainBarsCard, modifiableDriversCard,
+  // riskMatrixCard, and the pattern-analysis table in clinicianDetailCard()).
 
   // Save-a-visit + pilot-CSV download + print.
   const actions = el('div', { class: 'card row', style: 'justify-content:flex-end;gap:8px;flex-wrap:wrap' });
