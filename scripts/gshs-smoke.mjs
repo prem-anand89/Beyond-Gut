@@ -409,7 +409,12 @@ const clSrc = clFn ? clFn[0] : '';
 // the triage verdict + full plan are reunited on page 2 (no cross-page pointer);
 // the overloaded "lenses" split into Interpretation + History & context.
 ok(/clinicalImpression\(c\)/.test(clSrc), 'clinician: clinical impression generated');
-ok(/Screening synthesis only — not a diagnosis/.test(html), 'clinician: impression carries not-a-diagnosis caveat');
+// The "not a diagnosis" caveat used to be restated inside Clinical impression,
+// duplicating the report footer's identical sentence — now stated exactly
+// once, in the footer, at the very end of the report.
+ok(!/Screening synthesis only — not a diagnosis/.test(html), 'clinician: impression no longer restates its own "not a diagnosis" caveat (de-duplicated)');
+ok((html.match(/not a diagnosis or prescription\. Apply clinical judgement/g) || []).length === 2,
+  'clinician: single "not a diagnosis" disclaimer at the end of each surface (print footer + on-screen closing note)');
 
 // Page-group headers + hero.
 ok(/Page 1 · At a glance/.test(clSrc), 'clinician: Page 1 group header present');
@@ -474,24 +479,37 @@ ok(!/tri\.conditionNote \? \[tri\.conditionNote\]|tri\.medNote \? \[tri\.medNote
 // Actions), called from clSrc but defined ahead of it — check html.
 ok(/function actionColumnsHtml\(tri, physio\)/.test(html) && /dedupeList\(tri\.investigations \|\| \[\]\)/.test(html),
   'clinician: investigations list is de-duplicated');
-ok(/capList\(dx, 10\), mgmtCap = capList\(dedupeList\(mgmt\), 10\)/.test(html),
+ok(/capList\(group\.priority\.concat\(group\.consider\), 10\)/.test(html),
   'clinician: investigations/management lists are capped (with a "+N more" line)');
+// Suggested Actions items are further split by priority — the top-ranked
+// firing pattern's items vs everything else (lower-ranked patterns, Rome IV
+// subtype/family add-ons, physiotherapy candidacy).
+ok(/investigationsRanked/.test(html) && /r\.rank === 0 \? bucket\.priority : bucket\.consider/.test(html),
+  'clinician: Suggested Actions items are tagged Priority vs Also-consider by pattern rank');
 ok(/capList\(patterns, 6\)/.test(clSrc), 'clinician: patterns table capped to the top 6 prominent patterns');
 ok(/function dedupeList\(arr\)/.test(html) && /function capList\(arr, n\)/.test(html), 'dedupeList/capList helpers defined');
 
-// Interpretation: patterns → Rome IV → axis profile → domain breakdown, in order.
+// Interpretation: patterns → Rome IV → axis & domain profile, in order.
 ok(clSrc.indexOf(`sectionTitle('interp')`) < clSrc.indexOf('Prominent patterns'), 'clinician: Patterns sits inside the interpretation section');
-ok(clSrc.indexOf('Prominent patterns') < clSrc.indexOf('>Axis profile<'), 'clinician: Patterns leads Axis profile');
-ok(clSrc.indexOf('Rome IV-informed bowel-pain pattern') < clSrc.indexOf('>Axis profile<'), 'clinician: Rome IV leads Axis profile');
-ok(clSrc.indexOf('>Axis profile<') < clSrc.indexOf('>Domain breakdown<'), 'clinician: Axis profile leads Domain breakdown');
+ok(clSrc.indexOf('Prominent patterns') < clSrc.indexOf('>Axis &amp; domain profile<'), 'clinician: Patterns leads the Axis & domain profile');
+ok(clSrc.indexOf('Rome IV-informed bowel-pain pattern') < clSrc.indexOf('>Axis &amp; domain profile<'), 'clinician: Rome IV leads the Axis & domain profile');
 ok((clSrc.match(/sectionTitle\('burden'\)/g) || []).length === 1, 'clinician: burden matrix section renders exactly once');
 
 // Consolidation dedup checks:
 // - the standalone overlapping "Microbiome-correlate signals" block is gone; each
-//   load's signals fold under the axis profile instead.
+//   load's signals fold under the merged axis & domain profile instead.
 ok(!/\$\{lens\.count\}\/6/.test(clSrc), 'clinician: standalone overlapping microbiome-signal block (lens.count/6) removed from the print');
 ok(/<b>Disruption Load<\/b>/.test(clSrc) && /<b>Dysbiosis Correlate Load<\/b>/.test(clSrc),
-  'clinician: disruption/correlate signal lists folded under the axis profile');
+  'clinician: disruption/correlate signal lists folded under the axis & domain profile');
+// The old "Axis profile" and "Domain breakdown" were two separate tables that
+// repeated the same figure for 4 of 7 rows (Gut Symptom Burden/GI, Nutrient
+// Risk/NU, Inflammatory/IM, Functional Impact/IMP) — now ONE table, ONE row
+// each, Score/Max + % + Band together. Psychosocial load (PSS-4 composite) and
+// Brain-gut & mood (raw item burden) are genuinely different numbers, so both
+// still get their own row rather than being force-merged into one figure.
+ok(!/>Axis profile</.test(clSrc) && !/>Domain breakdown</.test(clSrc), 'clinician: separate "Axis profile" / "Domain breakdown" tables are gone');
+ok(/>Axis &amp; domain profile</.test(clSrc), 'clinician: merged into one "Axis & domain profile" table');
+ok(/Psychosocial load/.test(clSrc) && /PSS-4 composite/.test(clSrc), 'clinician: Psychosocial load (PSS-4 composite) kept as its own row, distinct from Brain-gut & mood');
 // - per-cluster severity lives once (burden matrix); the domain breakdown drops the ↳ rows.
 ok(!/↳ \$\{esc\(k\)\}/.test(clSrc), 'clinician: domain breakdown no longer repeats per-cluster severity (lives once in the burden matrix)');
 // - confidence + completeness stated once (hero) — no axis-profile "Confidence" row.
@@ -504,45 +522,47 @@ ok(!/pr-hero[\s\S]{0,400}esc\(sv\.desc/.test(clSrc), 'clinician: hero drops the 
 // and it must surface every advanced lens (E2–F2 + Tranche G).
 const impFn = html.match(/function clinicalImpression\(c\)\s*\{[\s\S]*?\n\}\n/);
 const impSrc = impFn ? impFn[0] : '';
-// The impression layer is a terse 2-line synthesis (line1/line2/caveat) that
-// leads with the pattern and does NOT restate the band, index %, confidence, or
-// the triage tier — all of which live once, in the hero score / results grid and
-// the Assessment & plan section.
-ok(/line1/.test(impSrc) && /line2/.test(impSrc) && /caveat/.test(impSrc), 'unified: impression layer returns a two-line clinical story ({line1, line2, caveat})');
+// The impression layer is a terse 2-line synthesis (line1/line2) that leads
+// with the pattern and does NOT restate the band, index %, confidence, or the
+// triage tier — all of which live once, in the hero score / results grid and
+// the Assessment & plan section. It also no longer carries its own "not a
+// diagnosis" caveat — that used to duplicate the report footer's identical
+// sentence; now stated once, at the very end of the report (see above).
+ok(/line1/.test(impSrc) && /line2/.test(impSrc), 'unified: impression layer returns a two-line clinical story ({line1, line2})');
+ok(!/return \{ line1, line2, caveat \}/.test(impSrc) && !/const caveat = /.test(impSrc),
+  'unified: impression layer no longer returns its own caveat (de-duplicated into the single report-end disclaimer)');
 ok(!/peakAlerts\.map|score\.peakAlerts/.test(impSrc), 'unified: impression layer does not duplicate the itemized peak-symptom alert list (lives in the axis profile)');
 ok(!/idxTxt|score\.index|score\.completeness/.test(impSrc), 'unified: impression layer no longer restates the index % / completeness (hero owns them)');
 ok(/patterns \|\| \[\]\)\[0\]/.test(impSrc), 'unified: impression layer synthesises the single leading pattern (patterns[0]) into line 1, not an exhaustive list');
 ok(/same-day assessment|prompt assessment/.test(impSrc), 'unified: impression layer leads red flags with E2 urgency');
 ok(!/\btri\b/.test(impSrc.replace(/\/\/.*$/gm, '')), 'unified: impression layer no longer reads the triage object at all (Assessment & plan owns the tier)');
-ok(/caveat = 'Screening synthesis only — not a diagnosis\. Apply clinical judgement\.'/.test(impSrc),
-  'unified: impression caveat no longer carries confidence/completeness (hero/results grid own them)');
 // Advanced reads all present in the report body.
 ok(/sectionTitle\('burden'\)/.test(clSrc), 'unified: report contains the Tranche G severity × frequency burden section');
 ok(/Interventions this visit/.test(clSrc), 'unified: report contains the Tranche G interventions section');
 ok(/Peak-symptom alert/.test(clSrc), 'unified: report contains the E4 peak-symptom alert row');
 ok(/highest: \$\{esc\(topMeta\.label\)\}|firedByUrgency/.test(clSrc), 'unified: report groups red flags by E2 urgency tier');
-// Red flags on page 1 lead the axis profile / domain breakdown on page 2.
-ok(clSrc.indexOf(`sectionTitle('flags')`) < clSrc.indexOf('>Axis profile<'), 'clinician: red flags (page 1) lead the axis profile (page 2)');
-ok(clSrc.indexOf(`sectionTitle('flags')`) < clSrc.indexOf('>Domain breakdown<'), 'clinician: red flags lead the domain breakdown');
+// Red flags on page 1 lead the axis & domain profile on page 2.
+ok(clSrc.indexOf(`sectionTitle('flags')`) < clSrc.indexOf('>Axis &amp; domain profile<'), 'clinician: red flags (page 1) lead the axis & domain profile (page 2)');
 // Physio candidacy callout.
 // Physio candidacy no longer gets its own heading on either surface — it's
 // folded into the Management & Therapeutics column of Suggested Actions (a
 // therapeutic referral, same bucket as dietitian/psych referrals), on both
 // the print report and the on-screen clinician tab.
 ok(/physioCandidacy\(tri\)/.test(clSrc) && /actionColumnsHtml\(tri, physio\)/.test(clSrc)
-  && /dedupeList\(\(physio \|\| \[\]\)\.map\(r => r\.text\)\)\.forEach\(t => mgmt\.push\(t\)\)/.test(html),
-  'clinician: physiotherapy candidacy folded into the Management & Therapeutics column');
-// Merged axis profile with provenance + colour.
-// The "Basis" (validated/derived/draft provenance) column was deliberately
-// dropped from the printed Axis profile table (item 3) — it's a data-governance
-// detail, not something a clinician acts on; the Rationale/table width was
-// widened into the freed space instead. The on-screen axisProfileCard still
-// shows provenance, via the separate provTag() helper.
-ok(/>Axis profile</.test(clSrc) && !/prProv\(o\.validated\)/.test(clSrc), 'clinician: axis profile print table no longer shows the Basis/provenance column');
-ok(/prBandPill\(o\.band\)/.test(clSrc), 'clinician: axis bands colour-coded');
+  && /mgmt\.consider = dedupeList\(mgmt\.consider\.concat\(dedupeList\(\(physio \|\| \[\]\)\.map\(r => r\.text\)\)\)\)/.test(html),
+  'clinician: physiotherapy candidacy folded into the Management & Therapeutics column (Also-consider tier)');
+// Merged table carries no provenance column (the "Basis" validated/derived/
+// draft detail was already dropped from print in an earlier pass; the
+// on-screen axisProfileCard still shows it via the separate provTag() helper).
+ok(!/prProv\(o\.validated\)/.test(clSrc), 'clinician: merged table shows no Basis/provenance column');
+ok(/prBandPill\(o\.band\)/.test(clSrc), 'clinician: load/psychosocial rows colour-coded by band');
 ok(!/Scores — primary/.test(clSrc) && !/Scores — secondary/.test(clSrc), 'clinician: two score tables merged into one');
-// Domain breakdown colour-coded by band.
-ok(/bandForPct\(pct\)/.test(clSrc) && /bnd\.color/.test(clSrc), 'clinician: domain breakdown % colour-coded by band');
+// Every row (domain + load + psychosocial) is colour-coded by band, not just some.
+ok(/bandForPct\(pct\)/.test(clSrc) && /bandPillFromPct/.test(clSrc), 'clinician: domain rows colour-coded by band');
+// Numbers sit close to their label (no far-right-spaced columns) — the merged
+// table intentionally drops the old fixed colgroup + text-align:right combo
+// that spread Score/Max, %, and Band across a wide row.
+ok(!/text-align:right.*Domain/.test(clSrc) && !clSrc.includes('col style="width:46%"'), 'clinician: merged table has no wide fixed-width right-aligned columns (mobile-readable)');
 // Rome collapses when unanswered.
 ok(/if \(rome\.answered\)/.test(clSrc) && /Not answered \(pain items/.test(clSrc), 'clinician: Rome IV collapses to one line when unanswered');
 // Two-column item responses.

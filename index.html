@@ -2306,6 +2306,26 @@ function triage(score, patterns, firedFlags, dys, opts) {
   if (o.family && o.family.invest) result.investigations.push(...o.family.invest);
   result.investigations = [...new Set(result.investigations)];
 
+  // Same investigations, tagged with a priority rank for the report's
+  // Priority/Consider split — rank = the firing pattern's own priority
+  // position (patterns is already engine-ordered by priority then confidence,
+  // so rank 0 = the single most-actionable pattern). Rome IV subtype and
+  // family-history additions rank just after every firing pattern (they refine
+  // or corroborate a pattern already covered, rather than leading on their
+  // own). Case-insensitive dedup keeps the FIRST (best-ranked) occurrence.
+  const ranked = [];
+  (patterns || []).forEach((p, idx) => { if (PI[p.id]) PI[p.id].forEach(text => ranked.push({ text, rank: idx })); });
+  if (o.romeResult && o.romeResult.criteriaMet && o.romeResult.subtype && RI[o.romeResult.subtype])
+    RI[o.romeResult.subtype].forEach(text => ranked.push({ text, rank: (patterns || []).length }));
+  if (o.family && o.family.invest) o.family.invest.forEach(text => ranked.push({ text, rank: (patterns || []).length + 1 }));
+  const seenRanked = new Set();
+  result.investigationsRanked = ranked.filter(r => {
+    const k = r.text.toLowerCase();
+    if (seenRanked.has(k)) return false;
+    seenRanked.add(k);
+    return true;
+  });
+
   return result;
 }
 
@@ -4458,7 +4478,7 @@ function triageCard(tri, rome, showInvestigations, includeInvestigationsList) {
     // Candidate lower tiers by name only — the reasons behind each are the fired
     // patterns, already listed in the pattern analysis (not repeated here).
     tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px' },
-      'Other suitable pathways: ' + tri.alsoConsider.map(a => esc(a.label)).join(' · ')));
+      'Consider alongside: ' + tri.alsoConsider.map(a => esc(a.label)).join(' · ')));
   }
   if (rome && rome.criteriaMet) {
     // F1 — note how the subtype was resolved: by the Rome IV >25% stool-form
@@ -4643,9 +4663,11 @@ function clinicalImpression(c) {
     line2 = `${fired.length} safety feature${fired.length > 1 ? 's' : ''} present (${urgTxt} recommended).`;
   }
 
-  // Confidence/completeness is shown once, in the hero score / results grid — not repeated here.
-  const caveat = 'Screening synthesis only — not a diagnosis. Apply clinical judgement.';
-  return { line1, line2, caveat };
+  // Confidence/completeness is shown once, in the hero score / results grid — not
+  // repeated here. Nor is the "not a diagnosis" caveat: it used to be restated
+  // here, duplicating the same sentence in the report footer — now stated ONCE,
+  // at the very end of the report.
+  return { line1, line2 };
 }
 
 // Pull every pelvic-floor / visceral-fascial manual-therapy candidacy out of the
@@ -4712,13 +4734,13 @@ function classifyInvestigation(text) {
 // Filled, high-visibility chips for the candidate lower-tier "care tracks" a
 // patient could also be routed to (e.g. Clinician-led management, Microbiome-
 // support candidate) — replaces a plain-text "Also consider: A · B · C" line.
-// "Other suitable pathways" (not "Also consider") — these are alternative,
-// equally valid routing options given the evidence, not an optional afterthought.
+// "Consider alongside" (not "Also consider") — pairs these care tracks with
+// the primary tier rather than ranking them below it as an afterthought.
 function careTrackBadgesHtml(alsoConsider) {
   if (!alsoConsider || !alsoConsider.length) return '';
   const COLORS = ['#2C5D8A', '#6B4A80', '#2C7A63', '#9A6B1E'];
   const chips = alsoConsider.map((a, i) => `<span style="display:inline-block;background:${COLORS[i % COLORS.length]};color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:999px;margin:3px 6px 0 0">${esc(a.label)}</span>`).join('');
-  return `<div style="margin-top:6px"><div style="font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#666;margin-bottom:2px">Other suitable pathways</div>${chips}</div>`;
+  return `<div style="margin-top:6px"><div style="font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#666;margin-bottom:2px">Consider alongside</div>${chips}</div>`;
 }
 
 // Peak-symptom alert — an isolated ceiling/severe item that raised the displayed
@@ -4731,24 +4753,50 @@ function peakAlertBoxHtml(score) {
     <div style="font-size:10.5px;color:#7A1F1F;margin-top:2px">${esc(items)}${score.peakEscalated ? ' — displayed band raised; raw index unchanged' : ''}</div></div>`;
 }
 
-// Suggested Actions — 2 columns: Investigations & Diagnostics (tests) and
-// Management & Therapeutics (referrals/trials/therapies, physiotherapy candidacy
-// folded in since it IS a therapeutic referral, same category as dietitian/psych).
+// Suggested Actions — 2 columns (Investigations & Diagnostics, Management &
+// Therapeutics — physiotherapy candidacy folded into Management, since it IS a
+// therapeutic referral, same category as dietitian/psych), each further split
+// by PRIORITY: items from the single top-ranked firing pattern ("Priority")
+// vs everything else — lower-ranked patterns, Rome IV subtype add-ons,
+// family-history add-ons, and physiotherapy candidacy ("Also consider").
+// tri.investigationsRanked carries the rank (see triage.js); falls back to
+// treating the flat list as all-priority if a caller passes an older tri shape.
 function actionColumnsHtml(tri, physio) {
-  const invDeduped = dedupeList(tri.investigations || []);
-  const dx = [], mgmt = [];
-  invDeduped.forEach(i => (classifyInvestigation(i) === 'mgmt' ? mgmt : dx).push(i));
-  dedupeList((physio || []).map(r => r.text)).forEach(t => mgmt.push(t));
-  const dxCap = capList(dx, 10), mgmtCap = capList(dedupeList(mgmt), 10);
-  const col = (title, cap) => `<div style="flex:1;min-width:0">
-    <div style="font-weight:600;font-size:11px;margin-bottom:2px">${title}</div>
-    ${cap.shown.length ? `<ul style="margin:0 0 3px 14px;font-size:10.5px;line-height:1.4">${cap.shown.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : `<div style="font-size:10.5px;color:#555">None suggested.</div>`}
-    ${cap.extra ? `<div style="font-size:9.5px;color:#888">+${cap.extra} further suggestion${cap.extra > 1 ? 's' : ''}.</div>` : ''}
-  </div>`;
-  if (!dx.length && !mgmt.length) return `<div style="font-size:11px;color:#555">No suggested actions for this screen.</div>`;
+  const rankedSrc = (tri.investigationsRanked && tri.investigationsRanked.length)
+    ? tri.investigationsRanked
+    : dedupeList(tri.investigations || []).map(text => ({ text, rank: 0 }));
+  const dx = { priority: [], consider: [] }, mgmt = { priority: [], consider: [] };
+  rankedSrc.forEach(r => {
+    const bucket = classifyInvestigation(r.text) === 'mgmt' ? mgmt : dx;
+    (r.rank === 0 ? bucket.priority : bucket.consider).push(r.text);
+  });
+  mgmt.consider = dedupeList(mgmt.consider.concat(dedupeList((physio || []).map(r => r.text))));
+  const col = (title, group) => {
+    const prioritySet = new Set(group.priority);
+    const cap = capList(group.priority.concat(group.consider), 10);
+    const shownPriority = cap.shown.filter(i => prioritySet.has(i));
+    const shownConsider = cap.shown.filter(i => !prioritySet.has(i));
+    const list = arr => arr.length ? `<ul style="margin:0 0 3px 14px;font-size:10.5px;line-height:1.4">${arr.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : '';
+    // Only show the Priority/Also-consider split when both are non-empty —
+    // a single firing pattern (the common case) makes everything "priority",
+    // and splitting a single-item list in two just adds noise.
+    let body;
+    if (!cap.shown.length) body = `<div style="font-size:10.5px;color:#555">None suggested.</div>`;
+    else if (shownPriority.length && shownConsider.length) {
+      body = `<div style="font-size:9px;font-weight:700;color:#A9463F;text-transform:uppercase;letter-spacing:.03em">Priority</div>${list(shownPriority)}`
+        + `<div style="font-size:9px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.03em;margin-top:2px">Also consider</div>${list(shownConsider)}`;
+    } else body = list(cap.shown);
+    return `<div style="flex:1;min-width:0">
+      <div style="font-weight:600;font-size:11px;margin-bottom:2px">${title}</div>
+      ${body}
+      ${cap.extra ? `<div style="font-size:9.5px;color:#888">+${cap.extra} further suggestion${cap.extra > 1 ? 's' : ''}.</div>` : ''}
+    </div>`;
+  };
+  const empty = !dx.priority.length && !dx.consider.length && !mgmt.priority.length && !mgmt.consider.length;
+  if (empty) return `<div style="font-size:11px;color:#555">No suggested actions for this screen.</div>`;
   return `<div style="display:flex;gap:18px;align-items:flex-start;page-break-inside:avoid;break-inside:avoid">
-    ${col('Investigations &amp; Diagnostics', dxCap)}
-    ${col('Management &amp; Therapeutics', mgmtCap)}
+    ${col('Investigations &amp; Diagnostics', dx)}
+    ${col('Management &amp; Therapeutics', mgmt)}
   </div>
   <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:4px">Pattern-matched — not a protocol. Physiotherapy is an adjunct after medical assessment, not a substitute for it.</div>`;
 }
@@ -4859,7 +4907,6 @@ function buildClinicianPrint(c, opts) {
   h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('impression')}</div>
     <div style="font-size:11px;line-height:1.5">${esc(imp.line1)}</div>
     ${imp.line2 ? `<div style="font-size:11px;line-height:1.5;margin-top:3px">${esc(imp.line2)}</div>` : ''}
-    <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:3px">${esc(imp.caveat)}</div>
     ${patternsLine}${romeLine}
     ${peakAlertBoxHtml(score)}
     ${planFlags.length ? `<div style="font-size:10.5px;margin-top:8px;font-weight:600">Clinical flags:</div>
@@ -4932,52 +4979,65 @@ function buildClinicianPrint(c, opts) {
       <div style="font-size:11px;color:#555">Not answered (pain items not reached / completed).</div></div>`;
   }
 
-  // Axis profile — primary + secondary in ONE table with band colour + provenance.
-  // The two microbiome loads (Disruption = objective exposures, Dysbiosis Correlate
-  // = inferred phenotype with its weighted Dys-R tier) each get their signal list
-  // folded in directly beneath the table — replacing the old standalone
-  // "Microbiome-correlate signals" block that overlapped both and confused the count.
-  const COUNT_LOADS = new Set(['disruption_load', 'dysbiosis_correlate_load']);
-  const pctOrCount = (o) => o.value == null ? '—'
-    : (o.max != null ? `${o.value}/${o.max}`
-      : (o.key === 'dysbiosis_correlate_load' && o.tier
-          ? `${o.value} signal${o.value === 1 ? '' : 's'} · Dys-R ${o.tier}${o.weightedScore != null ? ` (${o.weightedScore})` : ''}`
-          : (COUNT_LOADS.has(o.key) ? `${o.value} signal${o.value === 1 ? '' : 's'}` : o.value + '%')));
-  // Basis (validated/derived/draft provenance) dropped from the printed table —
-  // it's a data-governance detail, not something a clinician acts on; provenance
-  // is still available in the on-screen axisProfileCard for anyone who needs it.
-  const axisRow = (o) => `<tr><td>${esc(o.label)}</td><td style="white-space:nowrap;text-align:right"><b>${esc(String(pctOrCount(o)))}</b></td><td style="text-align:right">${prBandPill(o.band)}</td></tr>`;
-  const axisGroupRow = (label) => `<tr><td colspan="3" style="font-size:9px;color:#888;font-weight:700;letter-spacing:.04em;background:#F5F4EF;padding-top:3px;padding-bottom:3px">${label}</td></tr>`;
+  // Axis profile + Domain breakdown — ONE combined table (Domain | Score/Max |
+  // % | Band). These used to be two separate tables that mostly repeated the
+  // same numbers (Gut Symptom Burden/GI, Nutrient Risk/NU, Inflammatory/IM,
+  // Functional Impact/IMP are the identical figure computed two ways) — now
+  // shown once each, sourced from the domain's raw item score/max (same
+  // computation the old Domain breakdown used; bandForPct on that % matches
+  // the old axis-profile band exactly for these four).
+  // "Psychosocial / Gut-Brain Load" is the ONE row that is genuinely NOT a
+  // duplicate of its section: it's a validated PSS-4-anchored composite
+  // (headlineOutputs' ax.psychosocial), a different number from "Brain-gut &
+  // mood"'s plain item-average (BG section) — both kept, clearly re-labelled,
+  // rather than silently merged into one (mis)representative figure.
+  // Disruption Load / Dysbiosis Correlate Load have no domain-breakdown
+  // equivalent at all (they're exposure/phenotype counts, not GSRS items).
+  const bandPillFromPct = (pct) => {
+    if (pct == null) return '<span style="color:#AAA">n/a</span>';
+    const bnd = bandForPct(pct);
+    return `<span class="pr-pill" style="background:${bnd.bg};color:#000;font-size:9.5px">${esc(bnd.label)}</span>`;
+  };
+  const domainRow = (s) => {
+    const sc = score.secScores[s.id] || 0, mx = score.secApplicableMax[s.id] || 0;
+    const giNorm = s.id === 'GI' ? score.secNorm.GI : null;
+    const pct = giNorm != null ? Math.round(giNorm * 100) : (mx ? Math.round(sc / mx * 100) : null);
+    return `<tr><td>${esc(s.full || s.label)}</td><td style="white-space:nowrap">${sc}/${mx}</td><td>${pct != null ? `${pct}%` : '<span style="color:#AAA">n/a</span>'}</td><td>${bandPillFromPct(pct)}</td></tr>`;
+  };
+  const loadValueTxt = (o) => o.key === 'dysbiosis_correlate_load' && o.tier
+    ? `${o.value} signal${o.value === 1 ? '' : 's'} · Dys-R ${o.tier}${o.weightedScore != null ? ` (${o.weightedScore})` : ''}`
+    : `${o.value} signal${o.value === 1 ? '' : 's'}`;
+  const loadRow = (o) => `<tr><td>${esc(o.label)}</td><td>—</td><td style="white-space:nowrap">${esc(loadValueTxt(o))}</td><td>${prBandPill(o.band)}</td></tr>`;
+  const psychRow = () => {
+    const ps = heads.secondary.psychosocial;
+    return `<tr><td>Psychosocial load <span style="font-weight:400;color:#888">(PSS-4 composite)</span></td><td>—</td><td>${ps.value != null ? `${ps.value}%` : '<span style="color:#AAA">n/a</span>'}</td><td>${prBandPill(ps.band)}</td></tr>`;
+  };
+  const groupRow = (label) => `<tr><td colspan="4" style="font-size:9px;color:#888;font-weight:700;letter-spacing:.04em;background:#F5F4EF;padding-top:3px;padding-bottom:3px">${label}</td></tr>`;
+  const byId = id => SECTIONS.find(s => s.id === id);
   const disruptSig = (heads.primary.disruption && heads.primary.disruption.signals) || [];
   const correlateSig = (heads.primary.correlate && heads.primary.correlate.signals) || [];
-  h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Axis profile</div>
-    <table class="pr-tbl"><colgroup><col style="width:46%"><col style="width:30%"><col style="width:24%"></colgroup><thead><tr><th>Axis</th><th style="text-align:right">Value</th><th style="text-align:right">Band</th></tr></thead><tbody>
-      ${axisGroupRow('PRIMARY')}
-      ${heads.primaryList.map(axisRow).join('')}
-      ${axisGroupRow('SECONDARY')}
-      ${heads.secondaryList.map(axisRow).join('')}
-      ${score.coreUnknown ? '<tr><td colspan="3" style="color:#A32D2D;font-weight:600">⚠ Core GI section not answered — Gut Symptom Burden provisional</td></tr>' : ''}
+  // Targeted domains (AR/UG/SY) only get a row once they have applicable items
+  // answered this visit — showing an untouched conditional section as "0/0 n/a"
+  // adds noise for the (common) patient it never revealed for.
+  const targetedIds = ['AR', 'UG', 'SY'].filter(id => (score.secApplicableMax[id] || 0) > 0);
+  h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Axis &amp; domain profile</div>
+    <table class="pr-tbl"><thead><tr><th>Domain</th><th>Score/Max</th><th>%</th><th>Band</th></tr></thead><tbody>
+      ${groupRow('CORE')}
+      ${domainRow(byId('GI'))}
+      ${domainRow(byId('NU'))}
+      ${loadRow(heads.primary.disruption)}
+      ${loadRow(heads.primary.correlate)}
+      ${groupRow('SECONDARY')}
+      ${domainRow(byId('IM'))}
+      ${psychRow()}
+      ${domainRow(byId('BG'))}
+      ${domainRow(byId('IMP'))}
+      ${targetedIds.length ? groupRow('TARGETED') : ''}
+      ${targetedIds.map(id => domainRow(byId(id))).join('')}
+      ${score.coreUnknown ? '<tr><td colspan="4" style="color:#A32D2D;font-weight:600">⚠ Core GI section not answered — Gut Symptom Burden provisional</td></tr>' : ''}
     </tbody></table>
     ${disruptSig.length ? `<div style="font-size:9.5px;margin-top:3px"><b>Disruption Load</b> (exposures): ${esc(disruptSig.join(', '))}</div>` : ''}
     ${correlateSig.length ? `<div style="font-size:9.5px;margin-top:2px"><b>Dysbiosis Correlate Load</b> (inferred): ${esc(correlateSig.join(', '))}</div>` : ''}</div>`;
-
-  // GSRS domain breakdown — section-level only (per-cluster severity is shown once,
-  // in the burden matrix on page 1). % cell colour-coded by band. Same column
-  // proportions as the Axis profile table above so the two line up visually.
-  h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Domain breakdown</div>
-    <table class="pr-tbl"><colgroup><col style="width:46%"><col style="width:30%"><col style="width:24%"></colgroup><thead><tr><th>Domain</th><th style="text-align:right">Score/Max</th><th style="text-align:right">%</th></tr></thead><tbody>`;
-  SECTIONS.forEach(s => {
-    const sc = score.secScores[s.id] || 0, mx = score.secApplicableMax[s.id] || 0;
-    // GI's % matches the headline Index (cluster-balanced); Score/Max stays the
-    // raw item tally for transparency — the two are allowed to look inconsistent
-    // (see the Bristol-transit note above), that's the point of showing both.
-    const giNorm = s.id === 'GI' ? score.secNorm.GI : null;
-    const pct = giNorm != null ? Math.round(giNorm * 100) : (mx ? Math.round(sc / mx * 100) : null);
-    const bnd = pct != null ? bandForPct(pct) : null;
-    h += `<tr><td>${esc(s.full || s.label)}</td><td style="text-align:right">${sc}/${mx}</td><td style="text-align:right">${pct != null ? `<b style="color:${bnd.color}">${pct}%</b>` : '<span style="color:#AAA">n/a</span>'}</td></tr>`;
-  });
-  h += `</tbody></table></div>`;
-  h += `</div>`;
 
   // Context & drivers — one section, two columns, so History / labs / treatments /
   // interventions (left) sit beside the Modifiable-driver readout (right) instead
@@ -5233,7 +5293,6 @@ function renderClinician() {
   impCard.appendChild(el('h2', {}, sectionTitle('impression')));
   impCard.appendChild(el('div', { style: 'font-size:13px;line-height:1.5' }, esc(imp.line1)));
   if (imp.line2) impCard.appendChild(el('div', { style: 'font-size:13px;line-height:1.5;margin-top:3px' }, esc(imp.line2)));
-  impCard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:4px;font-style:italic' }, esc(imp.caveat)));
   const peakHtml = peakAlertBoxHtml(score);
   if (peakHtml) impCard.appendChild(el('div', {}, peakHtml));
   root.appendChild(impCard);
@@ -5298,6 +5357,12 @@ function renderClinician() {
   root.appendChild(el('div', { class: 'rpt-grp' }, 'Page 3+ · Appendix'));
   root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('appendix')));
   root.appendChild(clinicianDetailCard(c));
+
+  // The single "not a diagnosis" disclaimer for this surface — stated once, at
+  // the very end, mirroring the print report's footer (imp.caveat used to
+  // restate the same sentence up in Clinical impression; removed as a duplicate).
+  root.appendChild(el('div', { class: 'q-sub', style: 'text-align:center;font-style:italic;margin-top:14px;padding-top:10px;border-top:1px solid var(--bdr)' },
+    'Screening tool only — not a diagnosis or prescription. Apply clinical judgement.'));
 }
 
 function init(c) { nav = c || {}; }
