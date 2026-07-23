@@ -2301,7 +2301,14 @@ function triage(score, patterns, firedFlags, dys, opts) {
   };
   const RI = {
     'IBS-C': ['Low-FODMAP trial with dietitian', 'Pelvic floor physiotherapy assessment', 'Soluble fibre (ispaghula husk)'],
-    'IBS-D': ['Stool calprotectin / PCR (exclude infection or IBD)', 'Consider bile acid malabsorption', 'Low-FODMAP trial with supervised reintroduction'],
+    // "Consider bile acid malabsorption..." is worded IDENTICALLY to
+    // PI.diarrhoea_dominant's entry (not a paraphrase) — diarrhoea_dominant and
+    // IBS-D commonly fire together, and the exact-string Set dedup in
+    // result.investigations (below) only collapses true duplicates; two
+    // differently-worded strings for the same recommendation used to survive
+    // as separate list entries and land in different Investigations/
+    // Management columns once classifyInvestigation() split them.
+    'IBS-D': ['Stool calprotectin / PCR (exclude infection or IBD)', 'Consider bile acid malabsorption (empirical trial or SeHCAT)', 'Low-FODMAP trial with supervised reintroduction'],
     'IBS-M': ['Low-FODMAP dietitian referral', 'Gut-directed psychological intervention (hypnotherapy / CBT)', 'Visceral manual therapy candidacy'],
     'IBS-U': ['2–4 week symptom diary before specialist referral', 'Dietary trigger review (FODMAP, fibre)', 'Gut-brain axis assessment'],
   };
