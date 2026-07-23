@@ -9,53 +9,64 @@
    Single self-contained offline file. Palette ported from BM_Gut_Suite v7.
    ========================================================================== */
 :root{
-  --g:#0F6E56;--gm:#1D9E75;--gl:#5DCAA5;--gp:#E1F5EE;--gf:#F4FBF7;
-  --am:#BA7517;--ap:#FAEEDA;--re:#A32D2D;--rp:#FCEBEB;
+  --brand:#0C3B44;--brand-d:#082C33;--tint:#E1EDEF;--neutral:#253238;
+  --ok:#2E7D5B;--alert:#B23A3A;--alert-p:#F7E6E6;--alert-d:#7A2626;
+  --am:#BA7517;--ap:#FAEEDA;
   --pu:#534AB7;--pp:#EEEDFE;--bl:#185FA5;--blp:#E6F1FB;
-  --ink:#1A1A17;--inks:#3A3A37;--inkt:#707070;
-  --bdr:#E0DDD6;--bdrm:#C0BDB6;--bg:#F5F3EE;--surf:#FFFFFF;--surf2:#FAFAF8;
+  --ink:#1B2226;--inks:#48555B;--inkt:#7C878C;
+  --bdr:#DBE2E3;--bdrm:#C2CBCD;--chrome:#E6EBEB;--paper2:#FFFFFF;--paper:#F1F4F4;
   --r6:6px;--r8:8px;--r12:12px;
   --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
 }
+:root[data-theme="dark"]{
+  --paper:#0E1518;--paper2:#141D20;--ink:#E7EDEE;--inks:#B4C0C3;--inkt:#7E8B8F;
+  --bdr:#28353A;--bdrm:#38484E;--chrome:#101719;--tint:#122A30;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0E1518;--paper2:#141D20;--ink:#E7EDEE;--inks:#B4C0C3;--inkt:#7E8B8F;
+    --bdr:#28353A;--bdrm:#38484E;--chrome:#101719;--tint:#122A30;
+  }
+}
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.5;min-height:100vh;-webkit-text-size-adjust:100%}
+html,body{background:var(--chrome);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.5;min-height:100vh;-webkit-text-size-adjust:100%}
 button,input,select,textarea{font-family:var(--font)}
 button{-webkit-tap-highlight-color:transparent;touch-action:manipulation;cursor:pointer}
 small{font-size:.82em}
 
-.app-bar{background:var(--g);color:#fff;display:flex;align-items:center;gap:12px;padding:14px 18px;padding-top:max(14px,env(safe-area-inset-top));position:sticky;top:0;z-index:500;box-shadow:0 1px 0 rgba(0,0,0,.08);flex-wrap:wrap}
+.app-bar{background:var(--brand);color:#fff;display:flex;align-items:center;gap:12px;padding:14px 18px;padding-top:max(14px,env(safe-area-inset-top));position:sticky;top:0;z-index:500;box-shadow:0 1px 0 rgba(0,0,0,.08);flex-wrap:wrap}
 .app-logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:21px;letter-spacing:-.01em;white-space:nowrap}
-.app-logo .dot{width:11px;height:11px;border-radius:50%;background:var(--gl);box-shadow:0 0 0 4px rgba(93,202,165,.25)}
+.app-logo .dot{width:11px;height:11px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(46,125,91,.25)}
 .app-sub{display:block;font-size:12.5px;font-weight:600;color:rgba(255,255,255,.82)}
 .app-name-wrap{display:flex;flex-direction:column;gap:1px;line-height:1.15}
 /* Thin live progress strip along the bottom edge of the (sticky) header. */
 .app-progress{position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,.18)}
-.app-progress-fill{height:100%;width:0;background:var(--gl);transition:width .25s ease}
+.app-progress-fill{height:100%;width:0;background:var(--ok);transition:width .25s ease}
 /* Form intro: question count / time estimate + live answered counter. */
-.form-meta{background:var(--gf);border:1px solid var(--gl);border-radius:var(--r8);padding:9px 13px;margin-bottom:12px;font-size:12.5px;color:var(--inks);display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
-.form-meta b{color:var(--g)}
+.form-meta{background:var(--tint);border:1px solid var(--ok);border-radius:var(--r8);padding:9px 13px;margin-bottom:12px;font-size:12.5px;color:var(--inks);display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.form-meta b{color:var(--ok)}
 .app-spacer{flex:1}
 .app-tag{font-size:10.5px;color:rgba(255,255,255,.7);background:rgba(255,255,255,.13);border-radius:20px;padding:4px 10px}
 
 .wrap{max-width:880px;margin:0 auto;padding:16px}
 .btn{border:none;border-radius:var(--r8);font-size:13px;font-weight:600;padding:9px 15px;transition:all .15s;white-space:nowrap}
-.btn-g{background:var(--g);color:#fff}.btn-g:hover{background:var(--gm)}
-.btn-o{background:var(--surf);color:var(--g);border:1px solid var(--g)}.btn-o:hover{background:var(--gp)}
-.btn-gh{background:transparent;color:var(--inkt);border:1px solid var(--bdr)}.btn-gh:hover{background:var(--surf);color:var(--ink)}
-.card{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r12);padding:16px;margin-bottom:14px}
+.btn-g{background:var(--brand);color:#fff}.btn-g:hover{background:var(--brand-d)}
+.btn-o{background:var(--paper2);color:var(--ok);border:1px solid var(--ok)}.btn-o:hover{background:var(--tint)}
+.btn-gh{background:transparent;color:var(--inkt);border:1px solid var(--bdr)}.btn-gh:hover{background:var(--paper2);color:var(--ink)}
+.card{background:var(--paper2);border:1px solid var(--bdr);border-radius:var(--r12);padding:16px;margin-bottom:14px}
 .muted{color:var(--inkt)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 .pill{display:inline-block;padding:3px 11px;border-radius:20px;font-size:12px;font-weight:700}
-.sev-min{background:var(--gp);color:#085041}.sev-mod{background:var(--ap);color:#7A5800}
-.sev-sig{background:var(--cop,#FAECE7);color:#7A3410}.sev-sev{background:var(--rp);color:#7A1515}
+.sev-min{background:var(--tint);color:var(--ok)}.sev-mod{background:var(--ap);color:#7A5800}
+.sev-sig{background:var(--cop,#FAECE7);color:#7A3410}.sev-sev{background:var(--alert-p);color:var(--alert-d)}
 .sev-unknown{background:#E5E5E5;color:#555}
 
-.intro{background:var(--gf);border:1px solid var(--gl);border-radius:var(--r12);padding:14px 16px;margin-bottom:14px;font-size:13px;color:var(--inks)}
-.sec-card{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r12);margin-bottom:12px;overflow:hidden}
+.intro{background:var(--tint);border:1px solid var(--ok);border-radius:var(--r12);padding:14px 16px;margin-bottom:14px;font-size:13px;color:var(--inks)}
+.sec-card{background:var(--paper2);border:1px solid var(--bdr);border-radius:var(--r12);margin-bottom:12px;overflow:hidden}
 .sec-head{padding:11px 15px;font-weight:700;font-size:13px;color:#fff;display:flex;justify-content:space-between;align-items:center}
 .sec-body{padding:6px 15px 12px}
-.q{padding:11px 0;border-bottom:1px solid var(--surf2)}
+.q{padding:11px 0;border-bottom:1px solid var(--paper)}
 .q:last-child{border-bottom:none}
 .q-txt{font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:2px}
 .q-sub{font-size:11.5px;color:var(--inkt);margin-bottom:8px}
@@ -65,45 +76,45 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
    custom property (not an inline grid-template-columns) so the mobile
    media query below can still override it uniformly regardless of scale length. */
 .opts{display:grid;grid-template-columns:repeat(var(--n-opts,4),1fr);gap:6px}
-.opt{border:1.5px solid var(--bdr);background:var(--surf);border-radius:8px;padding:9px 6px;text-align:center;font-size:11.5px;font-weight:600;color:var(--inks);line-height:1.25;transition:all .12s}
+.opt{border:1.5px solid var(--bdr);background:var(--paper2);border-radius:8px;padding:9px 6px;text-align:center;font-size:11.5px;font-weight:600;color:var(--inks);line-height:1.25;transition:all .12s}
 .opt:hover{border-color:var(--bdrm)}
 .opt .on{display:block;font-size:14px;font-weight:800;margin-bottom:2px}
 /* Generic selected state for segmented rows that carry no s{v} colour class
    (diet/lifestyle, sleep, the abx/stool/gas microbiome rows). The s0–s4 rules
    below are more specific, so colour-coded items still win. */
-.opt.sel{border-color:var(--g);background:var(--gp);color:var(--g)}
-.opt.s0.sel{border-color:#0F6E56;background:#E1F5EE;color:#085041}
+.opt.sel{border-color:var(--ok);background:var(--tint);color:var(--ok)}
+.opt.s0.sel{border-color:var(--ok);background:var(--tint);color:var(--ok)}
 .opt.s1.sel{border-color:#BA7517;background:#FCEFCF;color:#7A5800}
 .opt.s2.sel{border-color:#C2622E;background:#FAD7C2;color:#7A3410}
-.opt.s3.sel{border-color:#A32D2D;background:#F7CBCB;color:#7A1515}
-.opt.s4.sel{border-color:#A32D2D;background:#F7CBCB;color:#7A1515}
+.opt.s3.sel{border-color:var(--alert);background:var(--alert-p);color:var(--alert-d)}
+.opt.s4.sel{border-color:var(--alert);background:var(--alert-p);color:var(--alert-d)}
 @media(max-width:520px){.opts{grid-template-columns:repeat(2,1fr)}}
 .chips{display:flex;gap:7px;flex-wrap:wrap}
-.chip-opt{border:1.5px solid var(--bdr);background:var(--surf);border-radius:20px;padding:7px 14px;font-size:12px;font-weight:600;color:var(--inks)}
-.chip-opt.sel{border-color:var(--g);background:var(--gp);color:var(--g)}
+.chip-opt{border:1.5px solid var(--bdr);background:var(--paper2);border-radius:20px;padding:7px 14px;font-size:12px;font-weight:600;color:var(--inks)}
+.chip-opt.sel{border-color:var(--ok);background:var(--tint);color:var(--ok)}
 .opt-tag{display:inline-block;font-size:9px;font-weight:700;color:var(--bl);background:var(--blp);border-radius:9px;padding:1px 7px;margin-left:4px;text-transform:uppercase;letter-spacing:.03em;vertical-align:middle}
 .na-wrap{margin-top:6px}
 .na-opt{font-size:11px;padding:5px 12px}
 .na-opt.sel{border-color:var(--inkt);background:#ECEAE4;color:var(--inks)}
 /* instruments (modifiable drivers) */
 .bristol-grid{display:grid;grid-template-columns:1fr;gap:6px}
-.bristol-opt{display:flex;gap:10px;align-items:center;border:1.5px solid var(--bdr);border-radius:8px;padding:9px 12px;background:var(--surf);text-align:left;width:100%}
-.bristol-opt.sel{border-color:var(--g);background:var(--gp)}
+.bristol-opt{display:flex;gap:10px;align-items:center;border:1.5px solid var(--bdr);border-radius:8px;padding:9px 12px;background:var(--paper2);text-align:left;width:100%}
+.bristol-opt.sel{border-color:var(--ok);background:var(--tint)}
 .bristol-n{width:24px;height:24px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0}
 .bristol-ic{flex-shrink:0;display:inline-block;vertical-align:middle}
 .nrs-row{display:flex;gap:4px;flex-wrap:wrap}
-.nrs-opt{flex:1;min-width:30px;border:1.5px solid var(--bdr);background:var(--surf);border-radius:7px;padding:9px 0;text-align:center;font-weight:700;font-size:13px;color:var(--inks)}
-.nrs-opt.sel{border-color:var(--re);background:#FCEBEB;color:var(--re)}
+.nrs-opt{flex:1;min-width:30px;border:1.5px solid var(--bdr);background:var(--paper2);border-radius:7px;padding:9px 0;text-align:center;font-weight:700;font-size:13px;color:var(--inks)}
+.nrs-opt.sel{border-color:var(--alert);background:var(--alert-p);color:var(--alert)}
 .grp-label{font-size:10px;font-weight:700;color:var(--inkt);text-transform:uppercase;letter-spacing:.06em;margin:8px 0 4px}
-.rpt-grp{font-size:12px;font-weight:800;color:#fff;background:#3A4A5A;text-transform:uppercase;letter-spacing:.04em;border-radius:8px;padding:8px 12px;margin:16px 0 6px}
+.rpt-grp{font-size:12px;font-weight:800;color:#fff;background:var(--neutral);text-transform:uppercase;letter-spacing:.04em;border-radius:8px;padding:8px 12px;margin:16px 0 6px}
 .drivers{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 @media(max-width:520px){.drivers{grid-template-columns:repeat(2,1fr)}}
-.driver{border:1px solid var(--bdr);border-radius:9px;padding:8px;background:var(--surf2);text-align:center}
+.driver{border:1px solid var(--bdr);border-radius:9px;padding:8px;background:var(--paper);text-align:center}
 .driver .dv{font-size:15px;font-weight:700}
 .driver .dl{font-size:9.5px;color:var(--inkt);margin-top:2px}
 
-.hero{display:flex;align-items:center;gap:20px;background:var(--gf);border:1px solid var(--gl);border-radius:var(--r12);padding:18px;flex-wrap:wrap}
-.hero .big{font-size:42px;font-weight:800;line-height:.95;color:var(--g)}
+.hero{display:flex;align-items:center;gap:20px;background:var(--tint);border:1px solid var(--ok);border-radius:var(--r12);padding:18px;flex-wrap:wrap}
+.hero .big{font-size:42px;font-weight:800;line-height:.95;color:var(--ok)}
 .hero .sub{font-size:11px;color:var(--inkt)}
 .bar-row{margin:7px 0}
 .bar-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px}
@@ -112,13 +123,13 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 .conf-note{font-size:11.5px;color:var(--inkt);margin-top:8px;line-height:1.45}
 .prov-caveat{background:#FFF6E7;border:1px solid var(--am);border-radius:var(--r8);padding:8px 11px;font-size:11.5px;color:#5C4406;margin-top:8px;line-height:1.45}
 
-.rf-banner{background:var(--rp);border:1.5px solid var(--re);border-radius:var(--r12);padding:13px 15px;margin-bottom:14px;display:flex;gap:12px;align-items:flex-start}
+.rf-banner{background:var(--alert-p);border:1.5px solid var(--alert);border-radius:var(--r12);padding:13px 15px;margin-bottom:14px;display:flex;gap:12px;align-items:flex-start}
 .rf-ic{font-size:20px;flex-shrink:0;line-height:1.2}
-.rf-title{font-size:13.5px;font-weight:700;color:var(--re);margin-bottom:3px}
-.rf-body{font-size:12px;color:#5A1414;line-height:1.5}
-.rf-list{margin:6px 0 0 16px;padding:0;font-size:11.5px;color:#5A1414}
+.rf-title{font-size:13.5px;font-weight:700;color:var(--alert);margin-bottom:3px}
+.rf-body{font-size:12px;color:var(--alert-d);line-height:1.5}
+.rf-list{margin:6px 0 0 16px;padding:0;font-size:11.5px;color:var(--alert-d)}
 .rf-tier{margin-top:8px}
-.rf-tier-head{font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#7A1F1F}
+.rf-tier-head{font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--alert-d)}
 .rf-tier .rf-list{margin-top:2px}
 
 .empty-note{text-align:center;padding:40px 20px;color:var(--inkt);font-size:13px}
@@ -127,7 +138,7 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 .ov{position:fixed;inset:0;background:rgba(20,20,18,.46);z-index:10000;display:none;align-items:center;justify-content:center;padding:18px}
 .ov.show{display:flex}
-.dlg{background:var(--surf);border-radius:16px;width:100%;max-width:400px;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden}
+.dlg{background:var(--paper2);border-radius:16px;width:100%;max-width:400px;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden}
 .dlg-h{font-size:16px;font-weight:700;padding:18px 20px 4px}
 .dlg-m{font-size:13px;color:var(--inks);padding:0 20px 8px;line-height:1.5;white-space:pre-line}
 .dlg-b{padding:6px 20px}
@@ -137,37 +148,37 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 /* mode switch (tab nav) */
 .mode-switch{display:flex;background:rgba(255,255,255,.13);border-radius:20px;padding:2px;gap:2px}
 .mode-btn{border:none;background:transparent;color:rgba(255,255,255,.78);font-size:12px;font-weight:600;padding:6px 14px;border-radius:18px;transition:all .15s;white-space:nowrap;cursor:pointer}
-.mode-btn.active{background:#fff;color:var(--g)}
+.mode-btn.active{background:#fff;color:var(--brand)}
 .mode{display:none}.mode.show{display:block}
 .app-chip{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.13);border-radius:20px;padding:4px 6px 4px 12px;font-size:12px;font-weight:600;color:#fff;max-width:240px}
 .app-chip .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .app-chip .x{background:rgba(255,255,255,.2);border:none;color:#fff;width:18px;height:18px;border-radius:50%;font-size:11px;line-height:1;flex-shrink:0;cursor:pointer}
 /* patient records */
-.db-search{flex:1;min-width:180px;padding:9px 13px;border:1px solid var(--bdr);border-radius:var(--r8);font-size:14px;background:var(--surf)}
+.db-search{flex:1;min-width:180px;padding:9px 13px;border:1px solid var(--bdr);border-radius:var(--r8);font-size:14px;background:var(--paper2)}
 .db-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
 .db-empty{text-align:center;color:var(--inkt);padding:48px 16px;line-height:1.8}
-.pt-card{position:relative;background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r12);padding:14px;cursor:pointer;transition:all .15s}
-.pt-card:hover{border-color:var(--g);box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.pt-card{position:relative;background:var(--paper2);border:1px solid var(--bdr);border-radius:var(--r12);padding:14px;cursor:pointer;transition:all .15s}
+.pt-card:hover{border-color:var(--ok);box-shadow:0 2px 10px rgba(0,0,0,.06)}
 .pt-del{position:absolute;top:8px;right:8px;border:none;background:transparent;color:var(--inkt);font-size:13px;cursor:pointer;border-radius:6px;padding:2px 6px}
-.pt-del:hover{background:#FCEBEB;color:var(--re)}
+.pt-del:hover{background:var(--alert-p);color:var(--alert)}
 .pt-top{display:flex;align-items:center;gap:10px;margin-bottom:12px}
-.pt-av{width:38px;height:38px;border-radius:50%;background:var(--gp);color:var(--g);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px}
+.pt-av{width:38px;height:38px;border-radius:50%;background:var(--tint);color:var(--ok);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px}
 .pt-name{font-weight:700;font-size:14px}.pt-meta{font-size:11px;color:var(--inkt)}
 .pt-stats{display:flex;gap:8px}
-.pt-stat{flex:1;text-align:center;background:var(--gf);border-radius:8px;padding:8px 4px}
+.pt-stat{flex:1;text-align:center;background:var(--tint);border-radius:8px;padding:8px 4px}
 .pt-stat .v{font-weight:800;font-size:16px}.pt-stat .l{font-size:9.5px;color:var(--inkt);text-transform:uppercase;letter-spacing:.03em;margin-top:2px}
-.back-btn{border:none;background:transparent;color:var(--g);font-weight:600;font-size:13px;cursor:pointer;padding:6px 0}
-.visit-card{display:flex;align-items:center;gap:12px;background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r12);padding:12px 14px;margin-bottom:10px;flex-wrap:wrap}
-.visit-card.latest{border-color:var(--g);background:var(--gf)}
-.visit-num{width:26px;height:26px;border-radius:50%;background:var(--g);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}
+.back-btn{border:none;background:transparent;color:var(--ok);font-weight:600;font-size:13px;cursor:pointer;padding:6px 0}
+.visit-card{display:flex;align-items:center;gap:12px;background:var(--paper2);border:1px solid var(--bdr);border-radius:var(--r12);padding:12px 14px;margin-bottom:10px;flex-wrap:wrap}
+.visit-card.latest{border-color:var(--ok);background:var(--tint)}
+.visit-num{width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}
 .visit-info{flex:1;min-width:140px}.visit-date{font-weight:600;font-size:13px}.visit-sub{font-size:11px;color:var(--inkt);margin-top:1px}
 .visit-score{text-align:center}.visit-score .v{font-weight:800;font-size:17px}.visit-score .l{font-size:10px;color:var(--inkt)}
-.delta-down{color:#0F6E56}.delta-up{color:#A32D2D}.delta-flat{color:#999}
+.delta-down{color:var(--ok)}.delta-up{color:var(--alert)}.delta-flat{color:#999}
 
 /* ── Clinician view ──────────────────────────── */
-.clin-badge{display:inline-block;padding:2px 8px;background:#3A4A5A;color:#fff;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-left:6px;vertical-align:middle}
+.clin-badge{display:inline-block;padding:2px 8px;background:var(--neutral);color:#fff;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-left:6px;vertical-align:middle}
 .clin-detail{background:#F5F7FA;border:1px solid #C0C8D2;border-radius:var(--r12);padding:16px;margin-bottom:14px}
-.clin-detail .clin-h{font-size:11.5px;font-weight:700;color:#3A4A5A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #D0D7DF;padding-bottom:3px;margin:12px 0 6px}
+.clin-detail .clin-h{font-size:11.5px;font-weight:700;color:var(--neutral);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #D0D7DF;padding-bottom:3px;margin:12px 0 6px}
 .clin-detail .clin-h:first-of-type{margin-top:0}
 .clin-tbl{width:100%;border-collapse:collapse;font-size:11.5px}
 .clin-tbl th{text-align:left;padding:4px 8px;background:#EAEDF0;font-weight:600;font-size:11px}
@@ -182,20 +193,20 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
   /* Force background colours to render in print/PDF — browsers strip them by
      default, which blanked the By-area bar fills, hero, triage and pill swatches. */
   #print-area,#print-area *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-  .pr-logo{font-size:14px;font-weight:700;color:#0F6E56}
+  .pr-logo{font-size:14px;font-weight:700;color:var(--brand)}
   .pr-title{font-size:20px;font-weight:800;margin:3px 0 2px}
   .pr-meta{font-size:10.5px;color:#555;margin-bottom:10px;line-height:1.7}
   hr.pr-divider{border:none;border-top:1.5px solid #D0D0C8;margin:10px 0}
   .pr-section{margin-bottom:8px}
-  .pr-sh{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#3A4A5A;border-bottom:1px solid #D0D0C8;padding-bottom:2px;margin-bottom:4px;page-break-after:avoid;break-after:avoid-page}
-  .pr-grp{font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#fff;background:#3A4A5A;border-radius:4px;padding:4px 10px;margin:10px 0 6px}
+  .pr-sh{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--neutral);border-bottom:1px solid #D0D0C8;padding-bottom:2px;margin-bottom:4px;page-break-after:avoid;break-after:avoid-page}
+  .pr-grp{font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#fff;background:var(--neutral);border-radius:4px;padding:4px 10px;margin:10px 0 6px}
   .pr-grp:first-of-type{margin-top:2px}
-  .pr-hero{display:flex;gap:14px;align-items:center;background:#F4FBF7;border:1px solid #5DCAA5;border-radius:8px;padding:8px 10px;margin-bottom:6px}
-  .pr-hero .big{font-size:36px;font-weight:800;color:#0F6E56;line-height:.95}
+  .pr-hero{display:flex;gap:14px;align-items:center;background:var(--tint);border:1px solid var(--ok);border-radius:8px;padding:8px 10px;margin-bottom:6px}
+  .pr-hero .big{font-size:36px;font-weight:800;color:var(--brand);line-height:.95}
   .pr-hero .sub{font-size:10px;color:#555;margin-top:2px}
   .pr-pill{display:inline-block;padding:2px 8px;border-radius:14px;font-size:10px;font-weight:700;margin-right:3px;border:1px solid rgba(0,0,0,.35)}
-  .pr-alert{background:#FCEBEB;border:1px solid #A32D2D;border-radius:6px;padding:6px 8px;margin-bottom:6px;page-break-inside:avoid;break-inside:avoid}
-  .pr-alert-t{font-weight:700;color:#A32D2D;font-size:11.5px;margin-bottom:2px}
+  .pr-alert{background:var(--alert-p);border:1px solid var(--alert);border-radius:6px;padding:6px 8px;margin-bottom:6px;page-break-inside:avoid;break-inside:avoid}
+  .pr-alert-t{font-weight:700;color:var(--alert);font-size:11.5px;margin-bottom:2px}
   .pr-info{background:#FFF3CD;border:1px solid #FECB1F;border-radius:6px;padding:6px 8px;margin-bottom:6px}
   /* Neutral card, colour-coded only by a left accent bar + a very light
      background wash — the tier number/label carries the meaning, colour is a
@@ -392,7 +403,7 @@ const { scaleFor } = __req('scales.js');
 //          cite findings by axis; the UI groups axes into headline outputs).
 const SECTIONS = [
   // Domain 1 (locked): GSRS-derived GI core. 15 items, 0–4 severity, 2-wk recall.
-  { id: 'GI',  label: 'GI',  full: 'Gut symptoms (GSRS-based)',          role: 'core',       axis: 'symptom',      color: '#0F6E56', bg: '#E1F5EE' },
+  { id: 'GI',  label: 'GI',  full: 'Gut symptoms (GSRS-based)',          role: 'core',       axis: 'symptom',      color: 'var(--brand)', bg: 'var(--tint)' },
   // Connected-axis screening domains, refocused at the trim (TRIM_PLAN §3–§6).
   // Oral/ENT, Hormonal, broad-Metabolic removed (no gut-specific engine pathway);
   // Sleep relocated to drivers; Skin collapsed into IM. All STANDALONE — they no
@@ -416,7 +427,7 @@ const SECTIONS = [
   // constipation-cluster burden) — the presentation F2 (PFD-paradoxical) targets.
   { id: 'AR', label: 'AR', full: 'Bowel control & evacuation', role: 'standalone', axis: 'pelvic',    color: '#7A4A8C', bg: '#F3ECF7', conditional: true,
     revealIf: { any: [ { type: 'cluster', cluster: 'Constipation', min: 0.30 }, { type: 'item', id: 'gsrs_urgency', min: 2 }, { type: 'item', id: 'gsrs_incomplete', min: 2 }, { type: 'flag', flag: 'pelvicRisk' } ] } },
-  { id: 'UG', label: 'UG', full: 'Upper-GI / dyspepsia',       role: 'standalone', axis: 'symptom',   color: '#0F6E56', bg: '#E1F5EE', conditional: true,
+  { id: 'UG', label: 'UG', full: 'Upper-GI / dyspepsia',       role: 'standalone', axis: 'symptom',   color: 'var(--brand)', bg: 'var(--tint)', conditional: true,
     revealIf: { any: [ { type: 'cluster', cluster: 'Reflux', min: 0.22 }, { type: 'cluster', cluster: 'Indigestion', min: 0.22 } ] } },
   { id: 'SY', label: 'SY', full: 'Systemic / autonomic',       role: 'standalone', axis: 'autonomic', color: '#117A8B', bg: '#E2F2F4', conditional: true,
     // Reveals on fatigue/brain-fog (original trigger) OR on pain/bloating — the
@@ -727,10 +738,10 @@ const BRISTOL_TYPES = [
   { n: 1, label: 'Separate hard lumps',     sub: 'like nuts, hard to pass',          tag: 'Constipated',          col: '#7A4A1E' },
   { n: 2, label: 'Lumpy and sausage-like',  sub: 'sausage-shaped but lumpy',         tag: 'Slightly constipated', col: '#9A6B2E' },
   { n: 3, label: 'Sausage with cracks',     sub: 'sausage with surface cracks',      tag: 'Near normal',          col: '#3B6D11' },
-  { n: 4, label: 'Smooth, soft sausage',    sub: 'like a smooth soft snake — ideal', tag: 'Normal / ideal',       col: '#0F6E56' },
+  { n: 4, label: 'Smooth, soft sausage',    sub: 'like a smooth soft snake — ideal', tag: 'Normal / ideal',       col: 'var(--ok)' },
   { n: 5, label: 'Soft blobs, clear edges', sub: 'soft blobs that pass easily',      tag: 'Lacking fibre',        col: '#BA7517' },
   { n: 6, label: 'Mushy, ragged edges',     sub: 'fluffy pieces, mushy stool',       tag: 'Mild diarrhoea',       col: '#C2622E' },
-  { n: 7, label: 'Watery, no solid pieces', sub: 'entirely liquid',                  tag: 'Diarrhoea',            col: '#A32D2D' },
+  { n: 7, label: 'Watery, no solid pieces', sub: 'entirely liquid',                  tag: 'Diarrhoea',            col: 'var(--alert)' },
 ];
 
 // NRS pain 0–10 + body region (observational; never feeds the Index).
@@ -740,8 +751,8 @@ const PAIN_REGIONS = [
 ];
 function painBand(s) {
   if (s == null) return null;
-  return s === 0 ? { l: 'None', c: '#0F6E56' } : s <= 3 ? { l: 'Mild', c: '#3B6D11' }
-    : s <= 6 ? { l: 'Moderate', c: '#BA7517' } : { l: 'Severe', c: '#A32D2D' };
+  return s === 0 ? { l: 'None', c: 'var(--ok)' } : s <= 3 ? { l: 'Mild', c: '#3B6D11' }
+    : s <= 6 ? { l: 'Moderate', c: '#BA7517' } : { l: 'Severe', c: 'var(--alert)' };
 }
 
 // Composite PSYCHOLOGICAL LOAD (co-design): folds the validated PSS-4 together
@@ -761,7 +772,7 @@ function psychLoadScore(ex) {
 }
 function loadBand(p) {
   if (p == null) return null;
-  return p < 33 ? { l: 'Low', c: '#0F6E56' } : p < 66 ? { l: 'Moderate', c: '#BA7517' } : { l: 'High', c: '#A32D2D' };
+  return p < 33 ? { l: 'Low', c: 'var(--ok)' } : p < 66 ? { l: 'Moderate', c: '#BA7517' } : { l: 'High', c: 'var(--alert)' };
 }
 
 // New modifiable drivers (co-design). All provisional, all kept OUT of the Index.
@@ -841,7 +852,7 @@ function sleepBurden(arr) {
 }
 function sleepBand(b) {
   if (b == null) return null;
-  return b < 0.34 ? { l: 'Good', c: '#0F6E56' } : b < 0.67 ? { l: 'Fair', c: '#BA7517' } : { l: 'Poor', c: '#A32D2D' };
+  return b < 0.34 ? { l: 'Good', c: 'var(--ok)' } : b < 0.67 ? { l: 'Fair', c: '#BA7517' } : { l: 'Poor', c: 'var(--alert)' };
 }
 // Diet quality: protective fibre/fermented intake vs harmful ultra-processed/
 // sugar intake (each 0–3 frequency). Burden 0–1, higher = worse.
@@ -853,7 +864,7 @@ function dietBurden(ex) {
 }
 function dietBand(b) {
   if (b == null) return null;
-  return b < 0.34 ? { l: 'Good', c: '#0F6E56' } : b < 0.67 ? { l: 'Fair', c: '#BA7517' } : { l: 'Poor', c: '#A32D2D' };
+  return b < 0.34 ? { l: 'Good', c: 'var(--ok)' } : b < 0.67 ? { l: 'Fair', c: '#BA7517' } : { l: 'Poor', c: 'var(--alert)' };
 }
 
 // ── DYS-R: dysbiosis-correlate lens (TRIM_PLAN §10) ─────────────────────────
@@ -1148,7 +1159,7 @@ function modifiableFactors(extras) {
     { icon: '⚡', label: 'Pain (NRS)', band: pn ? pn.l : '—', score: ex.nrsPain != null ? `${ex.nrsPain}/10` : null, color: pn ? pn.c : '#999' },
     { icon: '💩', bristolN: bt ? bt.n : null, label: 'Bristol stool', band: bt ? `Type ${bt.n}` : '—', score: bt ? bt.tag : null, color: bt ? bt.col : '#999' },
     { icon: '💊', label: 'Recent disruptors', band: disrupt.length ? `${disrupt.length} flagged` : (ex.meds ? 'None' : '—'),
-      score: disrupt.length ? disrupt.map(d => d.label).join(', ') : null, color: disrupt.length ? '#A32D2D' : (ex.meds ? '#0F6E56' : '#999') },
+      score: disrupt.length ? disrupt.map(d => d.label).join(', ') : null, color: disrupt.length ? 'var(--alert)' : (ex.meds ? 'var(--ok)' : '#999') },
     { icon: '🥗', label: 'Diet quality', band: db ? db.l : '—', score: null, color: db ? db.c : '#999' },
     { icon: '🏃', label: 'Lifestyle', band: act || '—',
       score: [alc != null ? `Alcohol: ${alc}` : null, smk != null ? `Smoking: ${smk}` : null].filter(Boolean).join(' · ') || null,
@@ -1339,10 +1350,10 @@ const { SECTIONS, QUESTIONS, QID, itemMax, sectionMax } = __req('schema.js');
 // weighting are provisional placeholders — refit against pilot distribution +
 // any lab-confirmed outcomes (breath test, GI-MAP) before treating as final.
 const BANDS = [
-  { label: 'Minimal',       maxPct: 10,        color: '#0F6E56', bg: '#E1F5EE', cls: 'sev-min' },
+  { label: 'Minimal',       maxPct: 10,        color: 'var(--ok)', bg: 'var(--tint)', cls: 'sev-min' },
   { label: 'Mild–Moderate', maxPct: 35,        color: '#BA7517', bg: '#FAEEDA', cls: 'sev-mod' },
   { label: 'Significant',   maxPct: 65,        color: '#C2622E', bg: '#FAECE7', cls: 'sev-sig' },
-  { label: 'Severe',        maxPct: Infinity,  color: '#A32D2D', bg: '#FCEBEB', cls: 'sev-sev' },
+  { label: 'Severe',        maxPct: Infinity,  color: 'var(--alert)', bg: 'var(--alert-p)', cls: 'sev-sev' },
 ];
 const SEVERITY_DESC = {
   'Minimal':       'Minimal gut-symptom burden on this screen.',
@@ -2084,7 +2095,7 @@ const PATTERNS = [
 // Ratio-based bands — comparable across patterns regardless of how many signals
 // each pattern lists. Confidence is data coverage (answered / total).
 const CONFIDENCE_BANDS = [
-  { min: 0.75, label: 'High',     color: '#0F6E56' },
+  { min: 0.75, label: 'High',     color: 'var(--ok)' },
   { min: 0.5,  label: 'Moderate', color: '#BA7517' },
   { min: 0,    label: 'Low',      color: '#999' },
 ];
@@ -2141,13 +2152,13 @@ return __e;
 __modules['triage.js'] = function(__e){
 
 const TIERS = {
-  1: { level: 1, label: 'Refer for clinical assessment', color: '#A32D2D',
+  1: { level: 1, label: 'Refer for clinical assessment', color: 'var(--alert)',
        action: 'One or more answers warrant clinician assessment before starting a gut-health program.' },
   2: { level: 2, label: 'Clinician-led management', color: '#C2622E',
        action: 'A clinician-guided plan is appropriate. Once other causes have been assessed, manual or physical therapy may be a useful adjunct (limited evidence base) for these symptoms.' },
   3: { level: 3, label: 'Microbiome-support candidate', color: '#BA7517',
        action: 'A reasonable candidate for a clinician-supervised trial of probiotic / microbiome support.' },
-  4: { level: 4, label: 'Self-management & monitoring', color: '#0F6E56',
+  4: { level: 4, label: 'Self-management & monitoring', color: 'var(--ok)',
        action: 'Lifestyle-focused self-management is reasonable. Re-screen in 4–6 weeks to track change.' },
 };
 
@@ -2667,8 +2678,8 @@ function deltaLabel(curr, prev) {
   const d = curr - prev, ad = Math.abs(d);
   if (ad < 5) return { dir: 'stable', label: 'Stable', delta: d, color: '#999' };
   const meaningful = ad >= 10;
-  if (d < 0) return { dir: 'improved', label: meaningful ? 'Improved' : 'Slightly improved', delta: d, color: '#0F6E56' };
-  return { dir: 'worsened', label: meaningful ? 'Worsened' : 'Slightly worse', delta: d, color: '#A32D2D' };
+  if (d < 0) return { dir: 'improved', label: meaningful ? 'Improved' : 'Slightly improved', delta: d, color: 'var(--ok)' };
+  return { dir: 'worsened', label: meaningful ? 'Worsened' : 'Slightly worse', delta: d, color: 'var(--alert)' };
 }
 
 function buildTrend(visits) {
@@ -3119,7 +3130,7 @@ function clearPatient() { session.name = session.ref = session.age = session.gen
 function patientBanner() {
   const lbl = (session.name || '').trim() || (session.ref || '').trim();
   const card = el('div', { class: 'sec-card' });
-  const head = el('div', { class: 'sec-head', style: 'background:#3A4A5A' });
+  const head = el('div', { class: 'sec-head', style: 'background:var(--neutral)' });
   head.appendChild(el('span', {}, lbl ? '👤 ' + esc(lbl) : 'Anonymous screen'));
   head.appendChild(el('span', { style: 'opacity:.85;font-weight:500' }, session.followup ? 'Follow-up' : 'Baseline'));
   card.appendChild(head);
@@ -3186,22 +3197,22 @@ function bandPillClass(band) {
 // Small "validated / draft / partial" provenance tag, reusing the .opt-tag class.
 function provTag(validated) {
   const label = validated === true ? 'validated' : validated === 'derived' ? 'derived' : validated === 'partial' ? 'part. validated' : 'draft';
-  const bg = validated === true ? '#E1F5EE' : validated === 'derived' ? '#E8F0F7' : validated === 'partial' ? '#FAEEDA' : '#F1F2F4';
-  const col = validated === true ? '#0F6E56' : validated === 'derived' ? '#2C5D8A' : validated === 'partial' ? '#7A5800' : '#6B7280';
+  const bg = validated === true ? 'var(--tint)' : validated === 'derived' ? '#E8F0F7' : validated === 'partial' ? '#FAEEDA' : '#F1F2F4';
+  const col = validated === true ? 'var(--ok)' : validated === 'derived' ? '#2C5D8A' : validated === 'partial' ? '#7A5800' : '#6B7280';
   return `<span class="opt-tag" style="background:${bg};color:${col}">${label}</span>`;
 }
 
 // GSHS headline — the four PRIMARY outputs (Option A). Nutrient/Malabsorption is
 // kept primary on purpose so the Tier-1-capable signal is never buried.
 function headlineCard(heads, rome) {
-  const card = el('div', { class: 'card', style: 'border-left:6px solid #0F6E56' });
+  const card = el('div', { class: 'card', style: 'border-left:6px solid var(--brand)' });
   card.appendChild(el('h2', {}, 'Gut & Systemic Health Screen — headline'));
   card.appendChild(el('div', { class: 'q-sub' }, 'Four separate reads. Burden = current symptom severity · Load = exposure / risk accumulation. The Gut Symptom Burden is the only validated number; the rest are screening reads.'));
   const grid = el('div', { style: 'display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px' });
   heads.primaryList.forEach(o => {
     const isPct = o.key === 'gut_symptom_burden' || o.key === 'nutrient_malabsorption_risk';
     const val = o.value == null ? '—' : (isPct ? o.value + '%' : o.value);
-    grid.appendChild(el('div', { style: 'border:1px solid var(--bdr);border-radius:10px;padding:11px 12px;background:var(--surf2)' },
+    grid.appendChild(el('div', { style: 'border:1px solid var(--bdr);border-radius:10px;padding:11px 12px;background:var(--paper)' },
       `<div style="font-size:11.5px;font-weight:700;color:var(--inks)">${esc(o.label)} ${provTag(o.validated)}</div>
        <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px">
          <div style="font-size:24px;font-weight:800;color:var(--ink)">${esc(String(val))}</div>
@@ -3234,7 +3245,7 @@ function axisProfileCard(profile, heads) {
   rows.forEach(a => {
     const isCount = a.max != null;
     const val = a.value == null ? '—' : (isCount ? `${a.value}/${a.max}` : a.value + '%');
-    card.appendChild(el('div', { class: 'row', style: 'justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--surf2)' },
+    card.appendChild(el('div', { class: 'row', style: 'justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--paper)' },
       `<span style="font-weight:600">${esc(a.label)} ${provTag(a.validated)}</span>
        <span class="row" style="gap:8px;align-items:center"><span class="muted">${esc(String(val))}</span>${a.band ? `<span class="pill ${bandPillClass(a.band)}">${esc(a.band)}</span>` : ''}</span>`));
   });
@@ -3253,7 +3264,7 @@ const SEVFREQ_QUAD = {
   priority:              { t: 'Priority — severe & frequent', c: '#A9463F', bg: '#FBF2F1' },
   'severe-intermittent': { t: 'Severe but intermittent',      c: '#B4713C', bg: '#FBF6EF' },
   'frequent-mild':       { t: 'Frequent but milder',          c: '#9A8339', bg: '#FAF8EE' },
-  low:                   { t: 'Low burden',                   c: '#3C7F6D', bg: '#F1F7F5' },
+  low:                   { t: 'Low burden',                   c: 'var(--ok)', bg: 'var(--tint)' },
 };
 // Shared renderer for both the on-screen card and the print section — returns
 // an HTML string so both call sites (el(...).innerHTML and the print string
@@ -3618,7 +3629,7 @@ function sectionCard(sec) {
   // Count only items shown up-front (reveal-on-positive follow-ups are hidden until
   // their parent is positive, so they shouldn't inflate the header count).
   const baseCount = items.filter(q => !q.revealIf).length;
-  card.appendChild(el('div', { class: 'sec-head', style: `background:${sec.color || '#0F6E56'}` },
+  card.appendChild(el('div', { class: 'sec-head', style: `background:${sec.color || 'var(--brand)'}` },
     `${esc(sec.full || sec.label)} <span style="opacity:.8;font-weight:500">${baseCount} items</span>`));
   const body = el('div', { class: 'sec-body' });
   if (!sec.noRecall) body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, esc(recallNote())));
@@ -4152,7 +4163,7 @@ function obstetricCard() {
 // Notes-only: feeds clinician interpretation, never the Index or the triage Tier.
 function anthropometricsCard() {
   const card = el('div', { class: 'sec-card' });
-  card.appendChild(el('div', { class: 'sec-head', style: 'background:#3A4A5A' }, 'Anthropometrics'));
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:var(--neutral)' }, 'Anthropometrics'));
   const body = el('div', { class: 'sec-body' });
   body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' },
     'Optional. Used for BMI and waist-to-height ratio — context for interpretation, not part of the score.'));
@@ -4182,7 +4193,7 @@ function anthropometricsCard() {
     out.innerHTML = '';
     if (a.bmi == null && a.whtr == null) return;
     const grid = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' });
-    const tile = (label, val, band) => el('div', { style: 'flex:1;min-width:120px;border:1px solid var(--bdr);border-radius:10px;padding:9px 12px;background:var(--surf2)' },
+    const tile = (label, val, band) => el('div', { style: 'flex:1;min-width:120px;border:1px solid var(--bdr);border-radius:10px;padding:9px 12px;background:var(--paper)' },
       `<div style="font-size:11px;font-weight:700;color:var(--inks)">${esc(label)}</div>
        <div style="display:flex;align-items:baseline;gap:8px;margin-top:3px">
          <div style="font-size:20px;font-weight:800;color:var(--ink)">${val == null ? '—' : esc(String(val))}</div>
@@ -4380,7 +4391,7 @@ function surgicalCard() {
 
 function redFlagCard() {
   const card = el('div', { class: 'sec-card red-flag-alert' });
-  card.appendChild(el('div', { class: 'sec-head', style: 'background:#A32D2D' },
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:var(--alert)' },
     `Important safety questions <span style="opacity:.8;font-weight:500">${RED_FLAGS.length} items</span>`));
   const body = el('div', { class: 'sec-body' });
   body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' },
@@ -4569,7 +4580,7 @@ function domainBarsCard(score, withClusters) {
     const detail = withClusters ? `${sc}/${max} · ${p}%` : p + '%';
     card.appendChild(el('div', { class: 'bar-row' },
       `<div class="bar-label"><span>${esc(s.full || s.label)}</span><span class="muted">${detail}</span></div>
-       <div class="bar-track"><div class="bar-fill" style="width:${p}%;background:${s.color || '#0F6E56'}"></div></div>`));
+       <div class="bar-track"><div class="bar-fill" style="width:${p}%;background:${s.color || 'var(--brand)'}"></div></div>`));
     if (!withClusters || s.id !== 'GI') return;
     // Bristol/frequency no longer nudge gut-core (decoupled — Bristol now
     // feeds Rome IV subtyping only, frequency feeds only the read-only
@@ -4819,8 +4830,8 @@ function triageCard(tri, rome, showInvestigations, includeInvestigationsList) {
       `Meets Rome IV-informed criteria for ${esc(rome.subtype)}${esc(basisNote)} — single-visit estimate, not the prospective diary Rome IV was validated against. A pattern to discuss, not a diagnosis.`));
   }
   if (includeInvestigationsList && tri.investigations && tri.investigations.length) {
-    tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-weight:600;color:#3A4A5A' }, 'Suggested investigations / management:'));
-    tcard.appendChild(el('ul', { class: 'rf-list', style: 'color:#3A4A5A;margin-top:2px' },
+    tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-weight:600;color:var(--neutral)' }, 'Suggested investigations / management:'));
+    tcard.appendChild(el('ul', { class: 'rf-list', style: 'color:var(--neutral);margin-top:2px' },
       dedupeList(tri.investigations).map(i => `<li>${esc(i)}</li>`).join('')));
     tcard.appendChild(el('div', { class: 'q-sub', style: 'color:#888;font-style:italic;margin-top:3px' }, 'Pattern-matched — apply clinical judgement. Not a protocol.'));
   }
@@ -4852,7 +4863,7 @@ function clinicianDetailCard(c) {
     <tr><td>Overall completeness</td><td>${score.completeness}%</td></tr>
     <tr><td>Sections with data</td><td>${esc(String(secWithData))}</td></tr>
     <tr><td>Confidence level</td><td>${esc(conf.level)}</td></tr>
-    <tr><td>GI core answered</td><td>${score.coreUnknown ? '<b style="color:#A32D2D">No — result provisional</b>' : 'Yes'}</td></tr>`));
+    <tr><td>GI core answered</td><td>${score.coreUnknown ? '<b style="color:var(--alert)">No — result provisional</b>' : 'Yes'}</td></tr>`));
 
   // Item-level responses per scored section
   card.appendChild(chead('Item-level responses'));
@@ -4862,7 +4873,7 @@ function clinicianDetailCard(c) {
     const sc = score.secScores[sec.id] || 0;
     const mx = score.secApplicableMax[sec.id] || 0;
     const pct = mx ? Math.round(sc / mx * 100) : 0;
-    card.appendChild(el('div', { style: 'font-size:11px;font-weight:600;color:#3A4A5A;margin:8px 0 3px;padding:2px 0;border-bottom:1px solid #D8DDE3' },
+    card.appendChild(el('div', { style: 'font-size:11px;font-weight:600;color:var(--neutral);margin:8px 0 3px;padding:2px 0;border-bottom:1px solid #D8DDE3' },
       `${esc(sec.full || sec.label)} — ${sc}/${mx} (${pct}%)`));
     const rows = qs.map(q => {
       const val = answers[q.id];
@@ -4950,8 +4961,8 @@ function appendixToggleEl() {
 // Band → background colour (print). Covers both the 0–100 bands
 // (Minimal/Mild–Moderate/Significant/Severe) and the count-load bands (Low/Some/Elevated).
 function bandBg(band) {
-  return { Severe: '#FCEBEB', Significant: '#FAECE7', Elevated: '#FAECE7',
-    'Mild–Moderate': '#FAEEDA', Some: '#FAEEDA' }[band] || '#E1F5EE';
+  return { Severe: 'var(--alert-p)', Significant: '#FAECE7', Elevated: '#FAECE7',
+    'Mild–Moderate': '#FAEEDA', Some: '#FAEEDA' }[band] || 'var(--tint)';
 }
 
 
@@ -5086,7 +5097,7 @@ function peakAlertBoxHtml(score) {
   if (!score || !score.peakAlerts || !score.peakAlerts.length) return '';
   const items = score.peakAlerts.map(p => `${p.label} (${p.level === 'ceiling' ? 'very severe' : 'severe'})`).join(', ');
   return `<div class="pr-alert" style="margin-top:8px"><div class="pr-alert-t">▲ Peak-symptom alert</div>
-    <div style="font-size:10.5px;color:#7A1F1F;margin-top:2px">${esc(items)}${score.peakEscalated ? ' — displayed band raised; raw index unchanged' : ''}</div></div>`;
+    <div style="font-size:10.5px;color:var(--alert-d);margin-top:2px">${esc(items)}${score.peakEscalated ? ' — displayed band raised; raw index unchanged' : ''}</div></div>`;
 }
 
 // Suggested Actions — 2 columns (Investigations & Diagnostics, Management &
@@ -5205,14 +5216,14 @@ function buildClinicianPrint(c, opts) {
     const topMeta = top ? RF_URGENCY_META[top] : null;
     const groups = firedByUrgency(redflags);
     h += `<div class="pr-alert"><div class="pr-alert-t">⚠ ${fired.length} item${fired.length > 1 ? 's' : ''} answered Yes${topMeta ? ` · highest: ${esc(topMeta.label)}` : ''}</div>`;
-    if (topMeta) h += `<div style="font-size:10px;color:#7A1F1F;margin:2px 0 4px">${esc(topMeta.headline)}</div>`;
+    if (topMeta) h += `<div style="font-size:10px;color:var(--alert-d);margin:2px 0 4px">${esc(topMeta.headline)}</div>`;
     h += groups.map(g =>
-      `<div style="margin-top:4px"><div style="font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#7A1F1F">${esc(g.meta.label)}</div>` +
+      `<div style="margin-top:4px"><div style="font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--alert-d)">${esc(g.meta.label)}</div>` +
       `<ul style="margin:2px 0 0 14px;font-size:10.5px">${g.flags.map(f => `<li>${esc(f.clinLabel || f.label)}</li>`).join('')}</ul></div>`
     ).join('');
     h += `</div>`;
   } else {
-    h += `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#2C7A63"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#E3F1EC;color:#2C7A63;font-size:9.5px;font-weight:800;line-height:14px;text-align:center">✓</span>No red flags identified this visit.</div>`;
+    h += `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ok)"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--tint);color:var(--ok);font-size:9.5px;font-weight:800;line-height:14px;text-align:center">✓</span>No red flags identified this visit.</div>`;
   }
   h += `</div>`;
 
@@ -5303,7 +5314,7 @@ function buildClinicianPrint(c, opts) {
     const onsetMetNow = typeof onsetIdx === 'number' && onsetIdx < ROME_ONSET.length && onsetIdx >= ROME_ONSET_MET;
     const assocMetNow = (rome.assocCount || 0) >= 2;
     const checkTag = met => met
-      ? '<span style="color:#2C7A63;font-weight:700">✓</span>'
+      ? '<span style="color:var(--ok);font-weight:700">✓</span>'
       : '<span style="color:#A9463F;font-weight:700">✗</span>';
     const failReason = !freqMetNow ? 'pain frequency below the required ≥1 day/week'
       : !onsetMetNow ? 'onset under 6 months'
@@ -5379,7 +5390,7 @@ function buildClinicianPrint(c, opts) {
       ${domainRow(byId('IMP'))}
       ${targetedIds.length ? groupRow('TARGETED') : ''}
       ${targetedIds.map(id => domainRow(byId(id))).join('')}
-      ${score.coreUnknown ? '<tr><td colspan="4" style="color:#A32D2D;font-weight:600">⚠ Core GI section not answered — Gut Symptom Burden provisional</td></tr>' : ''}
+      ${score.coreUnknown ? '<tr><td colspan="4" style="color:var(--alert);font-weight:600">⚠ Core GI section not answered — Gut Symptom Burden provisional</td></tr>' : ''}
     </tbody></table>
     ${disruptSig.length ? `<div style="font-size:9.5px;margin-top:3px"><b>Disruption Load</b> (exposures): ${esc(disruptSig.join(', '))}</div>` : ''}
     ${correlateSig.length ? `<div style="font-size:9.5px;margin-top:2px"><b>Dysbiosis Correlate Load</b> (inferred): ${esc(correlateSig.join(', '))}</div>` : ''}</div>`;
@@ -5495,7 +5506,7 @@ function buildClinicianPrint(c, opts) {
       if (!qs.length) return;
       const sc = score.secScores[s.id] || 0, mx = score.secApplicableMax[s.id] || 0;
       h += `<div style="break-inside:avoid;-webkit-column-break-inside:avoid;margin-bottom:6px">
-        <div style="font-weight:600;font-size:10.5px;margin:0 0 2px;color:#3A4A5A">${esc(s.full || s.label)} — ${sc}/${mx} (${mx ? Math.round(sc / mx * 100) + '%' : 'n/a'})</div>
+        <div style="font-weight:600;font-size:10.5px;margin:0 0 2px;color:var(--neutral)">${esc(s.full || s.label)} — ${sc}/${mx} (${mx ? Math.round(sc / mx * 100) + '%' : 'n/a'})</div>
         <table class="pr-tbl"><tbody>${qs.map(q => {
           const val = answers[q.id];
           const labels = scaleFor(q.scale);
@@ -5634,26 +5645,26 @@ function renderClinician() {
 
   // Red flags (safety net) — same-day features must never be buried.
   root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('flags')));
-  const rfCard = el('div', { class: 'card', style: `border-left:6px solid ${fired.length ? '#A32D2D' : '#2C7A63'}` });
+  const rfCard = el('div', { class: 'card', style: `border-left:6px solid ${fired.length ? 'var(--alert)' : 'var(--ok)'}` });
   rfCard.appendChild(el('h2', {}, sectionTitle('flags')));
   if (fired.length) {
     // E2 — group by urgency tier off the fired flag objects (each carries `urgency`).
     const rank = { emergency: 3, urgent: 2, routine: 1 };
     const top = fired.reduce((t, f) => (rank[f.urgency || 'routine'] > rank[t] ? (f.urgency || 'routine') : t), 'routine');
     const topMeta = RF_URGENCY_META[top];
-    rfCard.appendChild(el('div', { style: 'font-weight:700;color:#A32D2D;font-size:13px' },
+    rfCard.appendChild(el('div', { style: 'font-weight:700;color:var(--alert);font-size:13px' },
       `⚠ ${fired.length} item${fired.length > 1 ? 's' : ''} answered Yes · highest: ${esc(topMeta.label)}`));
-    rfCard.appendChild(el('div', { style: 'font-size:11px;color:#7A1F1F;margin:2px 0 4px' }, esc(topMeta.headline)));
+    rfCard.appendChild(el('div', { style: 'font-size:11px;color:var(--alert-d);margin:2px 0 4px' }, esc(topMeta.headline)));
     ['emergency', 'urgent', 'routine'].forEach(tier => {
       const grp = fired.filter(f => (f.urgency || 'routine') === tier);
       if (!grp.length) return;
-      rfCard.appendChild(el('div', { style: 'font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#7A1F1F;margin-top:6px' }, esc(RF_URGENCY_META[tier].label)));
-      rfCard.appendChild(el('ul', { style: 'font-size:12.5px;padding-left:18px;color:#A32D2D;margin:2px 0 0' },
+      rfCard.appendChild(el('div', { style: 'font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--alert-d);margin-top:6px' }, esc(RF_URGENCY_META[tier].label)));
+      rfCard.appendChild(el('ul', { style: 'font-size:12.5px;padding-left:18px;color:var(--alert);margin:2px 0 0' },
         grp.map(f => `<li>${esc(f.clinLabel || f.label)}</li>`).join('')));
     });
   } else {
-    rfCard.appendChild(el('div', { style: 'display:flex;align-items:center;gap:6px;font-size:12.5px;color:#2C7A63' },
-      `<span style="display:inline-block;width:15px;height:15px;border-radius:50%;background:#E3F1EC;color:#2C7A63;font-size:10px;font-weight:800;line-height:15px;text-align:center">✓</span>No red flags identified this visit.`));
+    rfCard.appendChild(el('div', { style: 'display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ok)' },
+      `<span style="display:inline-block;width:15px;height:15px;border-radius:50%;background:var(--tint);color:var(--ok);font-size:10px;font-weight:800;line-height:15px;text-align:center">✓</span>No red flags identified this visit.`));
   }
   root.appendChild(rfCard);
 
@@ -5902,7 +5913,7 @@ function renderDetail(root, db) {
       onclick: () => ctx.openVisit(identity, vrec, true) }, '📊 View results'));
     acts.appendChild(el('button', { class: 'btn btn-gh', type: 'button', title: 'Load answers into the questionnaire to review or edit',
       onclick: () => ctx.openVisit(identity, vrec, false) }, '📋 Load'));
-    acts.appendChild(el('button', { class: 'btn btn-gh', type: 'button', style: 'color:var(--re)', onclick: () => deleteVisit(p, vrec) }, 'Delete'));
+    acts.appendChild(el('button', { class: 'btn btn-gh', type: 'button', style: 'color:var(--alert)', onclick: () => deleteVisit(p, vrec) }, 'Delete'));
     card.appendChild(acts);
     root.appendChild(card);
   });
@@ -5919,7 +5930,7 @@ function progressionCard(visits) {
     const first = pts[0].index, last = pts[pts.length - 1].index, d = last - first;
     const dir = d < 0 ? 'improved' : d > 0 ? 'worsened' : 'stable';
     card.appendChild(el('div', { class: 'row', style: 'gap:10px;margin:6px 0' },
-      `<span class="pill" style="background:${d < 0 ? '#0F6E56' : d > 0 ? '#A32D2D' : '#999'};color:#fff">${dir === 'stable' ? 'No net change' : (d < 0 ? '▼' : '▲') + ' ' + Math.abs(d) + ' pts'}</span>
+      `<span class="pill" style="background:${d < 0 ? 'var(--ok)' : d > 0 ? 'var(--alert)' : '#999'};color:#fff">${dir === 'stable' ? 'No net change' : (d < 0 ? '▼' : '▲') + ' ' + Math.abs(d) + ' pts'}</span>
        <span style="font-size:13px;color:var(--inks)">${first}% → ${last}% across ${pts.length} visits</span>`));
   }
   // SVG sparkline
@@ -5927,11 +5938,11 @@ function progressionCard(visits) {
   const x = (i) => pad + (n === 1 ? (W - 2 * pad) / 2 : i * (W - 2 * pad) / (n - 1));
   const y = (v) => H - pad - (v / 100) * (H - 2 * pad);
   const line = pts.map((p, i) => `${x(i).toFixed(1)},${y(p.index).toFixed(1)}`).join(' ');
-  const dots = pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.index).toFixed(1)}" r="3.5" fill="#0F6E56"/><text x="${x(i).toFixed(1)}" y="${(y(p.index) - 8).toFixed(1)}" font-size="10" fill="#444" text-anchor="middle">${p.index}</text>`).join('');
+  const dots = pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.index).toFixed(1)}" r="3.5" fill="var(--brand)"/><text x="${x(i).toFixed(1)}" y="${(y(p.index) - 8).toFixed(1)}" font-size="10" fill="#444" text-anchor="middle">${p.index}</text>`).join('');
   card.appendChild(el('div', { style: 'overflow-x:auto' },
     `<svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:320px;height:auto">
        <line x1="${pad}" y1="${H - pad}" x2="${W - pad}" y2="${H - pad}" stroke="#E1E5EB"/>
-       ${n >= 2 ? `<polyline points="${line}" fill="none" stroke="#0F6E56" stroke-width="2"/>` : ''}
+       ${n >= 2 ? `<polyline points="${line}" fill="none" stroke="var(--brand)" stroke-width="2"/>` : ''}
        ${dots}
      </svg>`));
   return card;
