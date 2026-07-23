@@ -4741,35 +4741,32 @@ const CONCERN_BANDS = new Set(['Significant', 'Severe', 'Elevated']);
 // a restatement of computed findings — no inference beyond what each axis/pattern
 // already says — and always closed with an explicit "screening, not diagnosis"
 // caveat so it can never read as a clinical conclusion.
-// Two-line clinical story: line 1 is the presentation (severity + leading
-// pattern), line 2 is the bottom line (safety + triage). Deliberately terse —
-// every fact mentioned here is shown again in full detail elsewhere (Axis
-// profile for peak alerts, item 5 for the full pattern list, item 1/4 for
-// red flags and triage reasons), so this stays a synthesis, not a repeat.
+// Two-line clinical story: line 1 is the presentation (the leading symptom
+// pattern), line 2 is the bottom line (safety features). Deliberately terse and
+// deliberately NON-repeating — the band + index % live in the hero score (print)
+// and the results grid (patient), confidence lives there too, and peak alerts /
+// the full pattern list / triage reasons each live in their own section — so this
+// stays a one-glance synthesis, not a restatement of the numbers just above it.
 function clinicalImpression(c) {
-  const { score, sv, conf, fired, rome, patterns } = c;
+  const { sv, fired, rome, patterns } = c;
 
-  // Line 1 — presentation: severity band + the leading pattern. Patterns are
-  // already engine-ordered by priority then confidence, so [0] is the single
-  // most actionable finding — naming more than one turns this back into a list.
+  // Line 1 — presentation: the single leading pattern (patterns are engine-ordered
+  // by priority then confidence, so [0] is the most actionable). The band and % are
+  // NOT restated here — they sit in the hero score / results grid immediately above.
   let line1;
+  const top = (patterns || [])[0];
+  const romeSub = rome && rome.criteriaMet && rome.subtype;
+  const romeClause = (romeSub && !(top && top.label.includes(rome.subtype))) ? ` (Rome IV-consistent with ${rome.subtype})` : '';
   if (sv && sv.label) {
-    // E4 — flag a peak-escalated band without repeating the item list (that
-    // detail lives exclusively in the Axis profile peak-alert row now).
-    const peakNote = sv.peakEscalated ? ' (raised for an isolated high-severity symptom)' : '';
-    const idxTxt = score.index != null ? ` (${score.index}%)` : '';
-    const top = (patterns || [])[0];
-    const patternClause = top ? `, most consistent with a ${top.label.toLowerCase()}` : '';
-    const romeClause = (rome && rome.criteriaMet && rome.subtype && !(top && top.label.includes(rome.subtype)))
-      ? ` (Rome IV-consistent with ${rome.subtype})` : '';
-    line1 = `${sv.label} gut-symptom burden${idxTxt}${peakNote}${patternClause}${romeClause}.`;
+    if (top) line1 = `Most consistent with a ${top.label.toLowerCase()}${romeClause}.`;
+    else if (romeSub) line1 = `Pattern Rome IV-consistent with ${rome.subtype}.`;
+    else line1 = 'No single dominant symptom pattern identified on this screen.';
   } else {
     line1 = 'No prominent findings on this screen.';
   }
 
-  // Line 2 — bottom line: safety only, one sentence. The tier/action verdict
-  // sits immediately below in item 4 (Triage) — repeating "Tier N, label" here
-  // duplicated it for no reason, so this stays red-flag-only now.
+  // Line 2 — bottom line: safety only, one sentence. The triage tier/action verdict
+  // sits in its own Assessment & plan section, so it is not restated here.
   let line2 = '';
   if (fired && fired.length) {
     // E2 — lead with the highest urgency tier present.
@@ -4779,7 +4776,8 @@ function clinicalImpression(c) {
     line2 = `${fired.length} safety feature${fired.length > 1 ? 's' : ''} present (${urgTxt} recommended).`;
   }
 
-  const caveat = `Screening synthesis only — not a diagnosis.${conf ? ` Confidence ${conf.level}, ${score.completeness}% complete.` : ''} Apply clinical judgement.`;
+  // Confidence/completeness is shown once, in the hero score / results grid — not repeated here.
+  const caveat = 'Screening synthesis only — not a diagnosis. Apply clinical judgement.';
   return { line1, line2, caveat };
 }
 
@@ -4799,21 +4797,24 @@ function physioCandidacy(tri) {
     .filter(r => { if (seen.has(r.text)) return false; seen.add(r.text); return true; });
 }
 
-// Single source of truth for the report's item numbering/titles (items 1–7 —
-// item 8 is print/on-screen-specific, see each call site). Both surfaces read
-// from here so a renumber or retitle can't drift between print and on-screen,
-// or leave a cross-reference sentence (e.g. "...are in item 6") pointing at
-// the wrong item.
-const REPORT_ITEMS = {
-  1: 'Safety banner',
-  2: 'Executive summary',
-  3: 'Symptom burden — severity × frequency',
-  4: 'Triage',
-  5: 'Active clinical lenses',
-  6: 'Recommended actions',
-  7: 'Longitudinal trend &amp; intervention overlay',
+// Single source of truth for the report's SECTION titles, shared by the print
+// (buildClinicianPrint) and on-screen (renderClinician) surfaces so a rename
+// can't drift between them. Descriptive names, no running item numbers — the
+// three page-group headers (Page 1 / 2 / 3) are the only sequence markers, and
+// each section sits under exactly one page, so a reader never tracks two
+// competing counters.
+const REPORT_SECTIONS = {
+  flags:      'Red flags',
+  impression: 'Clinical impression',
+  burden:     'Symptom burden — severity × frequency',
+  plan:       'Assessment & plan',
+  interp:     'Interpretation',
+  history:    'History & context',
+  drivers:    'Modifiable drivers',
+  trend:      'Trend & interventions',
+  appendix:   'Full item-level responses',
 };
-function reportItemHeader(n) { return `${n} · ${REPORT_ITEMS[n]}`; }
+function sectionTitle(key) { return REPORT_SECTIONS[key] || key; }
 
 function buildClinicianPrint(c) {
   const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, meds, famhx, obstetric, anthro } = c;
@@ -4842,28 +4843,25 @@ function buildClinicianPrint(c) {
   }
 
   // ============================================================
-  // PAGE 1 — At-a-glance overview. The headline score is the very first
-  // thing on the page, then the safety banner (1, red flags only — a
-  // same-day feature must never be buried), the narrative summary (2), the
-  // 2-D burden matrix (3), and the triage verdict (4). Summary + matrix sit
-  // ABOVE the triage verdict so the clinical picture is read before the
-  // recommended action. The detailed action lists (investigations, physio,
-  // modifiable drivers) move to page 2 with the clinical lenses (item 6) so
-  // page 1 stays scannable rather than a wall of bullet points.
+  // PAGE 1 — At a glance. Everything a clinician reads in the first few
+  // seconds and nothing else: the headline score, the safety net (red flags),
+  // a one-line impression, and the severity × frequency burden matrix. The
+  // triage verdict + full plan live together on page 2 so "why" and "what to
+  // do" are never split across a page break, and page 1 stays scannable.
   // ============================================================
-  h += `<div class="pr-grp">Page 1 · At-a-glance overview</div>`;
+  h += `<div class="pr-grp">Page 1 · At a glance</div>`;
 
-  // Headline score — big number + band, unmissable at the top of the report.
+  // Headline score — big number + band + confidence, unmissable and stated ONCE
+  // (the impression below leads with the pattern, not a restatement of these).
   h += `<div class="pr-hero">
     <div><div class="big">${sv.index == null ? '—' : sv.index + '%'}</div><div class="sub">Gut Symptom Burden</div></div>
     <div style="flex:1;min-width:160px">${sv.label ? `<span class="pr-pill" style="background:${ptBandBg(sv.label)};font-size:12px;padding:3px 10px">${esc(sv.label)}${sv.peakEscalated ? ' ↑' : ''}</span>` : ''}
-      <div style="font-size:11px;color:#333;margin-top:6px;line-height:1.5">${esc(sv.desc || '')}</div>
-      <div style="font-size:9.5px;color:#777;margin-top:4px">Confidence: ${esc(conf.level)} · ${score.completeness}% complete</div></div>
+      <div style="font-size:9.5px;color:#777;margin-top:6px">Confidence: ${esc(conf.level)} · ${score.completeness}% complete</div></div>
   </div>`;
 
-  // Item 1 — Safety banner (red flags only). A same-day safety feature must
-  // never be buried, so this stays first regardless of what else moves.
-  h += `<div class="pr-section"><div class="pr-sh">${reportItemHeader(1)}</div>`;
+  // Red flags (safety net) — a same-day feature must never be buried, so this
+  // stays first regardless of what else moves. Card and header share one name.
+  h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('flags')}</div>`;
   if (fired.length) {
     const top = topUrgency(redflags);
     const topMeta = top ? RF_URGENCY_META[top] : null;
@@ -4880,18 +4878,18 @@ function buildClinicianPrint(c) {
   }
   h += `</div>`;
 
-  // Item 2 — Executive summary (auto-synthesised, two-line clinical story:
-  // presentation, then the safety/triage bottom line).
+  // Clinical impression — one- to two-line synthesis (leading pattern, then any
+  // safety features). Band / % / confidence are in the hero above, not repeated.
   const imp = clinicalImpression(c);
-  h += `<div class="pr-section"><div class="pr-sh">${reportItemHeader(2)}</div>
+  h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('impression')}</div>
     <div style="font-size:11px;line-height:1.5">${esc(imp.line1)}</div>
     ${imp.line2 ? `<div style="font-size:11px;line-height:1.5;margin-top:3px">${esc(imp.line2)}</div>` : ''}
     <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:3px">${esc(imp.caveat)}</div></div>`;
 
-  // Item 3 — 2-D burden matrix: symptom severity × frequency. Read-only
-  // cross-tab; frequency never re-enters the Index (see scoring.js) — no
-  // blended "burden score" is computed here.
-  h += `<div class="pr-section"><div class="pr-sh">${reportItemHeader(3)}</div>`;
+  // Symptom burden — 2-D severity × frequency matrix. Read-only cross-tab;
+  // frequency never re-enters the Index (see scoring.js). This is the single
+  // home for per-cluster severity — the domain breakdown no longer repeats it.
+  h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('burden')}</div>`;
   {
     const sfCells = severityFrequencyMatrix(score, driverExtras);
     h += `<div style="page-break-inside:avoid;break-inside:avoid">${sevFreqBodyHtml(sfCells)}</div>`;
@@ -4901,35 +4899,46 @@ function buildClinicianPrint(c) {
   }
   h += `</div>`;
 
-  // Item 4 — Triage verdict (tier / action / reasons). Deliberately placed
-  // AFTER the summary + matrix so the clinical picture is read before the
-  // recommended action; the detailed investigations list lives in item 6.
-  h += `<div class="pr-section"><div class="pr-sh">${reportItemHeader(4)}</div>`;
+  // ============================================================
+  // PAGE 2 — Assessment & clinical detail. The actionable conclusion first
+  // (Assessment & plan = triage verdict + reasons + the full investigation /
+  // management / physiotherapy list, all in ONE section — no page-jump), then
+  // the evidence behind it (Interpretation), the patient's History & context,
+  // the Modifiable drivers, and the longitudinal Trend & interventions.
+  // ============================================================
+  h += `<div class="pr-grp pr-page-break">Page 2 · Assessment &amp; clinical detail</div>`;
+
+  // Assessment & plan — the triage verdict AND the plan it implies together, so
+  // "why" (tier + reasons) and "what to do" (investigations, physiotherapy) sit
+  // in one place rather than a page apart.
+  h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('plan')}</div>`;
   const tierCls = ['', 't1', 't2', 't3', 't4'][tri.level] || 't4';
-  h += `<div class="pr-triage ${tierCls}">
+  h += `<div class="pr-triage ${tierCls}" style="page-break-inside:avoid;break-inside:avoid">
       <div style="font-weight:700">Tier ${tri.level} — ${esc(tri.label)}</div>
       <div style="margin-top:3px;font-size:11px">${esc(tri.action)}</div>
       ${tri.reasons.length ? `<div style="font-size:10.5px;margin-top:4px">Reasons: ${tri.reasons.map(r => esc(r.text)).join(' · ')}</div>` : ''}
       ${tri.alsoConsider.length ? `<div style="font-size:10.5px;margin-top:4px;font-weight:600">Also worth noting:</div>
       ${tri.alsoConsider.map(a => `<div style="font-size:10.5px;padding-left:8px">• ${esc(a.label)} — ${a.reasons.map(r => esc(r.text)).join('; ')}</div>`).join('')}` : ''}
       ${[].concat(tri.conditionGuidance || [], tri.familyNotes || [], tri.conditionNote ? [tri.conditionNote] : [], tri.labNote ? [tri.labNote] : [], tri.autonomicNote ? [tri.autonomicNote] : [], tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [], tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : [], tri.durationNote ? [tri.durationNote] : [], tri.bowelFreqNote ? [tri.bowelFreqNote] : [], tri.smokingNote ? [tri.smokingNote] : [], tri.treatmentsTriedNote ? [tri.treatmentsTriedNote] : [], tri.coeliacTimingNote ? [tri.coeliacTimingNote] : [], tri.restrictionNote ? [tri.restrictionNote] : [], tri.referredPainNote ? [tri.referredPainNote] : [], tri.restrictionScreenNote ? [tri.restrictionScreenNote] : []).map(n => `<div style="font-size:10.5px;margin-top:3px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
-    </div>
-    <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:4px">Full investigations / management list, physiotherapy candidacy, and modifiable drivers are in item 6 (${esc(REPORT_ITEMS[6])}), page 2.</div>`;
+    </div>`;
+  if (tri.investigations && tri.investigations.length) {
+    h += `<div style="margin-top:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Suggested investigations / management</div>
+      <ul style="margin:0 0 4px 14px;font-size:10.5px;line-height:1.6">${tri.investigations.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+      <div style="font-size:9.5px;color:#888;font-style:italic">Pattern-matched — not a protocol.</div></div>`;
+  }
+  const physio = physioCandidacy(tri);
+  if (physio.length) {
+    h += `<div style="margin-top:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Physiotherapy candidacy</div>
+      <ul style="margin:0 0 0 14px;font-size:10.5px;line-height:1.6">${physio.map(r => `<li>${esc(r.text)}</li>`).join('')}</ul>
+      <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:2px">An adjunct after medical assessment — not a substitute for it.</div></div>`;
+  }
   h += `</div>`;
 
-  // ============================================================
-  // PAGE 2 — Clinical deep dive & trends: the active clinical lenses,
-  // reordered so the named/actionable reads (Patterns, Rome IV subtype,
-  // microbiome correlates) lead and the supporting tables (axis profile,
-  // domain breakdown) plus history/context follow — then the longitudinal
-  // trend engine with the intervention overlay.
-  // ============================================================
-  h += `<div class="pr-grp pr-page-break">Page 2 · Clinical deep dive &amp; trends</div>`;
-
-  // Item 5 — Active clinical lenses. Named/actionable reads lead (Patterns,
-  // Rome IV subtype, microbiome correlates); supporting tables (axis profile,
-  // domain breakdown) and history/context follow.
-  h += `<div class="pr-section"><div class="pr-sh">${reportItemHeader(5)}</div>`;
+  // Interpretation — the reads behind the verdict: symptom patterns, the Rome IV
+  // bowel-pain estimate, the axis profile (each microbiome load's signals folded
+  // in beneath its own row), and the GSRS domain breakdown at section level (the
+  // per-cluster severity lives once, in the burden matrix on page 1).
+  h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('interp')}</div>`;
 
   // Patterns
   if (patterns.length) {
@@ -4961,38 +4970,34 @@ function buildClinicianPrint(c) {
       <div style="font-size:11px;color:#555">Not answered (pain items not reached / completed).</div></div>`;
   }
 
-  // Microbiome correlates
-  h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Microbiome-correlate signals (${lens.count}/6)</div>`;
-  h += lens.signals && lens.signals.length
-    ? `<ul style="margin:0 0 0 14px;font-size:10.5px">${lens.signals.map(s => `<li>${esc(s.label)}</li>`).join('')}</ul>`
-    : `<div style="font-size:11px;color:#555">No microbiome-correlate signals present.</div>`;
-  h += `</div>`;
-
-  // Axis profile — primary + secondary in ONE table with band colour + provenance,
-  // so the validated Gut Symptom Burden is visibly distinguished from the draft
-  // screening axes. disruption_load / dysbiosis_correlate_load are signal counts
-  // (0–6), not percentages; all other axis values are 0–100%.
+  // Axis profile — primary + secondary in ONE table with band colour + provenance.
+  // The two microbiome loads (Disruption = objective exposures, Dysbiosis Correlate
+  // = inferred phenotype with its weighted Dys-R tier) each get their signal list
+  // folded in directly beneath the table — replacing the old standalone
+  // "Microbiome-correlate signals" block that overlapped both and confused the count.
   const COUNT_LOADS = new Set(['disruption_load', 'dysbiosis_correlate_load']);
   const pctOrCount = (o) => o.value == null ? '—'
     : (o.max != null ? `${o.value}/${o.max}`
-      // E3 — the Dysbiosis Correlate Load shows the weighted Dys-R tier alongside the
-      // raw signal count, so a clinician sees strength-of-evidence, not just how many.
       : (o.key === 'dysbiosis_correlate_load' && o.tier
           ? `${o.value} signal${o.value === 1 ? '' : 's'} · Dys-R ${o.tier}${o.weightedScore != null ? ` (${o.weightedScore})` : ''}`
           : (COUNT_LOADS.has(o.key) ? `${o.value} signal${o.value === 1 ? '' : 's'}` : o.value + '%')));
   const axisRow = (o) => `<tr><td>${esc(o.label)}</td><td style="white-space:nowrap"><b>${esc(String(pctOrCount(o)))}</b></td><td>${prBandPill(o.band)}</td><td>${prProv(o.validated)}</td></tr>`;
+  const disruptSig = (heads.primary.disruption && heads.primary.disruption.signals) || [];
+  const correlateSig = (heads.primary.correlate && heads.primary.correlate.signals) || [];
   h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Axis profile</div>
     <table class="pr-tbl"><thead><tr><th>Axis</th><th>Value</th><th>Band</th><th>Basis</th></tr></thead><tbody>
       <tr><td colspan="4" style="font-size:9px;color:#888;font-weight:600">PRIMARY</td></tr>
       ${heads.primaryList.map(axisRow).join('')}
       <tr><td colspan="4" style="font-size:9px;color:#888;font-weight:600;padding-top:4px">SECONDARY</td></tr>
       ${heads.secondaryList.map(axisRow).join('')}
-      <tr><td>Confidence</td><td colspan="3">${esc(conf.level)} · ${score.completeness}% complete</td></tr>
       ${score.coreUnknown ? '<tr><td colspan="4" style="color:#A32D2D;font-weight:600">⚠ Core GI section not answered — Gut Symptom Burden provisional</td></tr>' : ''}
       ${(score.peakAlerts && score.peakAlerts.length) ? `<tr><td colspan="4" style="color:#A32D2D;font-weight:600">⚠ Peak-symptom alert: ${esc(score.peakAlerts.map(p => `${p.label} (${p.level === 'ceiling' ? 'very severe' : 'severe'})`).join(', '))}${score.peakEscalated ? ' — displayed band raised; raw index unchanged' : ''}</td></tr>` : ''}
-    </tbody></table></div>`;
+    </tbody></table>
+    ${disruptSig.length ? `<div style="font-size:9.5px;margin-top:3px"><b>Disruption Load</b> (exposures): ${esc(disruptSig.join(', '))}</div>` : ''}
+    ${correlateSig.length ? `<div style="font-size:9.5px;margin-top:2px"><b>Dysbiosis Correlate Load</b> (inferred): ${esc(correlateSig.join(', '))}</div>` : ''}</div>`;
 
-  // GSRS domain breakdown — % cell colour-coded by band so high domains stand out.
+  // GSRS domain breakdown — section-level only (per-cluster severity is shown once,
+  // in the burden matrix on page 1). % cell colour-coded by band.
   h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Domain breakdown</div>
     <table class="pr-tbl"><thead><tr><th>Domain</th><th>Score/Max</th><th>%</th></tr></thead><tbody>`;
   SECTIONS.forEach(s => {
@@ -5005,73 +5010,57 @@ function buildClinicianPrint(c) {
     const bnd = pct != null ? bandForPct(pct) : null;
     h += `<tr><td>${esc(s.full || s.label)}</td><td>${sc}/${mx}</td><td>${pct != null ? `<b style="color:${bnd.color}">${pct}%</b>` : 'n/a'}</td></tr>`;
   });
-  if (score.clusterAgg) {
-    ['Reflux', 'Pain', 'Indigestion', 'Diarrhoea', 'Constipation'].forEach(k => {
-      const cl = score.clusterAgg[k]; if (!cl || cl.max === 0) return;
-      const pct = Math.round(cl.sum / cl.max * 100);
-      h += `<tr><td style="padding-left:14px;color:#666">↳ ${esc(k)}</td><td>${cl.sum}/${cl.max}</td><td style="color:${bandForPct(pct).color}">${pct}%</td></tr>`;
-    });
-  }
   h += `</tbody></table></div>`;
+  h += `</div>`;
 
-  // History / context supporting the lenses above.
-  if (conditions && conditions.list && conditions.list.length) {
-    h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Known conditions reported</div>
-      <div style="font-size:10.5px">${esc(conditions.list.join(', '))}</div></div>`;
-  }
-  if (famhx && famhx.list && famhx.list.length) {
-    h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Family history</div>
-      <div style="font-size:10.5px">${esc(famhx.list.join(', '))}</div></div>`;
-  }
-  if (obstetric && obstetric.list && obstetric.list.length) {
-    h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Obstetric / birth history</div>
-      <div style="font-size:10.5px">${esc(obstetric.list.join(', '))}</div></div>`;
-  }
-  if (anthro && (anthro.bmi != null || anthro.whtr != null)) {
-    const bmiTxt = anthro.bmi != null ? `BMI ${anthro.bmi}${anthro.bmiBand ? ` (${anthro.bmiBand})` : ''}` : null;
-    const whtrTxt = anthro.whtr != null ? `Waist-to-height ${anthro.whtr}${anthro.whtrBand ? ` (${anthro.whtrBand})` : ''}` : null;
-    h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Anthropometrics</div>
-      <div style="font-size:10.5px">${esc([bmiTxt, whtrTxt].filter(Boolean).join(' · '))}${anthro.caveat ? `<br><i>${esc(anthro.caveat)}</i>` : ''}</div></div>`;
-  }
-  const medsOtherTxt = (driverExtras && driverExtras.medsOther || '').trim();
-  if ((meds && meds.list && meds.list.length) || medsOtherTxt) {
-    h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Medication confounders</div>`;
-    if (meds && meds.list && meds.list.length) h += `<div style="font-size:10.5px">${esc(meds.list.map(m => m.label + (m.effect ? ` (${m.effect})` : '')).join('; '))}</div>`;
-    if (medsOtherTxt) h += `<div style="font-size:10.5px${meds && meds.list && meds.list.length ? ';margin-top:2px' : ''}">Other reported medications: ${esc(medsOtherTxt)}</div>`;
-    h += `</div>`;
+  // History & context — diagnosed conditions and background that colour the reads
+  // above. Built into one section; a single empty-state line when nothing applies.
+  h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('history')}</div>`;
+  {
+    let hx = '';
+    if (conditions && conditions.list && conditions.list.length) {
+      hx += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Known conditions reported</div>
+        <div style="font-size:10.5px">${esc(conditions.list.join(', '))}</div></div>`;
+    }
+    if (famhx && famhx.list && famhx.list.length) {
+      hx += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Family history</div>
+        <div style="font-size:10.5px">${esc(famhx.list.join(', '))}</div></div>`;
+    }
+    if (obstetric && obstetric.list && obstetric.list.length) {
+      hx += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Obstetric / birth history</div>
+        <div style="font-size:10.5px">${esc(obstetric.list.join(', '))}</div></div>`;
+    }
+    if (anthro && (anthro.bmi != null || anthro.whtr != null)) {
+      const bmiTxt = anthro.bmi != null ? `BMI ${anthro.bmi}${anthro.bmiBand ? ` (${anthro.bmiBand})` : ''}` : null;
+      const whtrTxt = anthro.whtr != null ? `Waist-to-height ${anthro.whtr}${anthro.whtrBand ? ` (${anthro.whtrBand})` : ''}` : null;
+      hx += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Anthropometrics</div>
+        <div style="font-size:10.5px">${esc([bmiTxt, whtrTxt].filter(Boolean).join(' · '))}${anthro.caveat ? `<br><i>${esc(anthro.caveat)}</i>` : ''}</div></div>`;
+    }
+    const medsOtherTxt = (driverExtras && driverExtras.medsOther || '').trim();
+    if ((meds && meds.list && meds.list.length) || medsOtherTxt) {
+      hx += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Medication confounders</div>`;
+      if (meds && meds.list && meds.list.length) hx += `<div style="font-size:10.5px">${esc(meds.list.map(m => m.label + (m.effect ? ` (${m.effect})` : '')).join('; '))}</div>`;
+      if (medsOtherTxt) hx += `<div style="font-size:10.5px${meds && meds.list && meds.list.length ? ';margin-top:2px' : ''}">Other reported medications: ${esc(medsOtherTxt)}</div>`;
+      hx += `</div>`;
+    }
+    h += hx || `<div style="font-size:11px;color:#555">No additional history recorded this visit.</div>`;
   }
   h += `</div>`;
 
-  // Item 6 — Recommended actions: the detailed investigations/management
-  // list, physiotherapy candidacy, and modifiable drivers — moved off page 1
-  // (where they crowded out the safety banner and made the headline score
-  // hard to find) onto page 2, alongside the lenses that motivate them.
-  h += `<div class="pr-section"><div class="pr-sh">${reportItemHeader(6)}</div>`;
-  if (tri.investigations && tri.investigations.length) {
-    h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Suggested investigations / management</div>
-      <ul style="margin:0 0 4px 14px;font-size:10.5px;line-height:1.6">${tri.investigations.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
-      <div style="font-size:9.5px;color:#888;font-style:italic">Pattern-matched — apply clinical judgement. Not a protocol.</div></div>`;
-  }
-  const physio = physioCandidacy(tri);
-  if (physio.length) {
-    h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Physiotherapy candidacy</div>
-      <ul style="margin:0 0 0 14px;font-size:10.5px;line-height:1.6">${physio.map(r => `<li>${esc(r.text)}</li>`).join('')}</ul>
-      <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:2px">An adjunct after medical assessment — not a substitute for it.</div></div>`;
-  }
+  // Modifiable drivers — lifestyle / driver factors, kept out of the Index.
+  h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('drivers')}</div>`;
   {
     const drivers = modifiableFactors(driverExtras);
-    h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Modifiable drivers</div>
-      ${drivers.allEmpty ? `<div style="font-size:10.5px;color:#555">No modifiable-driver data recorded this visit.</div>` :
+    h += drivers.allEmpty ? `<div style="font-size:10.5px;color:#555">No modifiable-driver data recorded this visit.</div>` :
       `<table class="pr-tbl"><thead><tr><th>Factor</th><th>Band</th><th>Score</th></tr></thead><tbody>
       ${drivers.map(f => `<tr><td>${factorIcon(f)}${esc(f.label)}</td><td style="color:${f.color}">${esc(f.band)}</td><td>${esc(f.score || '')}</td></tr>`).join('')}
-    </tbody></table>`}</div>`;
+    </tbody></table>`;
   }
   h += `</div>`;
 
-  // Item 7 — Longitudinal trend engine & intervention overlay: what was
-  // tried this visit, then the full progression with interventions overlaid
-  // per point so burden change reads against what was actually tried.
-  h += `<div class="pr-section"><div class="pr-sh">${reportItemHeader(7)}</div>`;
+  // Trend & interventions — what was tried this visit, then the full progression
+  // with interventions overlaid per point so burden change reads against what was tried.
+  h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('trend')}</div>`;
 
   // Tranche G — interventions recorded at THIS visit (annotation only).
   {
@@ -5103,14 +5092,13 @@ function buildClinicianPrint(c) {
   h += `</div>`;
 
   // ============================================================
-  // PAGE 3+ — reference appendix: full item-level questionnaire responses.
-  // Optional reference material for a clinician who wants to see exactly
-  // what the patient answered; everything clinically actionable is already
-  // synthesised in items 1–7 above.
+  // PAGE 3+ — appendix: full item-level questionnaire responses. Optional
+  // reference material for a clinician who wants to see exactly what the
+  // patient answered; everything actionable is already on pages 1–2.
   // ============================================================
-  h += `<div class="pr-grp pr-page-break">Page 3+ · Reference appendix</div>`;
-  h += `<div class="pr-section"><div class="pr-sh">8 · Full item-level Q&amp;A</div>
-    <div style="font-size:9.5px;color:#888;font-style:italic;margin-bottom:6px">Reference only — every item answer, for clinicians who want to see exactly what was reported. Not required reading; all clinically actionable reads are in Items 1–7 above.</div>
+  h += `<div class="pr-grp pr-page-break">Page 3+ · Appendix</div>`;
+  h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('appendix')}</div>
+    <div style="font-size:9.5px;color:#888;font-style:italic;margin-bottom:6px">Reference only — every item answered, for clinicians who want to see exactly what was reported.</div>
     <div style="column-count:2;column-gap:16px">`;
   SECTIONS.forEach(s => {
     const qs = questionsOf(s.id);
@@ -5230,31 +5218,26 @@ function renderClinician() {
   root.appendChild(head);
 
   // ============================================================
-  // PAGE 1 — At-a-glance overview. The headline score leads, then the safety
-  // banner (1, red flags only — a same-day feature must never be buried),
-  // the narrative summary (2), the 2-D burden matrix (3), and the triage
-  // verdict (4). Summary + matrix sit ABOVE the triage verdict so the
-  // clinical picture is read before the recommended action. Detailed action
-  // lists (physio, modifiable drivers) moved to item 6 alongside the lenses
-  // on page 2 — see buildClinicianPrint for why.
+  // PAGE 1 — At a glance: headline score, red flags, a one-line impression, and
+  // the severity × frequency burden matrix. The triage verdict + plan live
+  // together on page 2 (no page-jump); page 1 stays scannable.
   // ============================================================
-  root.appendChild(el('div', { class: 'rpt-grp' }, 'Page 1 · At-a-glance overview'));
+  root.appendChild(el('div', { class: 'rpt-grp' }, 'Page 1 · At a glance'));
 
-  // Headline score — big number + band, unmissable at the top of the report.
-  // Peak-symptom detail lives exclusively in the Axis profile (item 5) now —
-  // the "↑" on the pill is just a pointer to it, not a repeat of the text.
+  // Headline score — big number + band + confidence, stated ONCE (the impression
+  // below leads with the pattern, not a restatement of these). Peak-symptom
+  // detail lives in the Interpretation axis profile; the "↑" pill just points to it.
   const hero = el('div', { class: 'card' });
   hero.appendChild(el('div', { class: 'hero' },
     `<div><div class="big">${sv.index == null ? '—' : sv.index + '%'}</div><div class="sub">Gut Symptom Burden</div></div>
      <div style="flex:1;min-width:160px">${sv.label ? `<span class="pill ${sv.cls || bandPillClass(sv.label)}">${esc(sv.label)}${sv.peakEscalated ? ' ↑' : ''}</span>` : ''}
-     <div style="font-size:12px;color:var(--inks);margin-top:8px;line-height:1.5">${esc(sv.desc || '')}</div>
      <div class="conf-note">Confidence: <b>${esc(conf.level)}</b> · ${score.completeness}% complete</div></div>`));
   root.appendChild(hero);
 
-  // Item 1 — Safety banner (red flags only).
-  root.appendChild(el('div', { class: 'grp-label' }, reportItemHeader(1)));
+  // Red flags (safety net) — same-day features must never be buried.
+  root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('flags')));
   const rfCard = el('div', { class: 'card', style: `border-left:6px solid ${fired.length ? '#A32D2D' : '#0F6E56'}` });
-  rfCard.appendChild(el('h2', {}, 'Red flags'));
+  rfCard.appendChild(el('h2', {}, sectionTitle('flags')));
   if (fired.length) {
     // E2 — group by urgency tier off the fired flag objects (each carries `urgency`).
     const rank = { emergency: 3, urgent: 2, routine: 1 };
@@ -5275,47 +5258,34 @@ function renderClinician() {
   }
   root.appendChild(rfCard);
 
-  // Item 2 — Executive summary (auto-synthesised narrative) + headline numbers.
-  root.appendChild(el('div', { class: 'grp-label' }, reportItemHeader(2)));
+  // Clinical impression — leading pattern + safety features. Band / % / confidence
+  // are in the hero above, not repeated here.
+  root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('impression')));
   const imp = clinicalImpression(c);
   const impCard = el('div', { class: 'card', style: 'border-left:6px solid #185FA5' });
-  impCard.appendChild(el('h2', {}, 'Executive summary'));
+  impCard.appendChild(el('h2', {}, sectionTitle('impression')));
   impCard.appendChild(el('div', { style: 'font-size:13px;line-height:1.5' }, esc(imp.line1)));
   if (imp.line2) impCard.appendChild(el('div', { style: 'font-size:13px;line-height:1.5;margin-top:3px' }, esc(imp.line2)));
   impCard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:4px;font-style:italic' }, esc(imp.caveat)));
   root.appendChild(impCard);
 
-  root.appendChild(headlineCard(heads, rome));
-
-  // Item 3 — 2-D burden matrix: symptom severity × frequency. Read-only
-  // cross-tab — frequency never re-enters the Index (see scoring.js).
-  root.appendChild(el('div', { class: 'grp-label' }, reportItemHeader(3)));
+  // Symptom burden — 2-D severity × frequency matrix (read-only; frequency never
+  // re-enters the Index). The single home for per-cluster severity.
+  root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('burden')));
   const sfCard = severityFrequencyCard(score, extras); if (sfCard) root.appendChild(sfCard);
 
-  // Item 4 — Triage verdict (tier / action / investigations). Deliberately
-  // placed AFTER the summary + matrix so the clinical picture is read
-  // before the recommended action.
-  root.appendChild(el('div', { class: 'grp-label' }, reportItemHeader(4)));
+  // ============================================================
+  // PAGE 2 — Assessment & clinical detail: the actionable conclusion first
+  // (Assessment & plan = triage verdict + investigations + physiotherapy,
+  // together), then the Interpretation reads behind it, the Modifiable drivers,
+  // and the longitudinal Trend & interventions.
+  // ============================================================
+  root.appendChild(el('div', { class: 'rpt-grp' }, 'Page 2 · Assessment & clinical detail'));
+
+  // Assessment & plan — triage verdict + investigations (triageCard carries the
+  // investigations arm) + physiotherapy candidacy, in one place.
+  root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('plan')));
   root.appendChild(triageCard(tri, rome, true));
-
-  // ============================================================
-  // PAGE 2 — Clinical deep dive & trends: the active clinical lenses, the
-  // recommended actions they motivate, then the longitudinal trend engine.
-  // ============================================================
-  root.appendChild(el('div', { class: 'rpt-grp' }, 'Page 2 · Clinical deep dive &amp; trends'));
-
-  // Item 5 — Active clinical lenses: axis profile, GSRS domain/cluster
-  // breakdown, and the severity × dysbiosis-correlate quadrant read.
-  root.appendChild(el('div', { class: 'grp-label' }, reportItemHeader(5)));
-  root.appendChild(axisProfileCard(profile, heads));
-  root.appendChild(domainBarsCard(score, true));   // full domain breakdown incl. GSRS cluster shape
-  root.appendChild(riskMatrixCard(sv, correlateLoad));
-
-  // Item 6 — Recommended actions: physiotherapy candidacy + modifiable
-  // drivers (the triage card in item 4 already carries the investigations/
-  // management arm — kept there since splitting it out of triageCard would
-  // also affect the shared patient-print caller).
-  root.appendChild(el('div', { class: 'grp-label' }, reportItemHeader(6)));
   const physio = physioCandidacy(tri);
   if (physio.length) {
     const phCard = el('div', { class: 'card', style: 'border-left:6px solid #7A4A8C' });
@@ -5326,16 +5296,26 @@ function renderClinician() {
       'An adjunct after medical assessment — not a substitute for it.'));
     root.appendChild(phCard);
   }
+
+  // Interpretation — the reads behind the verdict: headline axis reads, axis
+  // profile, GSRS domain/cluster breakdown, and the severity × dysbiosis-correlate
+  // quadrant read.
+  root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('interp')));
+  root.appendChild(headlineCard(heads, rome));
+  root.appendChild(axisProfileCard(profile, heads));
+  root.appendChild(domainBarsCard(score, true));   // full domain breakdown incl. GSRS cluster shape
+  root.appendChild(riskMatrixCard(sv, correlateLoad));
+
+  // Modifiable drivers — lifestyle / driver factors, kept out of the Index.
+  root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('drivers')));
   root.appendChild(modifiableDriversCard(driverExtras));
 
-  // Item 7 — Longitudinal trend engine & intervention overlay.
-  root.appendChild(el('div', { class: 'grp-label' }, reportItemHeader(7)));
-  // Tranche G — editable interventions for this visit (post-intake), overlaid on
-  // the trend below so symptom change reads against what was tried.
+  // Trend & interventions — editable interventions for this visit (post-intake),
+  // overlaid on the trend below so symptom change reads against what was tried.
+  root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('trend')));
   root.appendChild(interventionCard());
-
-  // Longitudinal context if this patient has prior saved visits.
-  // If a saved visit is loaded, it's already in the DB — don't duplicate it.
+  // Longitudinal context if this patient has prior saved visits. If a saved
+  // visit is loaded, it's already in the DB — don't duplicate it.
   const prior = priorVisits();
   if (loadedVisitId) {
     if (prior.length >= 2) root.appendChild(trendCard(prior, false));
@@ -5344,14 +5324,12 @@ function renderClinician() {
   }
 
   // ============================================================
-  // PAGE 3+ — reference appendix: item-level responses, Rome IV criteria,
-  // pattern analysis, microbiome-correlate signals, score confidence.
-  // Optional reference material — everything clinically actionable is
-  // already synthesised in items 1–7 above. (Modifiable-driver raw values
-  // now live in item 6's Recommended actions — not duplicated here.)
+  // PAGE 3+ — Appendix: item-level responses, history & context, Rome IV
+  // criteria, patterns, microbiome signals. Optional reference material —
+  // everything actionable is already on pages 1–2.
   // ============================================================
-  root.appendChild(el('div', { class: 'rpt-grp' }, 'Page 3+ · Reference appendix'));
-  root.appendChild(el('div', { class: 'grp-label' }, '8 · Full clinical detail (optional)'));
+  root.appendChild(el('div', { class: 'rpt-grp' }, 'Page 3+ · Appendix'));
+  root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('appendix')));
   root.appendChild(clinicianDetailCard(c));
 }
 
