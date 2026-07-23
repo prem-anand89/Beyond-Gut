@@ -2373,6 +2373,17 @@ function visitScore(v) {
     conditions: ex.conditions, surgeries: ex.surgeries, anthro: anthropometrics(ex, {}),
   };
   const patterns = detectPatterns(sc, drv, a).map(p => p.id);
+  // Frequency-burden aggregate for the trend's leading-indicator read — display
+  // only, same invariant as everywhere else frequency appears (never feeds the
+  // Index/patterns/tier, here or anywhere upstream). Averages the per-cluster
+  // 0–3 frequency band across whichever clusters were answered this visit, plus
+  // Rome's pain frequency (0–5) rescaled onto the same 0–3 band, as a % — the
+  // same shape as the Index so deltaLabel()'s thresholds apply unchanged.
+  const cf = ex.clusterFreq || {};
+  const freqVals = ['Reflux', 'Indigestion', 'Diarrhoea', 'Constipation']
+    .map(k => cf[k]).filter(x => typeof x === 'number');
+  if (ex.rome && typeof ex.rome.painFreq === 'number') freqVals.push(Math.min(3, Math.round(ex.rome.painFreq / 5 * 3)));
+  const freqPct = freqVals.length ? Math.round(freqVals.reduce((s, x) => s + x, 0) / freqVals.length / 3 * 100) : null;
   // P2 — the DISPLAYED numbers come from the visit's frozen snapshot when it has
   // one, so a past visit keeps showing what the patient saw even if the scoring
   // engine is later recalibrated. Patterns are always recomputed (not snapshotted
@@ -2383,7 +2394,7 @@ function visitScore(v) {
     index: snap ? snap.index : sc.index,
     band: snap ? (snap.severity && snap.severity.label) : sc.severity.label,
     completeness: snap && snap.completeness != null ? snap.completeness : sc.completeness,
-    clusterNorm: snap ? snap.clusterNorm : sc.clusterNorm, patterns,
+    clusterNorm: snap ? snap.clusterNorm : sc.clusterNorm, patterns, freqPct,
   };
 }
 
@@ -2401,14 +2412,33 @@ function deltaLabel(curr, prev) {
 
 function buildTrend(visits) {
   const points = (visits || []).slice().sort((a, b) => (a.date || 0) - (b.date || 0)).map(visitScore);
-  points.forEach((p, i) => { p.delta = i > 0 ? deltaLabel(p.index, points[i - 1].index) : null; });
+  points.forEach((p, i) => {
+    p.delta = i > 0 ? deltaLabel(p.index, points[i - 1].index) : null;
+    // Frequency-burden delta, same lower-is-better direction/thresholds as the
+    // Index delta — reused as-is via deltaLabel(), not a separate scale.
+    p.freqDelta = i > 0 ? deltaLabel(p.freqPct, points[i - 1].freqPct) : null;
+  });
   // Persistence: patterns that fired on BOTH the latest and the prior visit.
   let persistent = [];
   if (points.length >= 2) {
     const prev = new Set(points[points.length - 2].patterns);
     persistent = points[points.length - 1].patterns.filter(id => prev.has(id));
   }
-  return { points, persistent, latest: points[points.length - 1] || null };
+  // Leading-indicator read: frequency is clinically observed to ease BEFORE
+  // severity does as a patient responds to treatment — so flag it when the
+  // latest visit's frequency improved meaningfully while the Index itself
+  // hasn't moved as much (or at all). Advisory only; never changes what's
+  // computed, only what's pointed out.
+  const latest = points[points.length - 1] || null;
+  let leadingSignal = null;
+  if (latest && latest.freqDelta && latest.freqDelta.dir === 'improved') {
+    const idxImprovedLess = !latest.delta || latest.delta.dir !== 'improved'
+      || Math.abs(latest.freqDelta.delta) > Math.abs(latest.delta.delta) + 5;
+    if (idxImprovedLess) {
+      leadingSignal = `Symptom frequency eased ${Math.abs(latest.freqDelta.delta)}pt since the last visit — ahead of the severity index (${latest.delta ? `${latest.delta.delta > 0 ? '+' : ''}${latest.delta.delta}pt` : 'unchanged'}). Frequency often improves before severity does; worth noting as an early positive sign.`;
+    }
+  }
+  return { points, persistent, latest, leadingSignal };
 }
 
 __e.visitScore = visitScore; __e.deltaLabel = deltaLabel; __e.buildTrend = buildTrend;
@@ -3049,6 +3079,52 @@ function sevFreqBodyHtml(cells) {
   if (incomplete.length) out += `<div style="font-size:9px;color:#888;margin-top:6px">Incomplete data — not plotted: ${incomplete.map(c => esc(c.cluster)).join(', ')}.</div>`;
   return out;
 }
+
+// Plain-language read layered on top of the same quadrant cells — distinguishes
+// an INTERMITTENT-FLARE pattern (severe, but not frequent — episodic triggers
+// worth mapping) from a CONTINUOUS / PERSISTENT one (severe AND frequent —
+// daily-management focus), and flags a MIXED picture when both are present.
+// Purely narrative: reads the already-computed quadrant, never a new scoring
+// input, never touches the Index or pattern-firing.
+function frequencyPatternSummary(cells) {
+  const withFreq = (cells || []).filter(c => c.quadrant);
+  if (!withFreq.length) return null;
+  const continuous = withFreq.filter(c => c.quadrant === 'priority').map(c => c.cluster);
+  const episodic = withFreq.filter(c => c.quadrant === 'severe-intermittent').map(c => c.cluster);
+  if (continuous.length && episodic.length) {
+    return `Mixed pattern: ${continuous.join(', ')} ${continuous.length > 1 ? 'are' : 'is'} continuous (severe and frequent — daily-management focus), while ${episodic.join(', ')} ${episodic.length > 1 ? 'flare' : 'flares'} intermittently (severe but infrequent — worth mapping specific triggers).`;
+  }
+  if (continuous.length) {
+    return `Continuous / persistent pattern: ${continuous.join(', ')} ${continuous.length > 1 ? 'are' : 'is'} both severe and frequent — suggests daily-management strategies rather than trigger-avoidance alone.`;
+  }
+  if (episodic.length) {
+    return `Episodic / flare pattern: ${episodic.join(', ')} ${episodic.length > 1 ? 'are' : 'is'} severe but not frequent — specific triggers (diet, stress, cycle, etc.) may be identifiable and worth mapping.`;
+  }
+  return null; // nothing severe this visit — no flare/continuous distinction to draw
+}
+
+// Advisory SCHEDULING-priority tie-breaker — NEVER changes the clinical Tier,
+// which stays entirely red-flag/pattern driven (Tier 1 always reads "same-day/
+// urgent" here regardless of frequency). Within a tier, frequency distinguishes
+// how soon to book: multiple clusters that are both severe AND frequent (the
+// burden matrix's "priority" quadrant) push toward expediting; an all-episodic
+// picture can reasonably wait for the next routine slot. Returns null when
+// there's no frequency data to base a tie-breaker on (never defaults to
+// "Routine" from an absence of data).
+function schedulingPriorityHtml(tri, cells) {
+  if (tri.level === 1) return `<div style="font-size:10.5px;margin-top:4px"><b>Scheduling:</b> Same-day / urgent — set by red flags, frequency does not override safety.</div>`;
+  const hasFreq = (cells || []).some(c => c.freqIdx != null);
+  if (!hasFreq) return '';
+  const priorityCount = cells.filter(c => c.quadrant === 'priority').length;
+  const verdict = priorityCount >= 2 ? 'Expedite within tier'
+    : priorityCount === 1 ? 'Moderate priority within tier'
+    : 'Routine scheduling within tier';
+  const reason = priorityCount >= 2 ? `${priorityCount} symptom clusters are both severe and frequent`
+    : priorityCount === 1 ? '1 symptom cluster is both severe and frequent'
+    : 'no cluster is both severe and frequent this visit';
+  return `<div style="font-size:10.5px;margin-top:4px"><b>Scheduling (frequency-informed):</b> ${esc(verdict)} — ${esc(reason)}.</div>`;
+}
+
 function severityFrequencyCard(score, extras) {
   const cells = severityFrequencyMatrix(score, extras);
   if (!cells.length) return null;
@@ -3059,8 +3135,8 @@ function severityFrequencyCard(score, extras) {
   const body = el('div', {});
   body.innerHTML = sevFreqBodyHtml(cells);
   card.appendChild(body);
-  if (cells.some(c => c.quadrant === 'priority')) card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-weight:600;color:#A32D2D' },
-    '▲ One or more clusters are both severe and frequent — prioritise these.'));
+  const flareRead = frequencyPatternSummary(cells);
+  if (flareRead) card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-weight:600;color:#333' }, esc(flareRead)));
   return card;
 }
 
@@ -3099,7 +3175,7 @@ function interventionCard() {
 // visits, with visit-to-visit delta and pattern persistence. `markLastUnsaved`
 // labels the final point as the current in-progress (preview) visit.
 function trendCard(visits, markLastUnsaved) {
-  const { points, persistent, latest } = buildTrend(visits);
+  const { points, persistent, latest, leadingSignal } = buildTrend(visits);
   const card = el('div', { class: 'card', id: 'trend-card', style: 'border-left:6px solid #185FA5' });
   card.appendChild(el('h2', {}, 'Progress over time'));
   card.appendChild(el('div', { class: 'q-sub' },
@@ -3127,8 +3203,9 @@ function trendCard(visits, markLastUnsaved) {
     const deltaTxt = p.delta ? `<span style="color:${p.delta.color};font-weight:600">${esc(p.delta.label)}</span>` : '<span class="muted">—</span>';
     const indexTxt = p.index != null ? `${p.index}%` : '—';
     const bandTxt = p.band != null ? esc(p.band) : 'Not completed';
+    const freqTxt = p.freqDelta ? ` · freq: <span style="color:${p.freqDelta.color};font-weight:600">${esc(p.freqDelta.label)}</span>` : '';
     tbl.appendChild(el('div', { class: 'bar-row', style: 'display:flex;justify-content:space-between;gap:10px;padding:4px 0' },
-      `<span>${esc(dateStr)}${tag}</span><span><b>${indexTxt}</b> <span class="muted">${bandTxt}</span> · ${deltaTxt}</span>`));
+      `<span>${esc(dateStr)}${tag}</span><span><b>${indexTxt}</b> <span class="muted">${bandTxt}</span> · ${deltaTxt}${freqTxt}</span>`));
     const iv = interventionSummary(sortedVisits[i] && sortedVisits[i].extras);
     if (iv) tbl.appendChild(el('div', { class: 'q-sub', style: 'padding:0 0 4px 6px;color:#185FA5' }, '↳ interventions: ' + esc(iv)));
   });
@@ -3153,6 +3230,10 @@ function trendCard(visits, markLastUnsaved) {
   if (persistent.length) {
     card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px' },
       `Persistent patterns (2+ consecutive visits): <b>${persistent.map(id => esc(id.replace(/_/g, ' '))).join(', ')}</b>`));
+  }
+  // Leading-indicator read — frequency often eases before severity does.
+  if (leadingSignal) {
+    card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;color:#185FA5' }, '💡 ' + esc(leadingSignal)));
   }
   return card;
 }
@@ -4817,7 +4898,11 @@ function buildClinicianPrint(c, opts) {
   const priors = priorVisits();
   const trendVisits = loadedVisitId ? priors : priors.concat([currentVisit()]);
   const trend = trendVisits.length >= 2 ? buildTrend(trendVisits) : null;
-  const { ROME_FREQ, ROME_ONSET, ROME_ASSOC } = __req('romeiv.js');
+  const { ROME_FREQ, ROME_ONSET, ROME_ASSOC, ROME_FREQ_MET, ROME_ONSET_MET } = __req('romeiv.js');
+  // Computed once, up front, so both the Section-1 triage box (scheduling
+  // tie-breaker) and Section 3 (the matrix itself + its flare/continuous read)
+  // can use it without recomputing.
+  const sfCells = severityFrequencyMatrix(score, driverExtras);
   const isPregnant = session.pregnant === 'yes';
   const ageNum = parseInt(session.age, 10);
   const isMinor = !isNaN(ageNum) && ageNum < 18;
@@ -4862,6 +4947,7 @@ function buildClinicianPrint(c, opts) {
       <div style="font-weight:700">Tier ${tri.level} — ${esc(tri.label)}</div>
       <div style="margin-top:3px;font-size:11px">${esc(tri.action)}</div>
       ${reasonTxt.length ? `<div style="font-size:10.5px;margin-top:4px">Reasons: ${reasonTxt.map(esc).join(' · ')}</div>` : ''}
+      ${schedulingPriorityHtml(tri, sfCells)}
       ${careTrackBadgesHtml(tri.alsoConsider)}
     </div></div>`;
 
@@ -4927,10 +5013,11 @@ function buildClinicianPrint(c, opts) {
   // page 2 no longer repeats it.
   h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('burden')}</div>`;
   {
-    const sfCells = severityFrequencyMatrix(score, driverExtras);
     h += `<div style="page-break-inside:avoid;break-inside:avoid">${sevFreqBodyHtml(sfCells)}</div>`;
     if (sfCells.length && sfCells.some(c => c.freqIdx != null)) {
       h += `<div style="font-size:9px;color:#888;margin-top:4px">Frequency is display-only (not in the Index). Priority = severe + frequent.</div>`;
+      const flareRead = frequencyPatternSummary(sfCells);
+      if (flareRead) h += `<div style="font-size:10.5px;margin-top:5px;color:#333">${esc(flareRead)}</div>`;
     }
   }
   h += `</div>`;
@@ -4973,12 +5060,27 @@ function buildClinicianPrint(c, opts) {
   // for every new visit; sx_duration is the actual source of truth.
   const onsetIdx = r.onset != null ? r.onset : (typeof answers.sx_duration === 'number' ? answers.sx_duration : null);
   if (rome.answered) {
+    // Explicit criterion-by-criterion justification — frequency and onset each
+    // get a ✓/✗ against their own Rome IV threshold (≥1 day/week, ≥6 months)
+    // instead of leaving the reader to infer it from the Result line alone.
+    // Mirrors classifyRomeIV()'s own gating logic exactly (romeiv.js).
+    const freqMetNow = typeof r.painFreq === 'number' && r.painFreq >= ROME_FREQ_MET;
+    const onsetMetNow = typeof onsetIdx === 'number' && onsetIdx < ROME_ONSET.length && onsetIdx >= ROME_ONSET_MET;
+    const assocMetNow = (rome.assocCount || 0) >= 2;
+    const checkTag = met => met
+      ? '<span style="color:#2C7A63;font-weight:700">✓</span>'
+      : '<span style="color:#A9463F;font-weight:700">✗</span>';
+    const failReason = !freqMetNow ? 'pain frequency below the required ≥1 day/week'
+      : !onsetMetNow ? 'onset under 6 months'
+      : !assocMetNow ? `fewer than 2 supporting associations (${rome.assocCount || 0}/2)`
+      : '';
     h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Rome IV-informed bowel-pain pattern</div>
       <table class="pr-tbl"><tbody>
-        <tr><td>Pain frequency</td><td>${r.painFreq != null ? `${r.painFreq} — ${esc(ROME_FREQ[r.painFreq] || '')}` : '—'}</td></tr>
-        <tr><td>Onset</td><td>${onsetIdx != null ? `${onsetIdx} — ${esc(ROME_ONSET[onsetIdx] || '')}` : '—'}</td></tr>
+        <tr><td>Pain frequency</td><td>${r.painFreq != null ? `${r.painFreq} — ${esc(ROME_FREQ[r.painFreq] || '')} ${checkTag(freqMetNow)} <span style="color:#888;font-size:9.5px">(needs ≥1 day/wk)</span>` : '—'}</td></tr>
+        <tr><td>Onset</td><td>${onsetIdx != null ? `${onsetIdx} — ${esc(ROME_ONSET[onsetIdx] || '')} ${checkTag(onsetMetNow)} <span style="color:#888;font-size:9.5px">(needs ≥6 months)</span>` : '—'}</td></tr>
         ${ROME_ASSOC.map(a => `<tr><td>${esc(a.label)}</td><td>${r[a.id] ? '<b>Yes</b>' : 'No'}</td></tr>`).join('')}
-        <tr><td><b>Result</b></td><td><b>${rome.criteriaMet ? `Criteria met — ${esc(rome.subtype)}` : 'Criteria not met'}</b></td></tr>
+        <tr><td>Associations</td><td>${rome.assocCount || 0}/${ROME_ASSOC.length} ${checkTag(assocMetNow)} <span style="color:#888;font-size:9.5px">(needs ≥2)</span></td></tr>
+        <tr><td><b>Result</b></td><td><b>${rome.criteriaMet ? `Criteria met — ${esc(rome.subtype)}` : `Criteria not met${failReason ? ` — ${esc(failReason)}` : ''}`}</b></td></tr>
       </tbody></table>
       <div style="font-size:9.5px;color:#888;margin-top:3px">Single-visit estimate — not a prospective Bristol/pain diary.</div>
     </div>`;
@@ -5108,17 +5210,19 @@ function buildClinicianPrint(c, opts) {
     h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('trend')}</div>`;
     const sortedTrendVisits = trendVisits.slice().sort((a, b) => (a.date || 0) - (b.date || 0));
     h += `<div><div style="font-weight:600;font-size:11px;margin-bottom:2px">Longitudinal progression (${trend.points.length} visits)</div>
-      <table class="pr-tbl"><thead><tr><th>#</th><th>Date</th><th>Type</th><th>Index</th><th>Band</th><th>Δ</th><th>Interventions</th></tr></thead><tbody>
+      <table class="pr-tbl"><thead><tr><th>#</th><th>Date</th><th>Type</th><th>Index</th><th>Band</th><th>Δ</th><th>Freq Δ</th><th>Interventions</th></tr></thead><tbody>
         ${trend.points.map((p, i) => {
           const d = p.date ? new Date(p.date).toISOString().slice(0, 10) : '—';
           const dTxt = p.delta ? `${p.delta.delta > 0 ? '+' : ''}${p.delta.delta} (${esc(p.delta.label)})` : '—';
+          const freqTxt = p.freqDelta ? `${p.freqDelta.delta > 0 ? '+' : ''}${p.freqDelta.delta} (${esc(p.freqDelta.label)})` : (p.freqPct == null ? 'No data' : '—');
           const idxTxt = p.index != null ? `${p.index}%` : '—';
           const bandTxt = p.band != null ? esc(p.band) : 'Not completed';
           const iv = interventionSummary(sortedTrendVisits[i] && sortedTrendVisits[i].extras);
-          return `<tr><td>${i + 1}</td><td>${esc(d)}</td><td>${p.followup ? 'Follow-up' : 'Baseline'}</td><td>${idxTxt}</td><td>${bandTxt}</td><td>${dTxt}</td><td>${iv ? esc(iv) : '—'}</td></tr>`;
+          return `<tr><td>${i + 1}</td><td>${esc(d)}</td><td>${p.followup ? 'Follow-up' : 'Baseline'}</td><td>${idxTxt}</td><td>${bandTxt}</td><td>${dTxt}</td><td>${freqTxt}</td><td>${iv ? esc(iv) : '—'}</td></tr>`;
         }).join('')}
       </tbody></table>
       ${trend.persistent.length ? `<div style="font-size:10.5px;margin-top:4px">Persistent patterns: <b>${trend.persistent.map(id => esc(id.replace(/_/g, ' '))).join(', ')}</b></div>` : ''}
+      ${trend.leadingSignal ? `<div style="font-size:10.5px;margin-top:4px;color:#185FA5">💡 ${esc(trend.leadingSignal)}</div>` : ''}
     </div>`;
     h += `</div>`;
   }
