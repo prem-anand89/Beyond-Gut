@@ -164,6 +164,21 @@ What this means:
 
 Patterns are clinical signals detected from cluster norms (Reflux, **Pain**, Indigestion, Diarrhoea, Constipation), item answers, and patient history. Each pattern suggests a specific clinical pathway worth investigating. **Patterns do not diagnose; they flag hypotheses.**
 
+### Confidence vs. Specificity — NEW
+
+Every fired pattern carries a **confidence badge** (High/Moderate/Low), but that badge reflects *data completeness* — how many of the pattern's signals the patient answered — not clinical specificity. A patient who answers one weak proxy question and nothing else can show "High confidence" on a single, low-specificity signal. Four patterns (`inflammatory_immune`, `gut_brain`, `bloating_fermentation`, and implicitly the family-history/lab-result routes) now separate the two: they count `signalHits` — how many signals actually corroborated, not just how many were answered — and route Tier or wording off that instead. A single weak proxy still surfaces (nothing is suppressed), but with lower-specificity phrasing or, for `bloating_fermentation`, a lower Tier ceiling; a well-corroborated multi-signal picture gets the firmer wording and (where clinically appropriate) a higher Tier. `gut_brain` is the deliberate exception to the Tier change: both branches stay Tier 2, since psychosocial signals are not downgraded away even at lower specificity — only the wording differs.
+
+### Pattern-Overlap Cross-References — NEW
+
+Several patterns commonly co-fire as facets of ONE underlying picture rather than independent problems. When ≥2 members of a known-overlapping group fire together for the same patient, the report adds **one synthesizing note** (🔗) tying them together, instead of listing them as unrelated findings a clinician has to connect manually. Currently defined groups:
+
+- **Reflux + Functional Dyspepsia + Bloating/Fermentation** — often one upper-GI symptom complex; suggests a unified upper-GI work-up before treating each in isolation.
+- **Constipation-Dominant + Pelvic-Floor/Anorectal** — evacuation difficulty may be driving the constipation picture (or vice versa); a pelvic-floor assessment can clarify which is primary before escalating laxatives.
+- **Nutrient-Malabsorption + Inflammatory/Immune** — consider whether a single underlying process (e.g. undiagnosed coeliac disease or IBD) explains both.
+- **Mixed Bowel + Gut-Brain** — a disorder-of-gut-brain-interaction picture may fit better than treating the bowel pattern in isolation.
+
+These notes never change which patterns fired, their Tier, or the Investigations list — they're a synthesis layer only, and only appear on the actual combination (never on a single pattern alone).
+
 ### The 14 Patterns — Quick Reference
 
 | # | Pattern | Axis | Fires When (Plain English) | Typical Tier | Key Investigations |
@@ -173,9 +188,9 @@ Patterns are clinical signals detected from cluster norms (Reflux, **Pain**, Ind
 | 3 | Mixed Bowel (`mixed_bowel`, IBS-M) | Symptom | Rome criteria met + both Constipation ≥0.3 AND Diarrhoea ≥0.3 | 2 | Low-FODMAP, pelvic-floor assessment, gut-brain screening, treat worst complaint first |
 | 4 | Reflux/Upper-GI | Symptom | Reflux cluster ≥0.4 OR heartburn ≥2 | 2–3 | PPI trial, H. pylori if not done, GI referral if refractory, NSAID/alcohol/caffeine review |
 | 5 | Upper-GI Dyspepsia | Symptom | Early satiety ≥2 OR post-meal fullness ≥2 | 2–3 | H. pylori test, PPI trial, meal pattern/caffeine review, rule out delayed gastric emptying |
-| 6 | Bloating/Fermentation | Symptom | Indigestion cluster ≥0.5 OR gas/foul smelling ≥2 OR ≥2 fermentable-food triggers | 2–3 | SIBO breath test, low-FODMAP dietitian trial, fibre adjustment, stool microbiota if indicated |
+| 6 | Bloating/Fermentation | Symptom | Indigestion cluster ≥0.5 OR gas/foul smelling ≥2 OR ≥2 fermentable-food triggers | 2–3 | SIBO breath test, low-FODMAP dietitian trial, fibre adjustment, stool microbiota if indicated. **Specificity routing — NEW**: ≥3 of 6 corroborating signals escalates to Tier 2 with a direct SIBO-testing steer; a single weak signal keeps the generic Tier-3 wording (see below) |
 | 7 | Nutrient Malabsorption | Nutrient | Lab-confirmed deficiency documented, OR BMI <18.5, OR EPI/bariatric surgery, OR ≥2 of [hair loss, anaemia signs, mouth changes] + GI ≥0.2 | 1–2 | FBC, iron, B12, folate, 25-OH D, Mg; coeliac; faecal elastase; calorie count if underweight |
-| 8 | Gut-Brain Axis | Psychosocial | GI ≥0.2 AND (PSS-4 ≥50 OR anxiety ≥2 OR mood ≥2 OR brain-fog ≥2 OR fatigue ≥2) | 2–3 | PHQ-9/GAD-7 screen; gut-directed hypnotherapy or CBT referral; stress management |
+| 8 | Gut-Brain Axis | Psychosocial | GI ≥0.2 AND (PSS-4 ≥50 OR anxiety ≥2 OR mood ≥2 OR brain-fog ≥2 OR fatigue ≥2) | 2 | PHQ-9/GAD-7 screen; gut-directed hypnotherapy or CBT referral; stress management. **Specificity routing — NEW**: always Tier 2 (psychosocial signals are not downgraded), but the wording distinguishes ≥2 corroborating signals ("multiple corroborating signals") from a single weak proxy ("single corroborating signal — lower specificity") |
 | 9 | Inflammatory/Immune | Inflammatory | GI ≥0.2 AND ≥1 of [diagnosed IA condition, IM axis ≥0.4, histamine pattern, skin/joint involvement] | 2–3 | Coeliac serology; structured elimination trial; low-histamine diet trial (firms to a named **Histamine-reactive** subtype — NEW — when histamine-food symptoms co-occur with an atopic/allergic history); stool PCR if indicated |
 | 10 | Post-Disruptor (`post_disruptor`) | Microbiome | GI ≥0.2 AND (antibiotic course in last 12mo, OR current PPI/NSAID, OR microbiome-altering surgery) | 3 | Stool PCR if post-abx; C. difficile PCR if abx in past 3 months; probiotic trial; microbiome-supporting lifestyle |
 | 11 | Pelvic-Floor/Anorectal | Pelvic | Urge incontinence ≥2 OR passive incontinence ≥2 OR (straining ≥2 AND [blockage ≥2 OR maneuvers ≥1]) | 2 | Anorectal/pelvic-floor exam; defecation diary; pelvic-floor physio referral; dyssynergic-defecation screening |

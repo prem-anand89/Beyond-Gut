@@ -1608,5 +1608,48 @@ const surgicalCardFn = html.match(/function surgicalCard\(\)\s*\{[\s\S]*?\n\}/);
 ok(!!surgicalCardFn && /refreshReveals\(\)/.test(surgicalCardFn[0]),
   'surgicalCard() chip toggle calls refreshReveals() (F3a browser-caught fix)');
 
+// ── Pattern-refinement pass: specificity routing for gut_brain and
+// bloating_fermentation, mirroring inflammatory_immune's existing signalHits
+// fix. A single weak proxy used to earn the same wording/Tier as a well-
+// corroborated multi-signal picture; signalHits now distinguishes them. ──
+
+// gut_brain: weak (fatigue alone) stays Tier 2 but gets lower-specificity
+// wording; strong (brainfog + fatigue both present) gets the firmer wording.
+const gbWeak = run(1, { bg_fatigue: 2 });
+ok(gbWeak.pat.some(p => p.id === 'gut_brain'), 'sanity: gut_brain fixture (weak) fires');
+const gbWeakReasons = reasons(gbWeak.tri).map(r => r.text);
+ok(gbWeakReasons.some(t => /single corroborating signal/i.test(t) && /Gut-brain/i.test(t)), 'gut_brain: single weak proxy gets lower-specificity wording');
+ok(gbWeak.tri.level === 2, 'gut_brain: still routes to Tier 2 even at lower specificity (psychosocial signals are not downgraded away)');
+
+const gbStrong = run(1, { bg_fatigue: 2, bg_brainfog: 2 });
+const gbStrongReasons = reasons(gbStrong.tri).map(r => r.text);
+ok(gbStrongReasons.some(t => /multiple corroborating signals/i.test(t) && /Gut-brain/i.test(t)), 'gut_brain: 2+ corroborating signals gets the firmer wording');
+
+// bloating_fermentation: weak (foodReact alone) stays Tier 3 generic; strong
+// (indig + bloating + foodReact + triggers) escalates to Tier 2 with a direct
+// SIBO-testing steer.
+const bfWeak = run(0, { im_food_react: 3 });
+ok(bfWeak.pat.some(p => p.id === 'bloating_fermentation'), 'sanity: bloating_fermentation fixture (weak) fires');
+const bfWeakReasons = reasons(bfWeak.tri).map(r => r.text);
+ok(bfWeakReasons.some(t => t === 'Bloating / fermentation pattern'), 'bloating_fermentation: single weak signal keeps the generic Tier-3 wording');
+ok(bfWeak.tri.level !== 2 || bfWeakReasons.some(t => /calprotectin|malabsorption/i.test(t)), 'sanity: weak bloating_fermentation fixture does not itself force Tier 2');
+
+const bfStrong = run(0, { gsrs_rumbling: 3, gsrs_bloating: 3, gsrs_burping: 3, gsrs_gas: 3, im_food_react: 3 }, { dys: { foodTriggers: ['a', 'b'] } });
+ok(bfStrong.pat.some(p => p.id === 'bloating_fermentation'), 'sanity: bloating_fermentation fixture (strong) fires');
+const bfStrongReasons = reasons(bfStrong.tri).map(r => r.text);
+ok(bfStrongReasons.some(t => /multiple corroborating signals.*SIBO breath testing directly/i.test(t)), 'bloating_fermentation: well-corroborated picture escalates to a direct SIBO-testing steer');
+ok(bfStrong.tri.level === 2, 'bloating_fermentation: well-corroborated picture routes to Tier 2');
+
+// ── Pattern-overlap cross-references ──
+// When ≥2 members of a known-overlapping group fire together, one synthesizing
+// note should tie them together; a single member alone should not trigger it.
+const overlapAll3 = run(0, { gsrs_heartburn: 3, gsrs_regurg: 3, ug_fullness: 2, gsrs_bloating: 3 });
+ok(['reflux_upper_gi', 'functional_dyspepsia', 'bloating_fermentation'].every(id => overlapAll3.pat.some(p => p.id === id)), 'sanity: reflux + FD + bloating fixture fires all three');
+ok(overlapAll3.tri.patternOverlapNotes.some(n => /one upper-GI symptom complex/.test(n)), 'upper-GI overlap note appears when 2+ of reflux/FD/bloating co-fire');
+
+const overlapRefluxOnly = run(0, { gsrs_heartburn: 3, gsrs_regurg: 3 });
+ok(overlapRefluxOnly.pat.some(p => p.id === 'reflux_upper_gi') && !overlapRefluxOnly.pat.some(p => p.id === 'functional_dyspepsia' || p.id === 'bloating_fermentation'), 'sanity: reflux-only fixture fires just reflux_upper_gi');
+ok(overlapRefluxOnly.tri.patternOverlapNotes.length === 0, 'overlap note does NOT appear when only 1 group member fires');
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

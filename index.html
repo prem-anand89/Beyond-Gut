@@ -2126,6 +2126,22 @@ const TIERS = {
        action: 'Lifestyle-focused self-management is reasonable. Re-screen in 4–6 weeks to track change.' },
 };
 
+// Pattern-overlap groups (clinician-facing synthesis, see result.patternOverlapNotes
+// below). Each group names patterns that commonly co-fire as facets of ONE
+// underlying picture rather than independent problems. `ids` are checked
+// against the currently-fired pattern set — a group's note only appears when
+// ≥2 of its members actually fired together for THIS patient.
+const OVERLAP_GROUPS = [
+  { ids: ['reflux_upper_gi', 'functional_dyspepsia', 'bloating_fermentation'],
+    note: 'Reflux, functional dyspepsia, and bloating/fermentation patterns are firing together — this often reflects one upper-GI symptom complex rather than three separate problems; consider a unified upper-GI work-up (H. pylori, PPI trial, meal-pattern review) before treating each in isolation.' },
+  { ids: ['constipation_dominant', 'pelvic_floor'],
+    note: 'Constipation-dominant and pelvic-floor/anorectal patterns are firing together — evacuation difficulty may be driving the constipation picture (or vice versa); a pelvic-floor assessment can clarify which is primary before escalating laxative therapy.' },
+  { ids: ['nutrient_malabsorption', 'inflammatory_immune'],
+    note: 'Nutrient-malabsorption and inflammatory/immune patterns are firing together — consider whether a single underlying process (e.g. undiagnosed coeliac disease or IBD) could explain both, rather than treating them as separate issues.' },
+  { ids: ['mixed_bowel', 'gut_brain'],
+    note: 'Mixed/alternating bowel and gut-brain patterns are firing together — a disorder-of-gut-brain-interaction picture (variable bowel habit driven partly by psychosocial load) may fit better than treating the bowel pattern in isolation; gut-directed therapy can address both.' },
+];
+
 // score: computeScores() output · patterns: detectPatterns() output · firedFlags: array
 function triage(score, patterns, firedFlags, dys, opts) {
   const pids = new Set((patterns || []).map(p => p.id));
@@ -2195,7 +2211,18 @@ function triage(score, patterns, firedFlags, dys, opts) {
   }
   // Orphan pattern, now wired: gut-brain is a psychosocial-axis finding where
   // gut-directed / clinician-led therapy is the appropriate lever.
-  if (has('gut_brain')) add(2, 'Gut-brain pattern (psychosocial axis) — gut-directed therapy may help', 'psychosocial');
+  // Specificity routing (mirrors inflammatory_immune's signalHits fix, below):
+  // this pattern's `fires` condition is satisfied by a SINGLE weak proxy
+  // (brain fog OR fatigue alone, without high psychological load), which used
+  // to get the same Tier-2 wording as a well-corroborated multi-signal
+  // picture. signalHits >= 3 (giPresent + at least 2 of [highPsych, brainfog,
+  // fatigue]) requires that corroboration before the firmer wording; a single
+  // proxy still surfaces, just with lower-specificity phrasing.
+  const gutBrain = pById.get('gut_brain');
+  if (gutBrain) {
+    if (gutBrain.signalHits >= 3) add(2, 'Gut-brain pattern (psychosocial axis, multiple corroborating signals) — gut-directed therapy may help', 'psychosocial');
+    else add(2, 'Gut-brain pattern (psychosocial axis, single corroborating signal — lower specificity) — worth exploring alongside other management', 'psychosocial');
+  }
   // Impact axis as an INDEPENDENT escalation trigger — Rome IV treats functional
   // impact as independent of raw symptom severity in driving care intensity.
   if (o.impactBand === 'Significant' || o.impactBand === 'Severe')
@@ -2245,7 +2272,18 @@ function triage(score, patterns, firedFlags, dys, opts) {
 
   // Tier 3 — microbiome-support candidacy
   if (has('post_disruptor')) add(3, 'Recent gut-disruptor exposure (strongest probiotic-trial rationale)', 'microbiome');
-  if (has('bloating_fermentation')) add(3, 'Bloating / fermentation pattern', 'symptom');
+  // Specificity routing (same mechanism as inflammatory_immune/gut_brain above):
+  // this pattern's `fires` condition is satisfied by a SINGLE weak signal
+  // (e.g. foodReact or paradox alone), which used to get the same generic
+  // Tier-3 wording as a well-corroborated multi-signal fermentation picture.
+  // signalHits >= 3 (of 6) escalates to Tier 2 with a more specific SIBO-
+  // testing steer, since a well-corroborated picture is a stronger candidate
+  // for direct investigation than the default "microbiome support" framing.
+  const bloatFerm = pById.get('bloating_fermentation');
+  if (bloatFerm) {
+    if (bloatFerm.signalHits >= 3) add(2, 'Bloating / fermentation pattern (multiple corroborating signals) — consider SIBO breath testing directly', 'symptom');
+    else add(3, 'Bloating / fermentation pattern', 'symptom');
+  }
   // E3 — route on the weighted tier when available (Moderate/High), falling back to
   // the flat ≥2 count for callers that don't supply a tier (backward-compatible).
   if (dysTier === 'High' || dysTier === 'Moderate') {
@@ -2517,6 +2555,18 @@ function triage(score, patterns, firedFlags, dys, opts) {
     seenRanked.add(k);
     return true;
   });
+
+  // Pattern-overlap cross-references. Several patterns describe facets of the
+  // SAME underlying picture rather than independent problems — when ≥2 members
+  // of a known-overlapping group fire together, add ONE synthesizing note
+  // tying them together, instead of leaving the report to list them as
+  // unrelated findings a clinician has to connect manually. Deliberately a
+  // clinician-facing SYNTHESIS note (not new patient-facing copy) — it fires
+  // only on the combination, never on a single pattern alone, and never
+  // changes which patterns fired or their Tier.
+  result.patternOverlapNotes = OVERLAP_GROUPS
+    .filter(g => g.ids.filter(id => pids.has(id)).length >= 2)
+    .map(g => g.note);
 
   return result;
 }
@@ -4874,6 +4924,14 @@ function clinicianDetailCard(c) {
        <td>${esc(p.desc)}</td></tr>`
     ).join('');
     card.appendChild(tbl(['Pattern', 'Data completeness', 'Rationale'], ptRows));
+    // Pattern-overlap synthesis — ties co-firing patterns that commonly
+    // describe ONE underlying picture together, instead of leaving them as a
+    // flat list of unrelated findings. Only appears when ≥2 members of a
+    // known-overlapping group actually fired for this patient.
+    if (tri.patternOverlapNotes && tri.patternOverlapNotes.length) {
+      card.appendChild(el('ul', { style: 'font-size:11.5px;padding-left:18px;margin:6px 0 0;color:#185FA5' },
+        tri.patternOverlapNotes.map(n => `<li>🔗 ${esc(n)}</li>`).join('')));
+    }
   }
 
   // Modifiable-driver raw values are shown in the Page 1 action arm
@@ -5253,7 +5311,8 @@ function buildClinicianPrint(c, opts) {
       <table class="pr-tbl"><colgroup><col style="width:26%"><col style="width:74%"></colgroup><thead><tr><th>Pattern</th><th>Rationale</th></tr></thead><tbody>
         ${patCap.shown.map(p => `<tr><td><b>${esc(p.label)}</b></td><td>${esc(p.desc)}</td></tr>`).join('')}
       </tbody></table>
-      ${patCap.extra ? `<div style="font-size:9px;color:#888;margin-top:2px">+${patCap.extra} further lower-priority pattern${patCap.extra > 1 ? 's' : ''}: ${esc(patterns.slice(6).map(p => p.label).join(', '))}.</div>` : ''}</div>`;
+      ${patCap.extra ? `<div style="font-size:9px;color:#888;margin-top:2px">+${patCap.extra} further lower-priority pattern${patCap.extra > 1 ? 's' : ''}: ${esc(patterns.slice(6).map(p => p.label).join(', '))}.</div>` : ''}
+      ${(tri.patternOverlapNotes && tri.patternOverlapNotes.length) ? `<ul style="font-size:9.5px;color:#185FA5;padding-left:16px;margin:4px 0 0">${tri.patternOverlapNotes.map(n => `<li>🔗 ${esc(n)}</li>`).join('')}</ul>` : ''}</div>`;
   }
 
   // Rome IV — full criteria table only when answered; otherwise a single line, so
