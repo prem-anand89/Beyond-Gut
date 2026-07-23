@@ -1722,5 +1722,15 @@ ok(/triageCard\(/.test(rcSrc), 'renderClinician() still renders the triage/Tier 
 ok(/modifiableDriversCard\(/.test(rcSrc), 'renderClinician() still renders modifiable drivers');
 ok(/clinicianDetailCard\(/.test(rcSrc), "renderClinician() still renders the pattern-analysis appendix (clinicianDetailCard, superset of calc()'s old 'patterns to discuss')");
 
+// ── Fix: 0–4 scale answer buttons wrapping to a second row ──
+// .opts used a hardcoded repeat(4,1fr), a leftover from the 0–3 scale (4
+// options); DEFAULT is now 5 options (0–4), so the 5th wrapped onto its own
+// row. Fixed via a --n-opts custom property set per-question from
+// labels.length, so any scale length (DEFAULT's 5, DURATION's 6) lays out in
+// one row on wide screens without a hardcoded column count.
+ok(/\.opts\{display:grid;grid-template-columns:repeat\(var\(--n-opts,4\),1fr\)/.test(html), '.opts grid-template-columns is driven by --n-opts, not a hardcoded column count');
+ok(/style: `--n-opts:\$\{labels\.length\}`/.test(html), 'questionRow() sets --n-opts from the scale\'s actual option count');
+ok(/@media\(max-width:520px\)\{\.opts\{grid-template-columns:repeat\(2,1fr\)\}\}/.test(html), 'mobile 2-column override is untouched and still applies regardless of --n-opts');
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

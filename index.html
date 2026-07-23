@@ -59,7 +59,12 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 .q:last-child{border-bottom:none}
 .q-txt{font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:2px}
 .q-sub{font-size:11.5px;color:var(--inkt);margin-bottom:8px}
-.opts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+/* --n-opts is set per-question (labels.length) in questionRow() — the 0–4
+   scale migration widened DEFAULT from 4 to 5 options, and a hardcoded
+   repeat(4,1fr) here made the 5th option wrap onto its own row. Driven by a
+   custom property (not an inline grid-template-columns) so the mobile
+   media query below can still override it uniformly regardless of scale length. */
+.opts{display:grid;grid-template-columns:repeat(var(--n-opts,4),1fr);gap:6px}
 .opt{border:1.5px solid var(--bdr);background:var(--surf);border-radius:8px;padding:9px 6px;text-align:center;font-size:11.5px;font-weight:600;color:var(--inks);line-height:1.25;transition:all .12s}
 .opt:hover{border-color:var(--bdrm)}
 .opt .on{display:block;font-size:14px;font-weight:800;margin-bottom:2px}
@@ -4417,7 +4422,10 @@ function questionRow(q) {
     return row;
   }
   const labels = scaleFor(q.scale);
-  const opts = el('div', { class: 'opts', role: 'group', 'aria-labelledby': `q-${q.id}` });
+  // --n-opts drives .opts' grid-template-columns so every scale (DEFAULT's 5
+  // options, DURATION's 6, or any future length) lays out in one row on wide
+  // screens, without hardcoding a column count that only fit the old 0–3 scale.
+  const opts = el('div', { class: 'opts', role: 'group', 'aria-labelledby': `q-${q.id}`, style: `--n-opts:${labels.length}` });
   const naBtn = q.optional ? el('button', { class: `chip-opt na-opt${answers[q.id] === 'na' ? ' sel' : ''}`, type: 'button', 'aria-pressed': answers[q.id] === 'na', 'aria-label': `${q.patientText}: Not applicable` }, 'Not applicable') : null;
   labels.forEach((lab, v) => {
     const sel = answers[q.id] === v ? ' sel' : '';
