@@ -199,7 +199,8 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
   .pr-triage.t1{background:#FCEBEB;border-color:#A32D2D}.pr-triage.t2{background:#FAD7C2;border-color:#C2622E}
   .pr-triage.t3{background:#FAEEDA;border-color:#BA7517}.pr-triage.t4{background:#E1F5EE;border-color:#0F6E56}
   .pr-tbl{width:100%;border-collapse:collapse;font-size:10.5px;margin-top:2px;page-break-inside:avoid;break-inside:avoid}
-  .pr-tbl thead{display:table-header-group}
+  .pr-tbl thead{display:table-header-group;page-break-after:avoid;break-after:avoid-page}
+  .pr-tbl tbody tr:first-child{page-break-before:avoid;break-before:avoid-page}
   .pr-tbl th{text-align:left;padding:3px 6px;background:#F2F0EB;font-weight:600;border-bottom:1px solid #D0D0C8;font-size:10px}
   .pr-tbl td{padding:3px 6px;border-bottom:1px solid #ECEAEA;vertical-align:top}
   .pr-tbl tr:last-child td{border-bottom:none}
@@ -4604,7 +4605,7 @@ function buildPatientPrint(c) {
   const secPills = heads.secondaryList.filter(o => o.band).map(o =>
     `<span class="pr-pill" style="background:${ptBandBg(o.band)};color:#000;font-size:9.5px;margin:2px 4px 2px 0">${esc(o.label)} — ${esc(o.band)}</span>`).join('');
   if (secPills) {
-    h += `<div style="margin-top:8px"><div style="font-size:9.5px;color:#777;margin-bottom:3px">Other systemic reads (screening estimates):</div>${secPills}</div>`;
+    h += `<div style="margin-top:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-size:9.5px;color:#777;margin-bottom:3px">Other systemic reads (screening estimates):</div>${secPills}</div>`;
   }
   h += `</div>`;
 
@@ -4826,13 +4827,13 @@ function buildClinicianPrint(c) {
   // Physiotherapy candidacy — folded into the action arm (a distinct referral directive).
   const physio = physioCandidacy(tri);
   if (physio.length) {
-    h += `<div style="margin-top:8px"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Physiotherapy candidacy</div>
+    h += `<div style="margin-top:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Physiotherapy candidacy</div>
       <ul style="margin:0 0 0 14px;font-size:10.5px;line-height:1.6">${physio.map(r => `<li>${esc(r.text)}</li>`).join('')}</ul>
       <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:2px">An adjunct after medical assessment — not a substitute for it.</div></div>`;
   }
 
   // Modifiable drivers — folded into the action arm (a lifestyle directive, same "what to work on" register).
-  h += `<div style="margin-top:8px"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Modifiable drivers</div>
+  h += `<div style="margin-top:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Modifiable drivers</div>
     <table class="pr-tbl"><thead><tr><th>Factor</th><th>Band</th><th>Score</th></tr></thead><tbody>
       ${modifiableFactors(driverExtras).map(f => `<tr><td>${factorIcon(f)}${esc(f.label)}</td><td style="color:${f.color}">${esc(f.band)}</td><td>${esc(f.score || '')}</td></tr>`).join('')}
     </tbody></table></div>`;
@@ -4885,7 +4886,7 @@ function buildClinicianPrint(c) {
 
   // Patterns
   if (patterns.length) {
-    h += `<div style="margin-bottom:8px"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Patterns</div>
+    h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Patterns</div>
       <table class="pr-tbl"><thead><tr><th>Pattern</th><th>Data completeness</th><th>Rationale</th></tr></thead><tbody>
         ${patterns.map(p => `<tr><td><b>${esc(p.label)}</b></td><td>${esc(p.confidence)}</td><td>${esc(p.desc)}</td></tr>`).join('')}
       </tbody></table></div>`;
@@ -4899,7 +4900,7 @@ function buildClinicianPrint(c) {
   // for every new visit; sx_duration is the actual source of truth.
   const onsetIdx = r.onset != null ? r.onset : (typeof answers.sx_duration === 'number' ? answers.sx_duration : null);
   if (rome.answered) {
-    h += `<div style="margin-bottom:8px"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Rome IV-informed bowel-pain pattern</div>
+    h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Rome IV-informed bowel-pain pattern</div>
       <table class="pr-tbl"><tbody>
         <tr><td>Pain frequency</td><td>${r.painFreq != null ? `${r.painFreq} — ${esc(ROME_FREQ[r.painFreq] || '')}` : '—'}</td></tr>
         <tr><td>Onset</td><td>${onsetIdx != null ? `${onsetIdx} — ${esc(ROME_ONSET[onsetIdx] || '')}` : '—'}</td></tr>
@@ -4909,12 +4910,12 @@ function buildClinicianPrint(c) {
       <div style="font-size:9.5px;color:#888;margin-top:3px">Single-visit estimate — not the prospective diary Rome IV was validated against.</div>
     </div>`;
   } else {
-    h += `<div style="margin-bottom:8px"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Rome IV-informed bowel-pain pattern</div>
+    h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Rome IV-informed bowel-pain pattern</div>
       <div style="font-size:11px;color:#555">Not answered (pain items not reached / completed).</div></div>`;
   }
 
   // Microbiome correlates
-  h += `<div style="margin-bottom:8px"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Microbiome-correlate signals (${lens.count}/6)</div>`;
+  h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Microbiome-correlate signals (${lens.count}/6)</div>`;
   h += lens.signals && lens.signals.length
     ? `<ul style="margin:0 0 0 14px;font-size:10.5px">${lens.signals.map(s => `<li>${esc(s.label)}</li>`).join('')}</ul>`
     : `<div style="font-size:11px;color:#555">No microbiome-correlate signals present.</div>`;
@@ -4933,7 +4934,7 @@ function buildClinicianPrint(c) {
           ? `${o.value} signal${o.value === 1 ? '' : 's'} · Dys-R ${o.tier}${o.weightedScore != null ? ` (${o.weightedScore})` : ''}`
           : (COUNT_LOADS.has(o.key) ? `${o.value} signal${o.value === 1 ? '' : 's'}` : o.value + '%')));
   const axisRow = (o) => `<tr><td>${esc(o.label)}</td><td style="white-space:nowrap"><b>${esc(String(pctOrCount(o)))}</b></td><td>${prBandPill(o.band)}</td><td>${prProv(o.validated)}</td></tr>`;
-  h += `<div style="margin-bottom:8px"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Axis profile</div>
+  h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Axis profile</div>
     <table class="pr-tbl"><thead><tr><th>Axis</th><th>Value</th><th>Band</th><th>Basis</th></tr></thead><tbody>
       <tr><td colspan="4" style="font-size:9px;color:#888;font-weight:600">PRIMARY</td></tr>
       ${heads.primaryList.map(axisRow).join('')}
@@ -4945,7 +4946,7 @@ function buildClinicianPrint(c) {
     </tbody></table></div>`;
 
   // GSRS domain breakdown — % cell colour-coded by band so high domains stand out.
-  h += `<div style="margin-bottom:8px"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Domain breakdown</div>
+  h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Domain breakdown</div>
     <table class="pr-tbl"><thead><tr><th>Domain</th><th>Score/Max</th><th>%</th></tr></thead><tbody>`;
   SECTIONS.forEach(s => {
     const sc = score.secScores[s.id] || 0, mx = score.secApplicableMax[s.id] || 0;
@@ -4968,26 +4969,26 @@ function buildClinicianPrint(c) {
 
   // History / context supporting the lenses above.
   if (conditions && conditions.list && conditions.list.length) {
-    h += `<div style="margin-bottom:6px"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Known conditions reported</div>
+    h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Known conditions reported</div>
       <div style="font-size:10.5px">${esc(conditions.list.join(', '))}</div></div>`;
   }
   if (famhx && famhx.list && famhx.list.length) {
-    h += `<div style="margin-bottom:6px"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Family history</div>
+    h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Family history</div>
       <div style="font-size:10.5px">${esc(famhx.list.join(', '))}</div></div>`;
   }
   if (obstetric && obstetric.list && obstetric.list.length) {
-    h += `<div style="margin-bottom:6px"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Obstetric / birth history</div>
+    h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Obstetric / birth history</div>
       <div style="font-size:10.5px">${esc(obstetric.list.join(', '))}</div></div>`;
   }
   if (anthro && (anthro.bmi != null || anthro.whtr != null)) {
     const bmiTxt = anthro.bmi != null ? `BMI ${anthro.bmi}${anthro.bmiBand ? ` (${anthro.bmiBand})` : ''}` : null;
     const whtrTxt = anthro.whtr != null ? `Waist-to-height ${anthro.whtr}${anthro.whtrBand ? ` (${anthro.whtrBand})` : ''}` : null;
-    h += `<div style="margin-bottom:6px"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Anthropometrics</div>
+    h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Anthropometrics</div>
       <div style="font-size:10.5px">${esc([bmiTxt, whtrTxt].filter(Boolean).join(' · '))}${anthro.caveat ? `<br><i>${esc(anthro.caveat)}</i>` : ''}</div></div>`;
   }
   const medsOtherTxt = (driverExtras && driverExtras.medsOther || '').trim();
   if ((meds && meds.list && meds.list.length) || medsOtherTxt) {
-    h += `<div style="margin-bottom:6px"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Medication confounders</div>`;
+    h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Medication confounders</div>`;
     if (meds && meds.list && meds.list.length) h += `<div style="font-size:10.5px">${esc(meds.list.map(m => m.label + (m.effect ? ` (${m.effect})` : '')).join('; '))}</div>`;
     if (medsOtherTxt) h += `<div style="font-size:10.5px${meds && meds.list && meds.list.length ? ';margin-top:2px' : ''}">Other reported medications: ${esc(medsOtherTxt)}</div>`;
     h += `</div>`;
@@ -5002,7 +5003,7 @@ function buildClinicianPrint(c) {
   // Tranche G — interventions recorded at THIS visit (annotation only).
   {
     const ivNow = interventionSummary(driverExtras);
-    h += `<div style="margin-bottom:8px"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Interventions this visit</div>
+    h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Interventions this visit</div>
       <div style="font-size:11px">${ivNow ? esc(ivNow) : '<span style="color:#555">None recorded this visit.</span>'}</div></div>`;
   }
 
