@@ -488,6 +488,20 @@ const QUESTIONS = [
   { id: 'gsrs_urgency', section: 'GI', cluster: 'Diarrhoea',
     patientText: 'Urgency', patientSub: 'A sudden, urgent need to pass stool with little warning' },
 
+  // F3a — Bile-acid malabsorption (BAM) discriminators. Hidden until relevant:
+  // reveals only for patients with a Diarrhoea-cluster signal OR a reported
+  // cholecystectomy (the enabling risk factor — BAM is common and underdiagnosed
+  // post-gallbladder-removal, where patients often cycle through low-FODMAP
+  // trials that don't work because the mechanism isn't fermentation). Optional +
+  // no `cluster` tag, so these never enter the Index or count against mandatory
+  // completeness while hidden (same convention as the UG/AR/SY adaptive items).
+  { id: 'bam_stool', section: 'GI', optional: true,
+    revealIf: { any: [ { type: 'cluster', cluster: 'Diarrhoea', min: 0.30 }, { type: 'flag', flag: 'cholecystectomy' } ] },
+    patientText: 'Bowel movements that are pale, greasy, or hard to flush' },
+  { id: 'bam_fatty', section: 'GI', optional: true,
+    revealIf: { any: [ { type: 'cluster', cluster: 'Diarrhoea', min: 0.30 }, { type: 'flag', flag: 'cholecystectomy' } ] },
+    patientText: 'Symptoms triggered more by fatty or greasy meals than by high-fibre or fermentable foods' },
+
   // ── GI core — Constipation cluster ──
   { id: 'gsrs_constip', section: 'GI', cluster: 'Constipation',
     patientText: 'Constipation', patientSub: 'Passing stools less often than normal' },
@@ -872,7 +886,11 @@ function surgicalFlags(extras) {
   const ids = new Set(((extras || {}).surgeries) || []);
   let adhesion = false, microbiome = false; const list = [];
   SURGERIES.forEach(s => { if (ids.has(s.id)) { list.push(s.label); if (s.adhesion) adhesion = true; if (s.microbiome) microbiome = true; } });
-  return { adhesion, microbiome, list, count: list.length };
+  // F3a (BAM) — cholecystectomy specifically (not just the broader microbiome
+  // flag) is the enabling risk factor for bile-acid malabsorption; exposed here
+  // so both the pattern eval and the UI's reveal-context flag can read it
+  // without re-deriving from the raw id list.
+  return { adhesion, microbiome, cholecystectomy: ids.has('gallbladder'), list, count: list.length };
 }
 
 // Known diagnosed/suspected conditions (§7a). The single biggest completeness gap
@@ -1793,6 +1811,29 @@ const PATTERNS = [
     },
   },
   {
+    // F3a — Bile-acid malabsorption (BAM). Common and treatable but routinely
+    // missed for years while patients cycle on low-FODMAP trials that don't
+    // help, because the mechanism is bile acid, not fermentation. Co-flags
+    // alongside diarrhoea_dominant/IBS-D rather than replacing it — BAM is a
+    // MECHANISM hypothesis layered on top of the loose-stool picture, not a
+    // competing bowel-pattern classification.
+    id: 'bile_acid_malabsorption', axis: 'symptom',
+    label: 'Bile-acid malabsorption (BAM) pattern',
+    desc: 'Loose-stool pattern with a cholecystectomy history and a bile-mechanism signal (pale/greasy/hard-to-flush stool, or a fatty-meal rather than fermentable-food trigger). Consider a bile-acid sequestrant trial or SeHCAT; often less responsive to low-FODMAP.',
+    eval: (s, ex, a) => {
+      const diarrCluster = ge(clu(s, 'Diarrhoea'), 0.3);
+      // ex is driverExtras, which carries the raw surgeries id list (not the
+      // derived surgicalFlags() object) — resolve cholecystectomy directly so
+      // this pattern doesn't need a scales.js import inside patterns.js.
+      const hasChole = Array.isArray(ex.surgeries) && ex.surgeries.includes('gallbladder');
+      const cholecystSig = { a: true, t: hasChole };
+      const stoolSign = ge(av(a, 'bam_stool'), 2);
+      const fattyTrigger = ge(av(a, 'bam_fatty'), 2);
+      const signals = [diarrCluster, cholecystSig, stoolSign, fattyTrigger];
+      return { fires: diarrCluster.t && hasChole && (stoolSign.t || fattyTrigger.t), signals };
+    },
+  },
+  {
     id: 'mixed_bowel', axis: 'symptom',
     label: 'Mixed / alternating bowel pattern',
     desc: 'Alternating constipation and loose stools (IBS-mixed-type picture) — different management from a single-direction bowel disorder; map triggers.',
@@ -2131,6 +2172,9 @@ function triage(score, patterns, firedFlags, dys, opts) {
   // microbiome-support framing; a probiotic-trial tier for this pattern alone
   // could read as licence to self-manage ahead of that workup.
   if (has('diarrhoea_dominant')) add(2, 'Loose-stool / urgency pattern — exclude organic causes (calprotectin, coeliac serology) before considering microbiome support', 'symptom');
+  // F3a — co-flags alongside diarrhoea_dominant (a mechanism hypothesis on top
+  // of the loose-stool picture, not a competing bowel-pattern classification).
+  if (has('bile_acid_malabsorption')) add(2, 'Bile-acid malabsorption pattern (cholecystectomy history + bile-mechanism signal) — often under-recognised and less responsive to low-FODMAP than other loose-stool pictures', 'symptom');
   if (pain != null && pain >= 0.5) add(2, 'Prominent abdominal-pain cluster', 'symptom');
   if (o.adhesionSurgery) add(2, 'Prior abdominal/pelvic surgery (adhesions — visceral / fascial manual-therapy candidacy, as an adjunct after medical assessment)', 'symptom');
   if (o.romeResult && o.romeResult.criteriaMet) add(2, `Meets Rome IV-informed criteria for ${o.romeResult.subtype}`, 'symptom');
@@ -2368,6 +2412,13 @@ function triage(score, patterns, firedFlags, dys, opts) {
     // nutrient_malabsorption / RI.IBS-D respectively (diarrhoea_dominant
     // commonly co-fires with both).
     diarrhoea_dominant: ['Stool calprotectin / PCR (exclude infection or IBD)', 'Coeliac serology (anti-tTG IgA + total IgA)', 'FIT (faecal immunochemical test)', 'Consider bile acid malabsorption (empirical trial or SeHCAT)'],
+    // F3a — this line's first entry is worded IDENTICALLY to diarrhoea_dominant/
+    // RI.IBS-D's existing hedge line above ("Consider bile acid malabsorption
+    // (empirical trial or SeHCAT)"), so the Set dedup collapses it to one entry
+    // when both fire, per this file's canonicalisation rule. The two lines below
+    // are genuinely additional, more specific guidance that only applies once
+    // the dedicated BAM signal (cholecystectomy + stool/fatty-trigger) resolves.
+    bile_acid_malabsorption: ['Consider bile acid malabsorption (empirical trial or SeHCAT)', 'Trial of a bile-acid sequestrant (cholestyramine or colesevelam)', 'Often less responsive to low-FODMAP — mechanism is bile-acid, not fermentation'],
     // "Pelvic-floor" (hyphenated) matched to PI.pelvic_floor's wording —
     // constipation_dominant and pelvic_floor commonly co-fire together.
     constipation_dominant: ['Dietary fibre and fluid intake assessment', 'Pelvic-floor physiotherapy referral', 'Exclude hypothyroidism (TSH), hypercalcaemia'],
@@ -3568,7 +3619,11 @@ function refreshReveals() {
   // evacuation) section auto-reveals for those patients too.
   const pelvicRisk = obstetricHistory(extras).risk || surgicalFlags(extras).adhesion
     || (extras.conditions || []).includes('endo');
-  const ctx = { answers, clusterNorm: live.clusterNorm, flags: { pelvicRisk } };
+  // F3a — reveals the BAM discriminator items (bam_stool/bam_fatty) for
+  // patients with a reported cholecystectomy, even before any Diarrhoea-cluster
+  // signal is answered.
+  const cholecystectomy = surgicalFlags(extras).cholecystectomy;
+  const ctx = { answers, clusterNorm: live.clusterNorm, flags: { pelvicRisk, cholecystectomy } };
   const wrap = document.getElementById('targeted-wrap');
   const manual = !!(wrap && wrap.dataset.manual === '1');
   // Conditional sections
@@ -4236,6 +4291,13 @@ function surgicalCard() {
       const i = extras.surgeries.indexOf(s.id);
       if (i >= 0) extras.surgeries.splice(i, 1); else extras.surgeries.push(s.id);
       b.classList.toggle('sel');
+      // F3a — gallbladder removal now gates the BAM discriminator items
+      // (bam_stool/bam_fatty) via the cholecystectomy reveal flag; adhesion
+      // surgeries also feed pelvicRisk → the AR section. Without this, toggling
+      // a surgery chip wouldn't live-reveal either until some unrelated action
+      // happened to call refreshReveals() (same class of bug conditionsCard()
+      // was already fixed for).
+      refreshReveals();
     };
     chips.appendChild(b);
   });

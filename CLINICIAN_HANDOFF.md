@@ -43,7 +43,7 @@ Patients complete the questionnaire in a logical clinical order:
 1. **Anthropometrics** (optional, 3 items): Height (cm), weight (kg), waist circumference (cm) → BMI + Waist-to-Height Ratio (WHtR) auto-calculated for nutritional and cardiometabolic context (BMI <18.5 flags malabsorption risk; WHtR ≥0.5 flags central adiposity)
 2. **History** (optional, chip cards & free text): 
    - Known conditions (coeliac, IBD, IBS, SIBO, gallstones, pancreatitis/EPI, liver disease, H. pylori, PCOS, anxiety/depression, food allergy) → context for interpretation
-   - Surgical history (appendix, bariatric, hysterectomy, pelvic/abdominal, hernia) → adhesion risk
+   - Surgical history (appendix, bariatric, hysterectomy, pelvic/abdominal, hernia, **gallbladder removal**) → adhesion risk; gallbladder removal also reveals the bile-acid malabsorption (BAM) discriminator questions in the Gut Symptoms section, live as the chip is toggled
    - Regular medications (with confounders: GLP-1 agonists, opioids, SSRIs, metformin, laxatives, iron, OCPs)
    - Family history (coeliac, IBD, bowel cancer)
    - Free-text "other medications" field → captures complex regimens
@@ -52,6 +52,7 @@ Patients complete the questionnaire in a logical clinical order:
    - **Severity** (0–4 impact-anchored scale, 2-week recall): GSRS-derived, modified from the published 7-point instrument
    - **Bristol stool form** (types 1–7): Single current observation
    - **Per-cluster symptom frequency** (5 new optional rows): "Over the last 2–3 months, how many days a week do you get [Reflux/Pain/Indigestion/Diarrhoea/Constipation]?" (0–3: 1–2 days/wk → daily). Frequency does **not** affect the Index — it is decoupled and displayed only in the read-only severity×frequency widget, for context alongside (not blended into) the severity score
+   - **Bile-acid malabsorption (BAM) discriminators** — 2 items, item-level hidden by default, reveal only for a Diarrhoea-cluster signal or a reported cholecystectomy (never enter the Index)
 5. **Lifestyle & Modifiable Drivers** (optional): Diet quality, activity level, alcohol frequency, sleep quality, PSS-4 stress (1-month recall), bowel-movement frequency (stools/week band), smoking status, caffeine intake, hydration level, microbiome exposures (antibiotics, PPI, NSAID, post-infectious onset)
 6. **Systemic Features** (mandatory baseline, adaptive expansion): Inflammatory markers, brain-gut/mood, nutrient status, functional impact, psychosocial stress
 7. **Adaptive Deep Dive** (optional, conditional): Revealed only when GI core triggers specialist pathways:
@@ -159,11 +160,11 @@ What this means:
 
 ---
 
-## Section 4: The 13 Patterns — What They Detect & Why
+## Section 4: The 14 Patterns — What They Detect & Why
 
 Patterns are clinical signals detected from cluster norms (Reflux, **Pain**, Indigestion, Diarrhoea, Constipation), item answers, and patient history. Each pattern suggests a specific clinical pathway worth investigating. **Patterns do not diagnose; they flag hypotheses.**
 
-### The 13 Patterns — Quick Reference
+### The 14 Patterns — Quick Reference
 
 | # | Pattern | Axis | Fires When (Plain English) | Typical Tier | Key Investigations |
 |---|---------|------|-------------------------|--------------|-------------------|
@@ -180,9 +181,12 @@ Patterns are clinical signals detected from cluster norms (Reflux, **Pain**, Ind
 | 11 | Pelvic-Floor/Anorectal | Pelvic | Urge incontinence ≥2 OR passive incontinence ≥2 OR (straining ≥2 AND [blockage ≥2 OR maneuvers ≥1]) | 2 | Anorectal/pelvic-floor exam; defecation diary; pelvic-floor physio referral; dyssynergic-defecation screening |
 | 12 | **PFD-Paradoxical** (`pelvic_floor_paradox`) — NEW | Pelvic | Straining ≥2 OR incomplete evacuation ≥2, WITH normal-or-loose stool (Bristol 3–5 or Diarrhoea cluster ≥0.3) AND Constipation cluster <0.4 | 2 | Anorectal physiology / balloon expulsion test; pelvic-floor PT with biofeedback; **not laxatives** |
 | 13 | Functional Dyspepsia | Symptom | Early satiety ≥2 OR post-meal fullness ≥2 OR fasting epigastric burning ≥2 | 2–3 | H. pylori serology; **PDS** (early satiety/fullness, default) → prokinetic/meal-spacing trial; **EPS** (fasting burning) → acid suppression 4–8 weeks; **Mixed** → both — NEW subtyping |
+| 14 | **Bile-Acid Malabsorption** (`bile_acid_malabsorption`) — NEW | Symptom | Diarrhoea cluster ≥0.3 AND reported cholecystectomy AND (pale/greasy/hard-to-flush stool OR fatty-meal-over-fermentable trigger) | 2 | Consider SeHCAT / bile-acid sequestrant trial (cholestyramine, colesevelam); **often less responsive to low-FODMAP** — co-flags alongside Diarrhoea-Dominant/IBS-D, doesn't replace it |
 | — | Lifestyle-Driven Modifiable | Action | ≥2 of [high-burden diet, high alcohol frequency, low activity level] with GI present | 3 | Dietitian referral; exercise prescription (tailored to IBS subtype); sleep/stress optimisation |
 
 **#12 is new this cycle**: the ordinary Pelvic-Floor/Anorectal pattern (#11) and Constipation-Dominant (#1) both key off incontinence or a constipation-cluster burden. PFD-Paradoxical catches the OPPOSITE-looking picture — marked straining/incomplete evacuation despite stool that is **not hard** — the hallmark of pelvic-floor dyssynergia (a coordination problem, not slow transit). It co-flags separately from IBS-C and routes to pelvic-floor PT + anorectal assessment instead of laxatives, which don't address dyssynergia.
+
+**#14 is also new this cycle**: Bile-Acid Malabsorption (BAM) is common, treatable, and routinely missed for years while patients cycle through low-FODMAP trials that don't help — because the mechanism is bile acid, not fermentation. Its two discriminator questions (pale/greasy/hard-to-flush stool; fatty-meal-over-fermentable trigger) are hidden by default and reveal only for patients with a Diarrhoea-cluster signal or a reported cholecystectomy — they never appear for patients the pattern can't apply to, and never enter the Index.
 
 ### Adaptive Reveal Logic — When Specialist Questions Appear
 
@@ -209,11 +213,15 @@ The tool learns as it goes: new specialist question groups reveal only when the 
 
 **4 items appear**: Orthostatic dizziness, palpitations, **joint hypermobility — NEW** (Beighton-lite: "joints bend further than normal, or dislocate/sublux easily"), cyclical symptom flare with menstrual cycle (female-gated). Orthostatic dizziness, palpitations, and hypermobility are three independent routes into the same autonomic-overlap note (see below) — any one of them, alongside a relevant GI pattern, is enough.
 
+**Bile-Acid Malabsorption (BAM) items — item-level reveal, not a whole section — NEW**: Unlike AR/UG/SY (full conditional sections), the two BAM discriminator questions live inside the core Gut Symptoms (GI) section but individually hide until relevant: **Diarrhoea cluster ≥0.30 OR a reported cholecystectomy** (gallbladder-removal chip, in Surgical History). Both are optional — they never enter the Index and never count against mandatory completeness while hidden.
+
+**2 items appear**: "Bowel movements that are pale, greasy, or hard to flush", "Symptoms triggered more by fatty/greasy meals than by high-fibre or fermentable foods"
+
 **Manual override**: "Show all specialist questions" button allows clinicians to force-reveal everything regardless of GI triggers, useful if screening broadly or reviewing across multiple visits.
 
 ---
 
-### Deep Dive: Six Key Patterns
+### Deep Dive: Eight Key Patterns
 
 #### **1. Nutrient Malabsorption** (Highest Clinical Impact)
 
@@ -339,6 +347,25 @@ Unlike #1–6 above, this is a **triage note** (`autonomicNote`), not a fired pa
 **Investigations**: None generated automatically (this is a note, not a pattern with its own Investigations list) — the note text itself is the clinical prompt for the referring clinician to consider an autonomic/connective-tissue work-up.
 
 **Why this matters**: GI dysmotility secondary to hypermobility/POTS is under-recognised, and patients with this root cause often cycle through gut-specific interventions (elimination diets, motility agents) that don't address the underlying connective-tissue/autonomic driver. Reuses two existing items (orthostatic, palpitations) plus one new hypermobility item — no new pattern or Tier logic, just a sharper, better-gated note.
+
+---
+
+#### **8. Bile-Acid Malabsorption (BAM)** (`bile_acid_malabsorption`) — NEW
+
+**Fires when ALL of**:
+- Diarrhoea cluster ≥0.30 (loose-stool/urgency signal present) AND
+- Reported cholecystectomy (gallbladder-removal chip, Surgical History — the enabling risk factor) AND
+- At least one bile-mechanism discriminator: pale/greasy/hard-to-flush stool ≥2, OR symptoms triggered more by fatty/greasy meals than by high-fibre/fermentable foods ≥2
+
+**Hidden until relevant**: both discriminator items are reveal-gated — they appear only for patients with a Diarrhoea-cluster signal or a reported cholecystectomy, and are optional (never enter the Index, never count against mandatory completeness while hidden).
+
+**Co-flags, doesn't replace**: BAM is a mechanism hypothesis layered on top of the loose-stool picture, not a competing bowel-pattern classification — it fires alongside (not instead of) Diarrhoea-Dominant/IBS-D when the criteria are met, and both appear in the pattern list together.
+
+**Clinical meaning**: Bile-acid malabsorption is common and treatable but routinely missed for years — patients typically cycle through low-FODMAP trials that don't work because the mechanism is bile acid, not fermentation. A post-cholecystectomy patient with pale/greasy stool or a clear fatty-meal (not FODMAP) trigger pattern is a strong candidate for a bile-acid sequestrant trial or SeHCAT scan before further dietary elimination.
+
+**Investigations**: Consider bile acid malabsorption (empirical trial or SeHCAT) — shared wording with the Diarrhoea-Dominant/IBS-D hedge line, so they collapse to one entry rather than appearing twice; plus a bile-acid sequestrant trial (cholestyramine or colesevelam); note that response to low-FODMAP is often poor for this mechanism.
+
+**Why this matters**: Without this pattern, a post-cholecystectomy patient with a clear bile-mechanism picture gets the same generic "consider bile acid malabsorption" hedge as any other loose-stool patient, buried in a long investigations list. Naming BAM explicitly — gated on the actual risk factor (cholecystectomy) plus a specific discriminator — surfaces it as an actionable, named hypothesis instead of a generic maybe.
 
 ---
 
@@ -600,6 +627,7 @@ Rome IV was validated on prospective diaries; a single tool snapshot gives a scr
 | sy_orthostatic, sy_palpitations | SY (adaptive) | Fatigue ≥2 OR brain-fog ≥2 | Orthostatic dizziness, heart racing | Autonomic/systemic overlap note (with a relevant GI pattern) | 2 weeks | Screening items |
 | sy_hypermobile — NEW | SY (adaptive) | Fatigue ≥2 OR brain-fog ≥2 | Joint hypermobility (Beighton-lite) | Third route into the same autonomic/systemic overlap note — connective-tissue (hEDS/POTS) root-cause consideration | 2 weeks | Screening item |
 | gy_cyclical | SY (adaptive) | Pain ≥2 OR bloating ≥2 (female only) | Menstrual-cycle flare | Gynaecological/hormonal note + cycle-tracking suggestion | 2 weeks | Screening item |
+| bam_stool, bam_fatty — NEW | GI (item-level reveal, not a whole section) | Diarrhoea cluster ≥0.30 OR reported cholecystectomy | Pale/greasy/hard-to-flush stool; fatty-meal-over-fermentable trigger | Bile-acid malabsorption pattern (co-flags with Diarrhoea-Dominant/IBS-D) | 2 weeks | Screening items |
 
 ### History & Context (Never Scored, Clinician & Triage Notes Only)
 

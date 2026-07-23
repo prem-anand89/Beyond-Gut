@@ -1563,5 +1563,50 @@ ok(a4TriNoPattern.autonomicNote === null, 'autonomicNote does NOT fire on the au
 const a4TriNoFlag = triage(a4Score, a4Pats, [], { count: 0 }, { autonomicFlag: false, autonomicSource: {} });
 ok(a4TriNoFlag.autonomicNote === null, 'autonomicNote does NOT fire on a relevant GI pattern alone without an autonomic signal');
 
+// ── F3a — Bile-acid malabsorption (BAM) lens ──
+// Fires on Diarrhoea-cluster burden + cholecystectomy history + (stool sign OR
+// fatty-meal trigger). Co-flags alongside diarrhoea_dominant rather than
+// replacing it. The bam_stool/bam_fatty items are reveal-gated (hidden until a
+// Diarrhoea signal or a reported cholecystectomy) — never scored into the
+// Index (no `cluster` tag) and never inflate mandatory completeness (optional).
+const diarrSys = { gsrs_diarrhoea: 3, gsrs_loose: 3, gsrs_urgency: 3 };
+const bamFull = run(0, { ...diarrSys, bam_stool: 3 }, { surgeries: ['gallbladder'] });
+ok(bamFull.pat.some(p => p.id === 'bile_acid_malabsorption'), 'BAM fires on Diarrhoea cluster + cholecystectomy + stool sign');
+ok(bamFull.tri.investigations.includes('Trial of a bile-acid sequestrant (cholestyramine or colesevelam)'), 'BAM adds its specific sequestrant-trial line');
+ok(bamFull.tri.investigations.includes('Consider bile acid malabsorption (empirical trial or SeHCAT)'), 'BAM shares the canonical SeHCAT line with diarrhoea_dominant (no duplicate wording)');
+ok(bamFull.tri.reasons.concat(bamFull.tri.alsoConsider.flatMap(a => a.reasons)).some(r => /Bile-acid malabsorption pattern/.test(r.text)), 'BAM named in the triage candidacy reason');
+
+const bamFattyOnly = run(0, { ...diarrSys, bam_fatty: 3 }, { surgeries: ['gallbladder'] });
+ok(bamFattyOnly.pat.some(p => p.id === 'bile_acid_malabsorption'), 'BAM also fires on the fatty-meal-trigger signal alone (stool sign not required)');
+
+const bamNoSurgery = run(0, { ...diarrSys, bam_stool: 3, bam_fatty: 3 }, { surgeries: [] });
+ok(!bamNoSurgery.pat.some(p => p.id === 'bile_acid_malabsorption'), 'BAM does NOT fire without a reported cholecystectomy, even with both discriminators present');
+
+const bamNoDiscriminator = run(0, diarrSys, { surgeries: ['gallbladder'] });
+ok(!bamNoDiscriminator.pat.some(p => p.id === 'bile_acid_malabsorption'), 'BAM does NOT fire on cholecystectomy + diarrhoea alone, without a stool/fatty-trigger discriminator');
+
+const bamNoDiarrhoea = run(0, { bam_stool: 3, bam_fatty: 3 }, { surgeries: ['gallbladder'] });
+ok(!bamNoDiarrhoea.pat.some(p => p.id === 'bile_acid_malabsorption'), 'BAM does NOT fire without Diarrhoea-cluster burden');
+
+// bam_stool/bam_fatty reveal gating (hidden until relevant) — schema-level check.
+ok(/id: 'bam_stool'[\s\S]{0,250}revealIf:/.test(html), 'bam_stool is reveal-gated, not always shown');
+ok(/id: 'bam_fatty'[\s\S]{0,250}revealIf:/.test(html), 'bam_fatty is reveal-gated, not always shown');
+ok(/cluster: 'Diarrhoea', min: 0\.30 \}, \{ type: 'flag', flag: 'cholecystectomy'/.test(html), 'BAM items reveal on Diarrhoea-cluster signal OR reported cholecystectomy');
+
+// bam_stool/bam_fatty must never enter the Index — functional check (not text
+// matching): answering them at ceiling severity must not move the score.
+const bamIndexBase = scoring.computeScores({ gsrs_diarrhoea: 2 }, {});
+const bamIndexWithBam = scoring.computeScores({ gsrs_diarrhoea: 2, bam_stool: 4, bam_fatty: 4 }, {});
+ok(bamIndexBase.index === bamIndexWithBam.index, 'bam_stool/bam_fatty answers do NOT move the Gut Symptom Index');
+
+// F3a browser-caught fix: surgicalCard()'s chip toggle must call refreshReveals()
+// — cholecystectomy now gates the BAM items. Without this, toggling "Gallbladder
+// removal" wouldn't live-reveal bam_stool/bam_fatty until an unrelated answer
+// happened to trigger a refresh (same class of bug conditionsCard() was
+// already fixed for, D2 above).
+const surgicalCardFn = html.match(/function surgicalCard\(\)\s*\{[\s\S]*?\n\}/);
+ok(!!surgicalCardFn && /refreshReveals\(\)/.test(surgicalCardFn[0]),
+  'surgicalCard() chip toggle calls refreshReveals() (F3a browser-caught fix)');
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);
