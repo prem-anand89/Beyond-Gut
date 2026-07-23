@@ -420,11 +420,13 @@ ok(clSrc.indexOf('Page 1 ·') < clSrc.indexOf('Page 2 ·') && clSrc.indexOf('Pag
   'clinician: the 3 pages appear in order');
 
 // Every section header present, sourced from REPORT_SECTIONS via sectionTitle(key).
-['flags', 'impression', 'burden', 'plan', 'interp', 'history', 'drivers', 'trend', 'appendix'].forEach(k => {
+// (History & context + Modifiable drivers are now one 'context' section; 'trend'
+// only renders when a prior visit exists, so it may sit after 'context'.)
+['flags', 'impression', 'burden', 'plan', 'interp', 'context', 'trend', 'appendix'].forEach(k => {
   ok(clSrc.includes(`sectionTitle('${k}')`), `clinician: ${k} section header present`);
 });
 // Sections appear in the intended order across the report.
-const secIdx = ['flags', 'impression', 'burden', 'plan', 'interp', 'history', 'drivers', 'trend', 'appendix'].map(k => clSrc.indexOf(`sectionTitle('${k}')`));
+const secIdx = ['flags', 'impression', 'burden', 'plan', 'interp', 'context', 'trend', 'appendix'].map(k => clSrc.indexOf(`sectionTitle('${k}')`));
 ok(secIdx.every((v, i) => v >= 0 && (i === 0 || v > secIdx[i - 1])), 'clinician: sections appear in the intended order (flags → … → appendix)');
 // Page 1 is at-a-glance only: hero → red flags → impression → burden matrix, and
 // the burden matrix is the LAST section before the page-2 break.
@@ -436,8 +438,8 @@ const reportSecMatch = html.match(/const REPORT_SECTIONS = \{[\s\S]*?\n\};/);
 const reportSecSrc = reportSecMatch ? reportSecMatch[0] : '';
 ok(!!reportSecMatch, 'REPORT_SECTIONS constant defined (single source of truth for section titles)');
 [['flags', 'Red flags'], ['impression', 'Clinical impression'], ['burden', 'Symptom burden — severity × frequency'],
- ['plan', 'Assessment & plan'], ['interp', 'Interpretation'], ['history', 'History & context'],
- ['drivers', 'Modifiable drivers'], ['trend', 'Trend & interventions'], ['appendix', 'Full item-level responses']].forEach(([k, title]) => {
+ ['plan', 'Assessment & plan'], ['interp', 'Interpretation'], ['context', 'Context & drivers'],
+ ['trend', 'Longitudinal trend'], ['appendix', 'Full item-level responses']].forEach(([k, title]) => {
   ok(reportSecSrc.includes(`${k}:`) && reportSecSrc.includes(`'${title}'`), `REPORT_SECTIONS.${k} === '${title}'`);
 });
 ok(/function sectionTitle\(key\)/.test(html), 'sectionTitle() helper defined');
@@ -451,14 +453,25 @@ ok(clSrc.indexOf(`sectionTitle('plan')`) < clSrc.indexOf('Suggested investigatio
   'clinician: investigations sit inside the plan section (before interpretation)');
 ok(clSrc.indexOf('pr-triage') > clSrc.indexOf('Page 2 ·'), 'clinician: the triage/plan is on page 2, not page 1');
 ok(!/are in item 6|item 6 \(/.test(clSrc), 'clinician: the old cross-page "see item 6" pointer is gone');
-// "Also worth noting" bulleted (unchanged behaviour).
-ok(/Also worth noting:/.test(clSrc) && /• \$\{esc\(a\.label\)\} — \$\{a\.reasons/.test(clSrc),
-  'clinician: "Also worth noting" renders as bulleted lines, not a slash-joined run-on');
-ok(!/Also consider: \$\{tri\.alsoConsider/.test(clSrc), 'clinician: no slash-joined alsoConsider run-on line');
+// Readability trims (de-wall): "also consider" is tier-names-only (no per-pattern
+// reason dump), and the triage box carries only action-modifying "Clinical flags"
+// — the fact-restatement notes (conditionNote/medNote/anthroNote/duration/bowelFreq)
+// are NOT repeated in the plan (they live once, in Context & drivers).
+ok(/Also consider: \$\{tri\.alsoConsider\.map\(a => esc\(a\.label\)\)\.join/.test(clSrc),
+  'clinician: "Also consider" shows candidate-tier names only (no per-pattern reason dump)');
+ok(!/a\.reasons\.map\(r => esc\(r\.text\)\)\.join/.test(clSrc), 'clinician: the alsoConsider reason-concatenation wall is gone');
+ok(/Clinical flags:/.test(clSrc) && /planFlags = dedupeList/.test(clSrc), 'clinician: plan shows curated "Clinical flags" (deduped)');
+ok(!/tri\.conditionNote \? \[tri\.conditionNote\]|tri\.medNote \? \[tri\.medNote\]|tri\.anthroNote \? \[tri\.anthroNote\]/.test(clSrc),
+  'clinician: fact-restatement notes (condition/med/anthro) removed from the plan box (shown once in Context & drivers)');
+// Investigations + patterns are deduped/capped for readability.
+ok(/dedupeList\(tri\.investigations\)/.test(clSrc), 'clinician: investigations list is de-duplicated');
+ok(/capList\(dedupeList\(tri\.investigations\), 12\)/.test(clSrc), 'clinician: investigations list is capped (with a "+N more" line)');
+ok(/capList\(patterns, 6\)/.test(clSrc), 'clinician: patterns table capped to the top 6 prominent patterns');
+ok(/function dedupeList\(arr\)/.test(html) && /function capList\(arr, n\)/.test(html), 'dedupeList/capList helpers defined');
 
 // Interpretation: patterns → Rome IV → axis profile → domain breakdown, in order.
-ok(clSrc.indexOf(`sectionTitle('interp')`) < clSrc.indexOf('>Patterns<'), 'clinician: Patterns sits inside the interpretation section');
-ok(clSrc.indexOf('>Patterns<') < clSrc.indexOf('>Axis profile<'), 'clinician: Patterns leads Axis profile');
+ok(clSrc.indexOf(`sectionTitle('interp')`) < clSrc.indexOf('Prominent patterns'), 'clinician: Patterns sits inside the interpretation section');
+ok(clSrc.indexOf('Prominent patterns') < clSrc.indexOf('>Axis profile<'), 'clinician: Patterns leads Axis profile');
 ok(clSrc.indexOf('Rome IV-informed bowel-pain pattern') < clSrc.indexOf('>Axis profile<'), 'clinician: Rome IV leads Axis profile');
 ok(clSrc.indexOf('>Axis profile<') < clSrc.indexOf('>Domain breakdown<'), 'clinician: Axis profile leads Domain breakdown');
 ok((clSrc.match(/sectionTitle\('burden'\)/g) || []).length === 1, 'clinician: burden matrix section renders exactly once');
@@ -550,7 +563,7 @@ ok(rcSrc.indexOf(`sectionTitle('flags')`) < rcSrc.indexOf('axisProfileCard'), 'c
 ['Page 1 · At a glance', `sectionTitle('flags')`,
  `sectionTitle('impression')`, `sectionTitle('burden')`,
  'Page 2 · Assessment & clinical detail', `sectionTitle('plan')`,
- `sectionTitle('interp')`, `sectionTitle('drivers')`, `sectionTitle('trend')`,
+ `sectionTitle('interp')`, `sectionTitle('context')`, `sectionTitle('trend')`,
  'Page 3+ · Appendix', `sectionTitle('appendix')`,
 ].forEach(txt => ok(rcSrc.includes(txt), `clinician tab: on-screen section header "${txt}" present`));
 ok(rcSrc.indexOf('class="hero"') < rcSrc.indexOf('rfCard'), 'clinician tab: headline score hero leads, before the red-flag card');
@@ -559,7 +572,7 @@ ok(rcSrc.indexOf('impCard') < rcSrc.indexOf('severityFrequencyCard'), 'clinician
 ok(rcSrc.indexOf('severityFrequencyCard') < rcSrc.indexOf('triageCard(tri'), 'clinician tab: burden matrix (page 1) precedes the triage/plan (page 2)');
 ok(rcSrc.indexOf(`sectionTitle('plan')`) < rcSrc.indexOf('triageCard(tri'), 'clinician tab: triage card sits inside the plan section');
 ok(rcSrc.indexOf(`sectionTitle('interp')`) < rcSrc.indexOf('headlineCard(heads'), 'clinician tab: headline/axis reads sit inside the interpretation section');
-ok(rcSrc.indexOf(`sectionTitle('drivers')`) < rcSrc.lastIndexOf('modifiableDriversCard'), 'clinician tab: modifiable-driver card sits inside the drivers section');
+ok(rcSrc.indexOf(`sectionTitle('context')`) < rcSrc.lastIndexOf('modifiableDriversCard'), 'clinician tab: modifiable-driver card sits inside the context section');
 ok(rcSrc.indexOf('clinicianDetailCard(c)') > rcSrc.lastIndexOf(`sectionTitle('trend')`), 'clinician tab: clinicianDetailCard renders after the trend section, under the appendix header');
 // De-dup — the buried red-flag block is gone from clinicianDetailCard.
 const cdFn = html.match(/function clinicianDetailCard\(c\)\s*\{[\s\S]*?\n\}\n/);
@@ -1032,7 +1045,8 @@ ok(!/(^|,)null(,|$)/.test(csvEmptyRow), 'core-skipped visit does not export the 
 // tri.conditionNote (previously present in the on-screen triageCard but
 // silently dropped from both print builders' note concats). Clinician print
 // must also surface driverExtras.medsOther.
-ok(/tri\.autonomicNote/.test(clSrc) && /tri\.conditionNote/.test(clSrc), 'clinician print includes autonomicNote + conditionNote (A7)');
+ok(/tri\.autonomicNote/.test(clSrc), 'clinician print surfaces autonomicNote as a clinical flag (A7)');
+ok(/row\('Medication confounders'/.test(clSrc), 'medication confounders still surfaced (now a Context & drivers row, not the plan box)');
 ok(/medsOther/.test(clSrc), 'clinician print surfaces driverExtras.medsOther (A5)');
 
 // A6 regression. deltaLabel() must null-guard BOTH curr and prev — a null
@@ -1388,7 +1402,7 @@ ok(rCal.tri.labNote && /calprotectin/i.test(rCal.tri.labNote), 'labNote summaris
 ok(run(0, {}).tri.labNote == null, 'labNote null when no labs reported');
 // Wired into all three render sites + de-identified CSV columns.
 ok(/tri\.labNote/.test(html), 'labNote referenced in a UI render site');
-ok(/tri\.labNote \? \[tri\.labNote\] : \[\]/.test(clSrc), 'labNote in the clinician-print notes concat');
+ok(/tri\.labNote\.replace/.test(clSrc), 'labNote surfaced as a Context & drivers row (moved out of the plan box)');
 ok(/ex_lab_' \+ L\.id/.test(html) && /\(ex\.knownLabs \|\| \[\]\)\.includes\(L\.id\)/.test(html),
   'M2 labs exported as de-identified yes/no CSV columns (free-text excluded)');
 ok(/knownLabs: \[\]/.test(html) && /knownLabsDetail: \{\}/.test(html), 'blankExtras seeds knownLabs / knownLabsDetail');

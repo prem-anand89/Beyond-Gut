@@ -4443,9 +4443,10 @@ function triageCard(tri, rome, showInvestigations) {
   // "probiotic trial" framing. Clinician view keeps the full tier landscape.
   const showAlsoConsider = tri.alsoConsider.length && !(!showInvestigations && tri.suppressAlsoConsiderForPatient);
   if (showAlsoConsider) {
-    tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px;font-weight:600' }, 'Also worth noting:'));
-    tri.alsoConsider.forEach(a => tcard.appendChild(el('div', { class: 'q-sub', style: 'padding-left:4px' },
-      `• ${esc(a.label)} — ${a.reasons.map(r => esc(r.text)).join('; ')}`)));
+    // Candidate lower tiers by name only — the reasons behind each are the fired
+    // patterns, already listed in the pattern analysis (not repeated here).
+    tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px' },
+      'Also consider: ' + tri.alsoConsider.map(a => esc(a.label)).join(' · ')));
   }
   if (rome && rome.criteriaMet) {
     // F1 — note how the subtype was resolved: by the Rome IV >25% stool-form
@@ -4460,7 +4461,7 @@ function triageCard(tri, rome, showInvestigations) {
   if (showInvestigations && tri.investigations && tri.investigations.length) {
     tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-weight:600;color:#3A4A5A' }, 'Suggested investigations / management:'));
     tcard.appendChild(el('ul', { class: 'rf-list', style: 'color:#3A4A5A;margin-top:2px' },
-      tri.investigations.map(i => `<li>${esc(i)}</li>`).join('')));
+      dedupeList(tri.investigations).map(i => `<li>${esc(i)}</li>`).join('')));
     tcard.appendChild(el('div', { class: 'q-sub', style: 'color:#888;font-style:italic;margin-top:3px' }, 'Pattern-matched — apply clinical judgement. Not a protocol.'));
   }
   tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-style:italic;color:#999' },
@@ -4663,12 +4664,22 @@ const REPORT_SECTIONS = {
   burden:     'Symptom burden — severity × frequency',
   plan:       'Assessment & plan',
   interp:     'Interpretation',
-  history:    'History & context',
-  drivers:    'Modifiable drivers',
-  trend:      'Trend & interventions',
+  context:    'Context & drivers',
+  trend:      'Longitudinal trend',
   appendix:   'Full item-level responses',
 };
 function sectionTitle(key) { return REPORT_SECTIONS[key] || key; }
+
+// Case-insensitive de-dup preserving first-seen order — used to collapse the
+// repeated triage reasons / investigation suggestions that several fired patterns
+// contribute independently (e.g. "Coeliac serology" from two pathways).
+function dedupeList(arr) {
+  const seen = new Set(), out = [];
+  (arr || []).forEach(x => { const k = String(x == null ? '' : x).trim().toLowerCase(); if (k && !seen.has(k)) { seen.add(k); out.push(x); } });
+  return out;
+}
+// Cap a list to `n`, returning { shown, extra } so callers can render a "+N more" line.
+function capList(arr, n) { return { shown: arr.slice(0, n), extra: Math.max(0, arr.length - n) }; }
 
 function buildClinicianPrint(c) {
   const { score, sv, conf, driverExtras, patterns, fired, lens, rome, tri, profile, heads, conditions, meds, famhx, obstetric, anthro } = c;
@@ -4767,23 +4778,39 @@ function buildClinicianPrint(c) {
   // in one place rather than a page apart.
   h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('plan')}</div>`;
   const tierCls = ['', 't1', 't2', 't3', 't4'][tri.level] || 't4';
+  // "Clinical flags" = only the notes that CHANGE management. The pure fact
+  // restatements (conditions, meds, anthropometrics, duration, bowel frequency,
+  // reported labs, treatments tried) are shown once in Context & drivers, not
+  // repeated here — that de-duplication is what stops the old "wall of text".
+  const planFlags = dedupeList([].concat(
+    tri.conditionGuidance || [], tri.familyNotes || [],
+    tri.coeliacTimingNote ? [tri.coeliacTimingNote] : [], tri.restrictionNote ? [tri.restrictionNote] : [],
+    tri.restrictionScreenNote ? [tri.restrictionScreenNote] : [], tri.referredPainNote ? [tri.referredPainNote] : [],
+    tri.autonomicNote ? [tri.autonomicNote] : [], tri.gynNote ? [tri.gynNote] : [],
+    tri.pelvicNote ? [tri.pelvicNote] : [], tri.smokingNote ? [tri.smokingNote] : []));
+  const flagCap = capList(planFlags, 8);
+  // "Also consider" names the candidate lower tiers only — the reasons behind each
+  // are the fired patterns, already listed in full in the Interpretation table.
+  const reasonTxt = dedupeList((tri.reasons || []).map(r => r.text));
   h += `<div class="pr-triage ${tierCls}" style="page-break-inside:avoid;break-inside:avoid">
       <div style="font-weight:700">Tier ${tri.level} — ${esc(tri.label)}</div>
       <div style="margin-top:3px;font-size:11px">${esc(tri.action)}</div>
-      ${tri.reasons.length ? `<div style="font-size:10.5px;margin-top:4px">Reasons: ${tri.reasons.map(r => esc(r.text)).join(' · ')}</div>` : ''}
-      ${tri.alsoConsider.length ? `<div style="font-size:10.5px;margin-top:4px;font-weight:600">Also worth noting:</div>
-      ${tri.alsoConsider.map(a => `<div style="font-size:10.5px;padding-left:8px">• ${esc(a.label)} — ${a.reasons.map(r => esc(r.text)).join('; ')}</div>`).join('')}` : ''}
-      ${[].concat(tri.conditionGuidance || [], tri.familyNotes || [], tri.conditionNote ? [tri.conditionNote] : [], tri.labNote ? [tri.labNote] : [], tri.autonomicNote ? [tri.autonomicNote] : [], tri.gynNote ? [tri.gynNote] : [], tri.pelvicNote ? [tri.pelvicNote] : [], tri.anthroNote ? [tri.anthroNote] : [], tri.medNote ? [tri.medNote] : [], tri.durationNote ? [tri.durationNote] : [], tri.bowelFreqNote ? [tri.bowelFreqNote] : [], tri.smokingNote ? [tri.smokingNote] : [], tri.treatmentsTriedNote ? [tri.treatmentsTriedNote] : [], tri.coeliacTimingNote ? [tri.coeliacTimingNote] : [], tri.restrictionNote ? [tri.restrictionNote] : [], tri.referredPainNote ? [tri.referredPainNote] : [], tri.restrictionScreenNote ? [tri.restrictionScreenNote] : []).map(n => `<div style="font-size:10.5px;margin-top:3px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
+      ${reasonTxt.length ? `<div style="font-size:10.5px;margin-top:4px">Reasons: ${reasonTxt.map(esc).join(' · ')}</div>` : ''}
+      ${tri.alsoConsider.length ? `<div style="font-size:10.5px;margin-top:4px">Also consider: ${tri.alsoConsider.map(a => esc(a.label)).join(' · ')}</div>` : ''}
+      ${planFlags.length ? `<div style="font-size:10.5px;margin-top:5px;font-weight:600">Clinical flags:</div>
+      ${flagCap.shown.map(n => `<div style="font-size:10.5px;padding-left:8px;margin-top:2px;color:#5A3A10">• ${esc(n)}</div>`).join('')}${flagCap.extra ? `<div style="font-size:9.5px;padding-left:8px;color:#888;margin-top:2px">+${flagCap.extra} more flag${flagCap.extra > 1 ? 's' : ''} (see Context &amp; drivers)</div>` : ''}` : ''}
     </div>`;
+  const physio = physioCandidacy(tri);
   if (tri.investigations && tri.investigations.length) {
+    const invCap = capList(dedupeList(tri.investigations), 12);
     h += `<div style="margin-top:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Suggested investigations / management</div>
-      <ul style="margin:0 0 4px 14px;font-size:10.5px;line-height:1.6">${tri.investigations.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+      <ul style="margin:0 0 4px 14px;font-size:10.5px;line-height:1.6">${invCap.shown.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+      ${invCap.extra ? `<div style="font-size:9.5px;color:#888;margin:0 0 2px 14px">+${invCap.extra} further suggestion${invCap.extra > 1 ? 's' : ''} — prioritise per clinical judgement.</div>` : ''}
       <div style="font-size:9.5px;color:#888;font-style:italic">Pattern-matched — not a protocol.</div></div>`;
   }
-  const physio = physioCandidacy(tri);
   if (physio.length) {
     h += `<div style="margin-top:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Physiotherapy candidacy</div>
-      <ul style="margin:0 0 0 14px;font-size:10.5px;line-height:1.6">${physio.map(r => `<li>${esc(r.text)}</li>`).join('')}</ul>
+      <ul style="margin:0 0 0 14px;font-size:10.5px;line-height:1.6">${dedupeList(physio.map(r => r.text)).map(t => `<li>${esc(t)}</li>`).join('')}</ul>
       <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:2px">An adjunct after medical assessment — not a substitute for it.</div></div>`;
   }
   h += `</div>`;
@@ -4794,12 +4821,17 @@ function buildClinicianPrint(c) {
   // per-cluster severity lives once, in the burden matrix on page 1).
   h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('interp')}</div>`;
 
-  // Patterns
+  // Patterns — engine-ordered by priority then confidence, so the most actionable
+  // reads lead. Cap the printed table to the top 6 prominent patterns; any
+  // remainder is noted as a count rather than a full row (keeps the table scannable
+  // for complex patients where 8–10 patterns fire).
   if (patterns.length) {
-    h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Patterns</div>
+    const patCap = capList(patterns, 6);
+    h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Prominent patterns${patCap.extra ? ` (top 6 of ${patterns.length})` : ''}</div>
       <table class="pr-tbl"><thead><tr><th>Pattern</th><th>Data completeness</th><th>Rationale</th></tr></thead><tbody>
-        ${patterns.map(p => `<tr><td><b>${esc(p.label)}</b></td><td>${esc(p.confidence)}</td><td>${esc(p.desc)}</td></tr>`).join('')}
-      </tbody></table></div>`;
+        ${patCap.shown.map(p => `<tr><td><b>${esc(p.label)}</b></td><td>${esc(p.confidence)}</td><td>${esc(p.desc)}</td></tr>`).join('')}
+      </tbody></table>
+      ${patCap.extra ? `<div style="font-size:9px;color:#888;margin-top:2px">+${patCap.extra} further lower-priority pattern${patCap.extra > 1 ? 's' : ''}: ${esc(patterns.slice(6).map(p => p.label).join(', '))}.</div>` : ''}</div>`;
   }
 
   // Rome IV — full criteria table only when answered; otherwise a single line, so
@@ -4867,11 +4899,14 @@ function buildClinicianPrint(c) {
   h += `</tbody></table></div>`;
   h += `</div>`;
 
-  // History & context — diagnosed conditions and background that colour the reads
-  // above. Dense one-line-per-item ("Label: value") to stay compact; a single
-  // empty-state line when nothing applies.
-  h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('history')}</div>`;
+  // Context & drivers — one section, two columns, so History / labs / treatments /
+  // interventions (left) sit beside the Modifiable-driver readout (right) instead
+  // of four separately-headed tables stacked down the page. Every FACT that used
+  // to be repeated as a triage note (conditions, meds, anthropometrics, reported
+  // labs, treatments tried) lives here, once.
+  h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('context')}</div>`;
   {
+    // Left column — history / context, dense "Label: value" rows.
     const hxRows = [];
     const row = (label, val) => hxRows.push(`<div style="font-size:10.5px;margin-bottom:2px"><b>${label}:</b> ${val}</div>`);
     if (conditions && conditions.list && conditions.list.length) row('Known conditions', esc(conditions.list.join(', ')));
@@ -4882,43 +4917,36 @@ function buildClinicianPrint(c) {
       const whtrTxt = anthro.whtr != null ? `WHtR ${anthro.whtr}${anthro.whtrBand ? ` (${anthro.whtrBand})` : ''}` : null;
       row('Anthropometrics', esc([bmiTxt, whtrTxt].filter(Boolean).join(' · ')) + (anthro.caveat ? ` <i style="color:#888">${esc(anthro.caveat)}</i>` : ''));
     }
-    const medsOtherTxt = (driverExtras && driverExtras.medsOther || '').trim();
     if (meds && meds.list && meds.list.length) row('Medication confounders', esc(meds.list.map(m => m.label + (m.effect ? ` (${m.effect})` : '')).join('; ')));
+    const medsOtherTxt = (driverExtras && driverExtras.medsOther || '').trim();
     if (medsOtherTxt) row('Other medications', esc(medsOtherTxt));
-    h += hxRows.length
-      ? `<div style="page-break-inside:avoid;break-inside:avoid">${hxRows.join('')}</div>`
-      : `<div style="font-size:11px;color:#555">No additional history recorded this visit.</div>`;
-  }
-  h += `</div>`;
-
-  // Modifiable drivers — lifestyle / driver factors, kept out of the Index.
-  h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('drivers')}</div>`;
-  {
-    const drivers = modifiableFactors(driverExtras);
-    h += drivers.allEmpty ? `<div style="font-size:10.5px;color:#555">No modifiable-driver data recorded this visit.</div>` :
-      `<table class="pr-tbl"><thead><tr><th>Factor</th><th>Band</th><th>Score</th></tr></thead><tbody>
-      ${drivers.map(f => `<tr><td>${factorIcon(f)}${esc(f.label)}</td><td style="color:${f.color}">${esc(f.band)}</td><td>${esc(f.score || '')}</td></tr>`).join('')}
-    </tbody></table>`;
-  }
-  h += `</div>`;
-
-  // Trend & interventions — what was tried this visit, then the full progression
-  // with interventions overlaid per point so burden change reads against what was tried.
-  h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('trend')}</div>`;
-
-  // Tranche G — interventions recorded at THIS visit (annotation only). Kept
-  // atomic so the label + value can't split; the section header's break-after
-  // rule keeps the header with this block, so both move together rather than
-  // orphaning the header at a page foot.
-  {
+    // Reported abnormal labs + treatments already tried — moved here from the
+    // triage box (they are context, not action-modifying flags).
+    if (tri.labNote) row('Reported abnormal labs', esc(tri.labNote.replace(/^Patient-reported abnormal test result\(s\): /, '').replace(/\.$/, '')));
+    if (tri.treatmentsTriedNote) row('Already tried', esc(tri.treatmentsTriedNote.replace(/^Already tried: /, '').replace(/\.$/, '')));
     const ivNow = interventionSummary(driverExtras);
-    h += `<div style="margin-bottom:8px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Interventions this visit</div>
-      <div style="font-size:11px">${ivNow ? esc(ivNow) : '<span style="color:#555">None recorded this visit.</span>'}</div></div>`;
-  }
+    const leftInner = (hxRows.length ? hxRows.join('') : `<div style="font-size:10.5px;color:#555">No additional history recorded.</div>`)
+      + `<div style="font-size:10.5px;margin-top:6px"><b>Interventions this visit:</b> ${ivNow ? esc(ivNow) : '<span style="color:#555">none recorded</span>'}</div>`;
 
-  // Longitudinal trend (if applicable). Tranche G — interventions overlaid per
-  // visit so burden change reads against what was tried.
+    // Right column — modifiable drivers, compact one-line-per-factor readout.
+    const drivers = modifiableFactors(driverExtras);
+    const rightInner = drivers.allEmpty
+      ? `<div style="font-size:10.5px;color:#555">No modifiable-driver data recorded this visit.</div>`
+      : drivers.map(f => `<div style="font-size:10.5px;margin-bottom:2px">${factorIcon(f)}${esc(f.label)}: <b style="color:${f.color}">${esc(f.band)}</b>${f.score ? ` <span style="color:#777">· ${esc(f.score)}</span>` : ''}</div>`).join('');
+
+    h += `<div style="display:flex;gap:18px;align-items:flex-start;page-break-inside:avoid;break-inside:avoid">
+      <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:11px;margin-bottom:3px">History &amp; context</div>${leftInner}</div>
+      <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:11px;margin-bottom:3px">Modifiable drivers</div>${rightInner}</div>
+    </div>`;
+  }
+  h += `</div>`;
+
+  // Longitudinal trend — only rendered when there is a prior visit to compare
+  // against (a single baseline visit has nothing to trend, so the section is
+  // omitted rather than printed empty). Interventions per visit are overlaid so
+  // burden change reads against what was tried.
   if (trend && trend.points.length >= 2) {
+    h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('trend')}</div>`;
     const sortedTrendVisits = trendVisits.slice().sort((a, b) => (a.date || 0) - (b.date || 0));
     h += `<div><div style="font-weight:600;font-size:11px;margin-bottom:2px">Longitudinal progression (${trend.points.length} visits)</div>
       <table class="pr-tbl"><thead><tr><th>#</th><th>Date</th><th>Type</th><th>Index</th><th>Band</th><th>Δ</th><th>Interventions</th></tr></thead><tbody>
@@ -4933,10 +4961,8 @@ function buildClinicianPrint(c) {
       </tbody></table>
       ${trend.persistent.length ? `<div style="font-size:10.5px;margin-top:4px">Persistent patterns: <b>${trend.persistent.map(id => esc(id.replace(/_/g, ' '))).join(', ')}</b></div>` : ''}
     </div>`;
-  } else {
-    h += `<div style="font-size:11px;color:#555">No prior visits to trend against yet.</div>`;
+    h += `</div>`;
   }
-  h += `</div>`;
 
   // ============================================================
   // PAGE 3+ — appendix: full item-level questionnaire responses. Optional
@@ -5147,11 +5173,13 @@ function renderClinician() {
   root.appendChild(domainBarsCard(score, true));   // full domain breakdown incl. GSRS cluster shape
   root.appendChild(riskMatrixCard(sv, correlateLoad));
 
-  // Modifiable drivers — lifestyle / driver factors, kept out of the Index.
-  root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('drivers')));
+  // Context & drivers — modifiable driver readout (on-screen keeps the full
+  // history/context in the appendix detail card below; the print report combines
+  // them into a two-column block).
+  root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('context')));
   root.appendChild(modifiableDriversCard(driverExtras));
 
-  // Trend & interventions — editable interventions for this visit (post-intake),
+  // Longitudinal trend — editable interventions for this visit (post-intake),
   // overlaid on the trend below so symptom change reads against what was tried.
   root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('trend')));
   root.appendChild(interventionCard());
