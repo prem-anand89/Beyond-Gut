@@ -3371,7 +3371,12 @@ function schedulingPriorityHtml(tri, cells) {
 
 function severityFrequencyCard(score, extras) {
   const cells = severityFrequencyMatrix(score, extras);
-  if (!cells.length) return null;
+  // Previously returned null (silently vanishing, heading and all) when no
+  // cluster had any severity data yet — inconsistent with print, which
+  // always shows the card and lets sevFreqBodyHtml's own "Not enough data
+  // yet" placeholder handle the empty case. An incomplete screen used to
+  // read as "the Clinician tab is missing Symptom burden" rather than
+  // "not enough data recorded yet."
   const card = el('div', { class: 'card', style: 'border-left:6px solid #185FA5' });
   card.appendChild(el('h2', {}, 'Symptom severity × frequency'));
   card.appendChild(el('div', { class: 'q-sub', style: 'margin-bottom:6px' },
@@ -4669,6 +4674,13 @@ function calc() {
     `Provisional result — ${score.completeness}% of scored items answered.`));
   out.appendChild(hero);
 
+  // Symptom severity × frequency — per-cluster detail on the same headline
+  // score above (which cluster is driving it, how often it happens). Kept on
+  // the patient-facing screen per direction — unlike the Tier verdict or
+  // pattern-level clinical reasoning, this is a direct breakdown of answers
+  // the patient just gave, not a referral/management recommendation.
+  out.appendChild(severityFrequencyCard(score, extras));
+
   // Live trend preview: if this patient reference has prior visits, show the
   // trajectory. For a freshly-completed questionnaire the current visit is
   // appended as 'unsaved'; for a loaded saved visit it's already in the DB so
@@ -5660,7 +5672,7 @@ function renderClinician() {
   // Symptom burden — 2-D severity × frequency matrix (read-only; frequency never
   // re-enters the Index). The single home for per-cluster severity.
   root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('burden')));
-  const sfCard = severityFrequencyCard(score, extras); if (sfCard) root.appendChild(sfCard);
+  root.appendChild(severityFrequencyCard(score, extras));
 
   // ============================================================
   // PAGE 2 — Assessment & clinical detail. The tier verdict already led on

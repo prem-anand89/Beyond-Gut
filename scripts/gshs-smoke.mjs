@@ -1781,5 +1781,12 @@ ok(/band === 'Significant' \|\| band === 'Elevated' \|\| band === 'High' \? 'sev
 ok(/band === 'Mild–Moderate' \|\| band === 'Some' \|\| band === 'Moderate' \? 'sev-mod'/.test(html),
   "bandPillClass() recognises 'Moderate' as the moderate pill colour");
 
+// ── severityFrequencyCard(): never silently return null; add to calc() too ──
+ok(!/if \(!cells\.length\) return null;/.test(html.match(/function severityFrequencyCard\(score, extras\)\s*\{[\s\S]*?\n\}\n/)[0]),
+  'severityFrequencyCard() no longer returns null on empty data (was silently vanishing on the Clinician tab)');
+const calcFn2 = html.match(/function calc\(\)\s*\{[\s\S]*?\n(?=function )/);
+ok(!!calcFn2 && /severityFrequencyCard\(score, extras\)/.test(calcFn2[0]),
+  'calc() (patient-facing screen) now renders the symptom severity × frequency card, per direction');
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);
