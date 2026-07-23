@@ -2285,22 +2285,46 @@ function triage(score, patterns, firedFlags, dys, opts) {
   if (result.coreUnknown) result.reasons.push({ text: 'Note: the core GI section was not completed, so this triage is provisional.', axis: 'data' });
 
   // Pattern-matched investigations / management steps (clinician guidance only).
+  // Investigation/management strings that describe the SAME action must be
+  // worded IDENTICALLY across every pattern/subtype that can suggest it —
+  // result.investigations only dedupes on exact string match, and this app
+  // routinely fires several patterns (+ a Rome IV subtype, + family-history
+  // add-ons) on the same complex patient, so two different wordings for one
+  // recommendation reliably survive as separate list entries and can even
+  // land in different Investigations/Management columns once
+  // classifyInvestigation() splits them by keyword (see the bile-acid-
+  // malabsorption fix this canonicalisation generalises). Canonical wording
+  // picked per action below; sourced from whichever pattern said it first.
   const PI = {
     nutrient_malabsorption: ['FBC, iron studies, serum B12, folate, vitamin D', 'Coeliac serology (anti-tTG IgA + total IgA)', 'Clinical examination for malabsorption signs'],
     reflux_upper_gi: ['Empirical PPI trial (4–8 weeks)', 'GI referral if refractory, dysphagia, or unintentional weight loss', 'Review NSAID / aspirin / alcohol intake'],
     post_disruptor: ['Stool PCR if acutely symptomatic', 'C. difficile PCR if antibiotics in past 3 months', 'Consider a clinician-supervised probiotic trial (strain selection per indication; evidence is strain- and condition-specific)'],
     bloating_fermentation: ['SIBO breath test (lactulose or glucose H₂/CH₄)', 'Low-FODMAP dietitian referral', 'Note fibre/prebiotic paradox response if present'],
-    diarrhoea_dominant: ['Stool calprotectin + stool PCR', 'Coeliac screen (anti-tTG IgA, total IgA)', 'FIT (faecal immunochemical test)', 'Consider bile acid malabsorption (empirical trial or SeHCAT)'],
-    constipation_dominant: ['Dietary fibre and fluid intake assessment', 'Pelvic floor physiotherapy referral', 'Exclude hypothyroidism (TSH), hypercalcaemia'],
-    mixed_bowel: ['Low-FODMAP dietitian referral', 'Visceral/pelvic manual therapy assessment', 'Gut-brain axis psychological assessment'],
-    gut_brain: ['Consider PHQ-9 / GAD-7 if PSS-4 ≥ 10', 'Gut-directed hypnotherapy or CBT referral', 'Mind-body approach to symptom management'],
-    inflammatory_immune: ['Coeliac serology (anti-tTG IgA + total IgA) if not done', 'Clinician-guided structured elimination trial', 'Low-histamine / DAO discussion if a histamine pattern fits'],
+    // Coeliac serology + stool calprotectin/PCR wording matched to
+    // nutrient_malabsorption / RI.IBS-D respectively (diarrhoea_dominant
+    // commonly co-fires with both).
+    diarrhoea_dominant: ['Stool calprotectin / PCR (exclude infection or IBD)', 'Coeliac serology (anti-tTG IgA + total IgA)', 'FIT (faecal immunochemical test)', 'Consider bile acid malabsorption (empirical trial or SeHCAT)'],
+    // "Pelvic-floor" (hyphenated) matched to PI.pelvic_floor's wording —
+    // constipation_dominant and pelvic_floor commonly co-fire together.
+    constipation_dominant: ['Dietary fibre and fluid intake assessment', 'Pelvic-floor physiotherapy referral', 'Exclude hypothyroidism (TSH), hypercalcaemia'],
+    // Visceral/manual-therapy wording matched to RI.IBS-M; gut-brain wording
+    // matched to RI.IBS-U — mixed_bowel commonly co-fires with either subtype.
+    mixed_bowel: ['Low-FODMAP dietitian referral', 'Visceral manual therapy candidacy', 'Gut-brain axis assessment'],
+    // Matched to RI.IBS-M's wording — gut_brain commonly co-fires with it.
+    gut_brain: ['Consider PHQ-9 / GAD-7 if PSS-4 ≥ 10', 'Gut-directed psychological intervention (hypnotherapy / CBT)', 'Mind-body approach to symptom management'],
+    // "if not done" dropped — implicitly true of any suggested investigation,
+    // not specific to this one, and the suffix stopped this from exact-string
+    // matching nutrient_malabsorption's identical test when both fire.
+    inflammatory_immune: ['Coeliac serology (anti-tTG IgA + total IgA)', 'Clinician-guided structured elimination trial', 'Low-histamine / DAO discussion if a histamine pattern fits'],
     pelvic_floor: ['Anorectal / pelvic-floor examination', 'Pelvic-floor physiotherapy referral', 'Bowel / defecation diary'],
     pelvic_floor_paradox: ['Anorectal physiology / balloon expulsion test (assess dyssynergia)', 'Pelvic-floor physiotherapy with biofeedback', 'Avoid escalating laxatives — address coordination first'],
     functional_dyspepsia: ['H. pylori test (stool antigen or urea breath test)', 'Trial of acid suppression (4–8 weeks)', 'Review meal pattern, caffeine, alcohol, NSAID use'],
   };
   const RI = {
-    'IBS-C': ['Low-FODMAP trial with dietitian', 'Pelvic floor physiotherapy assessment', 'Soluble fibre (ispaghula husk)'],
+    // Low-FODMAP + pelvic-floor wording matched to PI.bloating_fermentation/
+    // mixed_bowel and PI.constipation_dominant/pelvic_floor respectively —
+    // IBS-C (constipation-predominant) commonly co-fires with either.
+    'IBS-C': ['Low-FODMAP dietitian referral', 'Pelvic-floor physiotherapy referral', 'Soluble fibre (ispaghula husk)'],
     // "Consider bile acid malabsorption..." is worded IDENTICALLY to
     // PI.diarrhoea_dominant's entry (not a paraphrase) — diarrhoea_dominant and
     // IBS-D commonly fire together, and the exact-string Set dedup in
