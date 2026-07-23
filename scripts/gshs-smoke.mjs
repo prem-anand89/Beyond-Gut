@@ -525,9 +525,10 @@ ok(/highest: \$\{esc\(topMeta\.label\)\}|firedByUrgency/.test(clSrc), 'unified: 
 ok(clSrc.indexOf(`sectionTitle('flags')`) < clSrc.indexOf('>Axis profile<'), 'clinician: red flags (page 1) lead the axis profile (page 2)');
 ok(clSrc.indexOf(`sectionTitle('flags')`) < clSrc.indexOf('>Domain breakdown<'), 'clinician: red flags lead the domain breakdown');
 // Physio candidacy callout.
-// Physio candidacy no longer gets its own print heading — it's folded into the
-// Management & Therapeutics column of Suggested Actions (a therapeutic referral,
-// same bucket as dietitian/psych referrals); the on-screen tab keeps its own card.
+// Physio candidacy no longer gets its own heading on either surface — it's
+// folded into the Management & Therapeutics column of Suggested Actions (a
+// therapeutic referral, same bucket as dietitian/psych referrals), on both
+// the print report and the on-screen clinician tab.
 ok(/physioCandidacy\(tri\)/.test(clSrc) && /actionColumnsHtml\(tri, physio\)/.test(clSrc)
   && /dedupeList\(\(physio \|\| \[\]\)\.map\(r => r\.text\)\)\.forEach\(t => mgmt\.push\(t\)\)/.test(html),
   'clinician: physiotherapy candidacy folded into the Management & Therapeutics column');
@@ -535,8 +536,8 @@ ok(/physioCandidacy\(tri\)/.test(clSrc) && /actionColumnsHtml\(tri, physio\)/.te
 // The "Basis" (validated/derived/draft provenance) column was deliberately
 // dropped from the printed Axis profile table (item 3) — it's a data-governance
 // detail, not something a clinician acts on; the Rationale/table width was
-// widened into the freed space instead. prProv() stays defined (unused by the
-// print path) since the on-screen axisProfileCard still shows provenance.
+// widened into the freed space instead. The on-screen axisProfileCard still
+// shows provenance, via the separate provTag() helper.
 ok(/>Axis profile</.test(clSrc) && !/prProv\(o\.validated\)/.test(clSrc), 'clinician: axis profile print table no longer shows the Basis/provenance column');
 ok(/prBandPill\(o\.band\)/.test(clSrc), 'clinician: axis bands colour-coded');
 ok(!/Scores — primary/.test(clSrc) && !/Scores — secondary/.test(clSrc), 'clinician: two score tables merged into one');
@@ -548,7 +549,8 @@ ok(/if \(rome\.answered\)/.test(clSrc) && /Not answered \(pain items/.test(clSrc
 ok(/column-count:2/.test(clSrc), 'clinician: item-level responses use two columns');
 // Helper unit-style checks via source presence (functions are closure-bound).
 ok(/function clinicalImpression\(c\)/.test(html) && /function physioCandidacy\(tri\)/.test(html), 'clinician: impression + physio helpers defined');
-ok(/function prBandPill\(band\)/.test(html) && /function prProv\(validated\)/.test(html), 'clinician: print band-pill + provenance helpers defined');
+ok(/function prBandPill\(band\)/.test(html), 'clinician: print band-pill helper defined');
+ok(!/function prProv\(/.test(html), 'clinician: dead prProv() helper removed (Basis column dropped, never called since)');
 
 // A4 regression. physioCandidacy()'s regex must not match the bare word
 // "visceral" (used as GI-motility jargon in constipation_dominant's label,

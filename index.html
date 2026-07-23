@@ -4604,14 +4604,6 @@ function prBandPill(band) {
   if (!band) return '';
   return `<span class="pr-pill" style="background:${bandBg(band)};color:#000;font-size:9.5px">${esc(band)}</span>`;
 }
-// Print provenance tag — validated / part-validated / draft, mirroring provTag().
-function prProv(validated) {
-  const m = validated === true ? ['validated', '#0F6E56']
-    : validated === 'derived' ? ['derived', '#2C5D8A']
-    : validated === 'partial' ? ['part. validated', '#7A5800'] : ['draft', '#6B7280'];
-  return `<span style="font-size:9px;color:${m[1]}">${m[0]}</span>`;
-}
-
 // One- to two-sentence auto-synthesis for the top of the clinician report. Strictly
 // a restatement of computed findings — no inference beyond what each axis/pattern
 // already says — and always closed with an explicit "screening, not diagnosis"
@@ -4853,9 +4845,13 @@ function buildClinicianPrint(c, opts) {
   // read when criteria are met. Kept to a single line each — the full tables
   // don't fit page 1's budget without pushing the report past 2 pages, and a
   // clinician scanning page 1 needs the names, not the rationale, to orient.
-  const patNames = (patterns || []).slice(0, 4).map(p => p.label);
-  const patternsLine = patNames.length
-    ? `<div style="margin-top:5px;font-size:10.5px"><span style="font-weight:600;color:#555">Patterns:</span> ${patNames.map(esc).join(' · ')}${patterns.length > patNames.length ? ` <span style="color:#888">+${patterns.length - patNames.length} more (page 2)</span>` : ''}</div>`
+  // imp.line1 above already narrates patterns[0] by name in prose ("Most
+  // consistent with a ... pattern") — skip it here so a single-pattern screen
+  // doesn't print the same name twice one line apart; only the ADDITIONAL
+  // patterns (if any) are worth surfacing again.
+  const extraPatNames = (patterns || []).slice(1, 4).map(p => p.label);
+  const patternsLine = extraPatNames.length
+    ? `<div style="margin-top:5px;font-size:10.5px"><span style="font-weight:600;color:#555">Also noted:</span> ${extraPatNames.map(esc).join(' · ')}${patterns.length > extraPatNames.length + 1 ? ` <span style="color:#888">+${patterns.length - extraPatNames.length - 1} more (page 2)</span>` : ''}</div>`
     : '';
   const romeLine = (rome && rome.criteriaMet)
     ? `<div style="margin-top:2px;font-size:10.5px"><span style="font-weight:600;color:#555">Rome IV:</span> ${esc(rome.subtype)} pattern — criteria met (single-visit estimate)</div>`
