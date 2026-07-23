@@ -56,8 +56,8 @@ Patients complete the questionnaire in a logical clinical order:
 6. **Systemic Features** (mandatory baseline, adaptive expansion): Inflammatory markers, brain-gut/mood, nutrient status, functional impact, psychosocial stress
 7. **Adaptive Deep Dive** (optional, conditional): Revealed only when GI core triggers specialist pathways:
    - **Pelvic floor/anorectal (AR)** — reveals when: Constipation cluster ≥0.30 OR Urgency ≥2 OR Incomplete evacuation ≥2 (paradoxical-picture arm) OR pelvic-risk flag (6 items: urge/passive/flatus incontinence, straining, blockage, evacuation maneuvers)
-   - **Upper-GI/dyspepsia (UG)** — reveals when: Reflux cluster ≥0.22 OR Indigestion ≥0.22 (2 items: early satiety, post-meal fullness)
-   - **Autonomic/systemic (SY)** — reveals when: Fatigue ≥2 OR Brain-fog ≥2 (3 items: orthostatic dizziness, palpitations, cyclical flare with menstrual cycle [female only])
+   - **Upper-GI/dyspepsia (UG)** — reveals when: Reflux cluster ≥0.22 OR Indigestion ≥0.22 (3 items: early satiety, post-meal fullness, epigastric burning independent of meals [PDS/EPS discriminator])
+   - **Autonomic/systemic (SY)** — reveals when: Fatigue ≥2 OR Brain-fog ≥2 (4 items: orthostatic dizziness, palpitations, joint hypermobility, cyclical flare with menstrual cycle [female only])
 
 ### Recall Windows (Why They Differ)
 
@@ -175,11 +175,11 @@ Patterns are clinical signals detected from cluster norms (Reflux, **Pain**, Ind
 | 6 | Bloating/Fermentation | Symptom | Indigestion cluster ≥0.5 OR gas/foul smelling ≥2 OR ≥2 fermentable-food triggers | 2–3 | SIBO breath test, low-FODMAP dietitian trial, fibre adjustment, stool microbiota if indicated |
 | 7 | Nutrient Malabsorption | Nutrient | Lab-confirmed deficiency documented, OR BMI <18.5, OR EPI/bariatric surgery, OR ≥2 of [hair loss, anaemia signs, mouth changes] + GI ≥0.2 | 1–2 | FBC, iron, B12, folate, 25-OH D, Mg; coeliac; faecal elastase; calorie count if underweight |
 | 8 | Gut-Brain Axis | Psychosocial | GI ≥0.2 AND (PSS-4 ≥50 OR anxiety ≥2 OR mood ≥2 OR brain-fog ≥2 OR fatigue ≥2) | 2–3 | PHQ-9/GAD-7 screen; gut-directed hypnotherapy or CBT referral; stress management |
-| 9 | Inflammatory/Immune | Inflammatory | GI ≥0.2 AND ≥1 of [diagnosed IA condition, IM axis ≥0.4, histamine pattern, skin/joint involvement] | 2–3 | Coeliac serology; structured elimination trial; low-histamine diet trial; stool PCR if indicated |
+| 9 | Inflammatory/Immune | Inflammatory | GI ≥0.2 AND ≥1 of [diagnosed IA condition, IM axis ≥0.4, histamine pattern, skin/joint involvement] | 2–3 | Coeliac serology; structured elimination trial; low-histamine diet trial (firms to a named **Histamine-reactive** subtype — NEW — when histamine-food symptoms co-occur with an atopic/allergic history); stool PCR if indicated |
 | 10 | Post-Disruptor (`post_disruptor`) | Microbiome | GI ≥0.2 AND (antibiotic course in last 12mo, OR current PPI/NSAID, OR microbiome-altering surgery) | 3 | Stool PCR if post-abx; C. difficile PCR if abx in past 3 months; probiotic trial; microbiome-supporting lifestyle |
 | 11 | Pelvic-Floor/Anorectal | Pelvic | Urge incontinence ≥2 OR passive incontinence ≥2 OR (straining ≥2 AND [blockage ≥2 OR maneuvers ≥1]) | 2 | Anorectal/pelvic-floor exam; defecation diary; pelvic-floor physio referral; dyssynergic-defecation screening |
 | 12 | **PFD-Paradoxical** (`pelvic_floor_paradox`) — NEW | Pelvic | Straining ≥2 OR incomplete evacuation ≥2, WITH normal-or-loose stool (Bristol 3–5 or Diarrhoea cluster ≥0.3) AND Constipation cluster <0.4 | 2 | Anorectal physiology / balloon expulsion test; pelvic-floor PT with biofeedback; **not laxatives** |
-| 13 | Functional Dyspepsia | Symptom | Early satiety ≥2 OR post-meal fullness ≥2 | 2–3 | H. pylori serology; PPI trial 4–8 weeks; meal pattern review |
+| 13 | Functional Dyspepsia | Symptom | Early satiety ≥2 OR post-meal fullness ≥2 OR fasting epigastric burning ≥2 | 2–3 | H. pylori serology; **PDS** (early satiety/fullness, default) → prokinetic/meal-spacing trial; **EPS** (fasting burning) → acid suppression 4–8 weeks; **Mixed** → both — NEW subtyping |
 | — | Lifestyle-Driven Modifiable | Action | ≥2 of [high-burden diet, high alcohol frequency, low activity level] with GI present | 3 | Dietitian referral; exercise prescription (tailored to IBS subtype); sleep/stress optimisation |
 
 **#12 is new this cycle**: the ordinary Pelvic-Floor/Anorectal pattern (#11) and Constipation-Dominant (#1) both key off incontinence or a constipation-cluster burden. PFD-Paradoxical catches the OPPOSITE-looking picture — marked straining/incomplete evacuation despite stool that is **not hard** — the hallmark of pelvic-floor dyssynergia (a coordination problem, not slow transit). It co-flags separately from IBS-C and routes to pelvic-floor PT + anorectal assessment instead of laxatives, which don't address dyssynergia.
@@ -200,20 +200,20 @@ The tool learns as it goes: new specialist question groups reveal only when the 
 - Reflux cluster ≥0.22 (re-tuned from 0.30) (any reflux signal) OR
 - Indigestion cluster ≥0.22 (re-tuned from 0.30) (any bloating/gas signal)
 
-**2 items appear**: Early satiety ("feel full too quickly"), post-meal fullness ("uncomfortable fullness after normal meals")
+**3 items appear**: Early satiety ("feel full too quickly"), post-meal fullness ("uncomfortable fullness after normal meals"), **epigastric burning independent of meals — NEW** (the FD PDS/EPS discriminator, see Section 4 pattern #13)
 
 **Autonomic/Systemic (SY) Section reveals when**:
 - Fatigue ≥2 OR
 - Brain-fog ≥2 OR
 - Abdominal pain ≥2 AND menstrual cycle present (female)
 
-**3 items appear**: Orthostatic dizziness, palpitations, cyclical symptom flare with menstrual cycle (female-gated)
+**4 items appear**: Orthostatic dizziness, palpitations, **joint hypermobility — NEW** (Beighton-lite: "joints bend further than normal, or dislocate/sublux easily"), cyclical symptom flare with menstrual cycle (female-gated). Orthostatic dizziness, palpitations, and hypermobility are three independent routes into the same autonomic-overlap note (see below) — any one of them, alongside a relevant GI pattern, is enough.
 
 **Manual override**: "Show all specialist questions" button allows clinicians to force-reveal everything regardless of GI triggers, useful if screening broadly or reviewing across multiple visits.
 
 ---
 
-### Deep Dive: Five Key Patterns
+### Deep Dive: Six Key Patterns
 
 #### **1. Nutrient Malabsorption** (Highest Clinical Impact)
 
@@ -287,17 +287,58 @@ The tool learns as it goes: new specialist question groups reveal only when the 
 
 ---
 
-#### **5. Functional Dyspepsia** (Upper-GI-Specific)
+#### **5. Functional Dyspepsia — PDS/EPS Subtyping** (Upper-GI-Specific) — SUBTYPING NEW
 
 **Fires when**:
 - Early satiety ≥2 ("feel very full very quickly when eating") OR
-- Post-meal fullness ≥2 ("uncomfortable fullness after normal-sized meals")
+- Post-meal fullness ≥2 ("uncomfortable fullness after normal-sized meals") OR
+- Epigastric burning ≥2, independent of meals ("burning or pain in the upper abdomen, including when you have not eaten")
 
-**Clinical meaning**: Upper-GI motor/sensory dysfunction (delayed gastric emptying, visceral hypersensitivity) rather than acid-driven reflux; H. pylori exclusion and PPI trial may help, but underlying dysfunction warrants assessment.
+**Subtype resolved from which discriminators fire** (Rome IV splits FD into two subtypes with different first-line management — the tool now names which one, rather than giving one generic recommendation for both):
+- **PDS** (postprandial distress — early satiety and/or fullness, no independent burning): prokinetic therapy or meal-spacing advice (smaller, more frequent meals) as first-line, alongside H. pylori testing
+- **EPS** (epigastric pain syndrome — fasting-independent burning): acid suppression (4–8 weeks) as first-line instead, alongside H. pylori testing
+- **Mixed** (both present): gets both management lines — Rome IV allows PDS/EPS overlap
+- Subtype label appears in the pattern description and drives which Investigations & Management text is attached; it does **not** change whether the pattern fires or its Tier
 
-**Investigations**: H. pylori serology (if not done); PPI trial 4–8 weeks; assess meal patterns, caffeine, alcohol as triggers; gastric emptying study if severe/refractory
+**Clinical meaning**: Upper-GI motor/sensory dysfunction (delayed gastric emptying, visceral hypersensitivity for PDS; acid-sensitivity/pain processing for EPS) rather than acid-driven reflux; subtyping sharpens which first-line trial is most likely to help before broader workup.
 
-**Why this matters**: Dyspepsia often buried under "IBS" diagnosis; explicit pattern firing ensures dyspepsia-specific workup (H. pylori, PPI effectiveness) is considered.
+**Investigations**: H. pylori serology; PDS → prokinetic/meal-spacing trial; EPS → PPI/acid-suppression trial 4–8 weeks; assess meal patterns, caffeine, alcohol, NSAID use as triggers; gastric emptying study if severe/refractory
+
+**Why this matters**: Dyspepsia is often buried under an "IBS" diagnosis and, even when recognised, previously got one generic recommendation regardless of phenotype. Explicit PDS/EPS subtyping means the first-line trial matches the mechanism instead of defaulting to acid suppression for a patient whose picture is actually postprandial distress (or vice versa).
+
+---
+
+#### **6. Inflammatory/Immune — Histamine-Reactive Branch** (`inflammatory_immune`) — SUBTYPING NEW
+
+**Fires when** (unchanged): a diagnosed inflammatory/autoimmune condition, OR the IM axis ≥0.4, OR a histamine-food reaction signal, OR significant skin involvement — with GI burden present.
+
+**Histamine-reactive subtype resolves when BOTH**:
+- Histamine-food reaction ≥2 (flushing, hives, or headache after fermented foods, wine, or aged cheese) AND
+- Allergies/hay fever ≥2 (an atopic/vasomotor corroborator — reuses the existing allergy item, no new question needed)
+
+**Clinical meaning**: A food-reactivity signal that is specifically histamine-triggered AND backed by an atopic/allergic background is more actionable than a generic "food reactivity" read — it points toward a low-histamine/DAO approach rather than a broad structured-elimination trial.
+
+**Investigations**: When the subtype resolves, the hedged default line ("Low-histamine / DAO discussion **if** a histamine pattern fits") is replaced by a firmer, named recommendation for a low-histamine/DAO trial with dietitian input. Without the atopic corroborator, the pattern still fires and still carries the hedged default line unchanged.
+
+**Why this matters**: Distinguishes a specific, treatable histamine-reactivity picture from the broader, noisier "inflammatory/immune" bucket it would otherwise be folded into — without adding a new question to the form.
+
+---
+
+#### **7. Autonomic / Connective-Tissue (hEDS/POTS) Overlap — Note, Not a Pattern** — NEW
+
+Unlike #1–6 above, this is a **triage note** (`autonomicNote`), not a fired pattern — it never appears in the Patterns list and never has its own Tier or investigations entry. It's a context flag layered on top of an already-firing GI pattern.
+
+**Fires when BOTH**:
+- A relevant GI pattern is already firing: Constipation-Dominant, Functional Dyspepsia, or Reflux/Upper-GI, AND
+- At least one autonomic/connective-tissue signal is present: orthostatic dizziness ≥2, palpitations ≥2, OR joint hypermobility ≥2 (Beighton-lite screen — NEW item)
+
+**Deliberately pattern-gated**: the note does NOT fire on the autonomic signal alone (e.g. a patient who only reports light-headedness with no relevant GI pattern gets no note) — GI dysmotility secondary to hypermobility/POTS is the specific clinical picture this is meant to catch, so the note is reserved for presentations it can actually redirect.
+
+**Clinical meaning**: Constipation, dyspepsia-type fullness, or reflux with a co-occurring autonomic or connective-tissue signal raises the possibility of a root cause in autonomic dysfunction or joint hypermobility (hEDS/POTS-spectrum) rather than a primary gut disorder — which reframes the referral toward autonomic/connective-tissue assessment rather than another gut-specific elimination trial.
+
+**Investigations**: None generated automatically (this is a note, not a pattern with its own Investigations list) — the note text itself is the clinical prompt for the referring clinician to consider an autonomic/connective-tissue work-up.
+
+**Why this matters**: GI dysmotility secondary to hypermobility/POTS is under-recognised, and patients with this root cause often cycle through gut-specific interventions (elimination diets, motility agents) that don't address the underlying connective-tissue/autonomic driver. Reuses two existing items (orthostatic, palpitations) plus one new hypermobility item — no new pattern or Tier logic, just a sharper, better-gated note.
 
 ---
 
@@ -554,8 +595,10 @@ Rome IV was validated on prospective diaries; a single tool snapshot gives a scr
 |----------|---------|--------------|----------|----------|--------|------|
 | ar_incont_urge, ar_incont_passive, ar_incont_flatus | AR (adaptive) | Constipation ≥0.30 OR urgency ≥2 OR incomplete evacuation ≥2 OR pelvic-risk flag | Urge/passive/flatus incontinence (3 items) | Pelvic-floor pattern + pelvic-floor physio Tier-2 | 2 weeks | Screening items |
 | ar_straining, ar_blockage, ar_maneuvers | AR (adaptive) | Same as above | Straining, blockage sensation, digital maneuvers | Pelvic-floor pattern + PFD-paradoxical pattern | 2 weeks | Screening items |
-| ug_earlysat, ug_fullness | UG (adaptive) | Reflux ≥0.22 OR Indigestion ≥0.22 | Early satiety, post-meal fullness | Functional dyspepsia pattern + upper-GI workup | 2 weeks | Screening items |
-| sy_orthostatic, sy_palpitations | SY (adaptive) | Fatigue ≥2 OR brain-fog ≥2 | Orthostatic dizziness, heart racing | Autonomic/systemic signal + co-management note | 2 weeks | Screening items |
+| ug_earlysat, ug_fullness | UG (adaptive) | Reflux ≥0.22 OR Indigestion ≥0.22 | Early satiety, post-meal fullness | Functional dyspepsia pattern, PDS subtype (default management: prokinetic/meal-spacing) | 2 weeks | Screening items |
+| ug_burning — NEW | UG (adaptive) | Reflux ≥0.22 OR Indigestion ≥0.22 | Epigastric burning independent of meals | Functional dyspepsia pattern, EPS subtype (management: acid suppression 4–8 weeks); both present → Mixed | 2 weeks | Screening item |
+| sy_orthostatic, sy_palpitations | SY (adaptive) | Fatigue ≥2 OR brain-fog ≥2 | Orthostatic dizziness, heart racing | Autonomic/systemic overlap note (with a relevant GI pattern) | 2 weeks | Screening items |
+| sy_hypermobile — NEW | SY (adaptive) | Fatigue ≥2 OR brain-fog ≥2 | Joint hypermobility (Beighton-lite) | Third route into the same autonomic/systemic overlap note — connective-tissue (hEDS/POTS) root-cause consideration | 2 weeks | Screening item |
 | gy_cyclical | SY (adaptive) | Pain ≥2 OR bloating ≥2 (female only) | Menstrual-cycle flare | Gynaecological/hormonal note + cycle-tracking suggestion | 2 weeks | Screening item |
 
 ### History & Context (Never Scored, Clinician & Triage Notes Only)

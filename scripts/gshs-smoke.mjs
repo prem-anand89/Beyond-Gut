@@ -1509,5 +1509,59 @@ const rGasWithIndig = run(0, { gsrs_rumbling: 1, gsrs_bloating: 1, gsrs_burping:
 ok(rGasWithIndig.pat.some(p => p.id === 'bloating_fermentation'),
   'bloating_fermentation fires when gasFoul co-occurs with mild Indigestion-cluster burden');
 
+// ── F5 — Functional dyspepsia PDS/EPS/Mixed subtyping ──
+// PDS (early satiety/fullness) and EPS (burning independent of meals) are Rome
+// IV's two FD subtypes with different first-line management; subtype must not
+// change whether the pattern fires or its Tier, only which investigations text
+// is attached.
+const fdPDS = run(1, { ug_fullness: 2 });
+ok(fdPDS.pat.find(p => p.id === 'functional_dyspepsia').subtype === 'PDS', 'functional_dyspepsia resolves PDS subtype on fullness alone');
+ok(fdPDS.tri.investigations.includes('Trial of prokinetic therapy or meal-spacing advice (smaller, more frequent meals)'), 'PDS routes to prokinetic/meal-spacing management');
+ok(!fdPDS.tri.investigations.includes('Trial of acid suppression (4–8 weeks)'), 'PDS does NOT get the EPS acid-suppression line');
+
+const fdEPS = run(1, { ug_burning: 2 });
+ok(fdEPS.pat.find(p => p.id === 'functional_dyspepsia').subtype === 'EPS', 'functional_dyspepsia resolves EPS subtype on fasting-burning alone');
+ok(fdEPS.tri.investigations.includes('Trial of acid suppression (4–8 weeks)'), 'EPS routes to acid-suppression management');
+ok(!fdEPS.tri.investigations.includes('Trial of prokinetic therapy or meal-spacing advice (smaller, more frequent meals)'), 'EPS does NOT get the PDS prokinetic line');
+
+const fdMixed = run(1, { ug_fullness: 2, ug_burning: 2 });
+ok(fdMixed.pat.find(p => p.id === 'functional_dyspepsia').subtype === 'Mixed', 'functional_dyspepsia resolves Mixed subtype when both discriminators present');
+ok(fdMixed.tri.investigations.includes('Trial of acid suppression (4–8 weeks)') && fdMixed.tri.investigations.includes('Trial of prokinetic therapy or meal-spacing advice (smaller, more frequent meals)'), 'Mixed gets both PDS and EPS management lines');
+ok(fdPDS.tri.investigationsRanked.some(r => r.text === 'Trial of prokinetic therapy or meal-spacing advice (smaller, more frequent meals)'), 'PDS management line is ranked, not just in the flat list');
+ok(!fdPDS.pat.some(p => p.id === 'reflux_upper_gi'), 'sanity: fixture does not accidentally also fire reflux_upper_gi');
+
+// ── F3b — Histamine-reactive branch of inflammatory_immune ──
+// im_histamine alone still fires inflammatory_immune generically; adding the
+// atopic corroborator (im_allergies) resolves a distinct subtype that firms up
+// the management line, without changing whether/how the pattern fires.
+const imGeneric = run(2, { im_histamine: 3 });
+ok(imGeneric.pat.find(p => p.id === 'inflammatory_immune').subtype === null, 'im_histamine alone does NOT resolve the histamine-reactive subtype');
+ok(imGeneric.tri.investigations.includes('Low-histamine / DAO discussion if a histamine pattern fits'), 'generic histamine picture keeps the hedged default line');
+
+const imHist = run(2, { im_histamine: 3, im_allergies: 3 });
+ok(imHist.pat.find(p => p.id === 'inflammatory_immune').subtype === 'Histamine-reactive', 'im_histamine + im_allergies resolves Histamine-reactive subtype');
+ok(imHist.tri.investigations.some(t => /histamine-reactive pattern/.test(t)), 'Histamine-reactive subtype firms up the management line');
+ok(!imHist.tri.investigations.includes('Low-histamine / DAO discussion if a histamine pattern fits'), 'Histamine-reactive branch replaces the generic hedged line, not adds to it');
+ok(imHist.tri.reasons.concat(imHist.tri.alsoConsider.flatMap(a => a.reasons)).some(r => /histamine-reactive/i.test(r.text)), 'Histamine-reactive subtype named in the triage candidacy reason');
+
+// ── F4 — Autonomic / connective-tissue (hEDS) overlap, pattern-gated ──
+// The note only fires when a relevant GI pattern (constipation/dyspepsia/
+// reflux) co-occurs with orthostatic intolerance, palpitations, OR joint
+// hypermobility — never on the autonomic signal alone.
+const a4Answers = { gsrs_constip: 3, gsrs_hard: 3, gsrs_incomplete: 3, sy_hypermobile: 3 };
+const a4Score = scoring.computeScores(a4Answers, {});
+const a4Pats = patterns.detectPatterns(a4Score, { dys: {} }, a4Answers);
+ok(a4Pats.some(p => p.id === 'constipation_dominant'), 'sanity: F4 fixture fires constipation_dominant');
+const a4TriWithPattern = triage(a4Score, a4Pats, [], { count: 0 }, {
+  autonomicFlag: true, autonomicSource: { orthostatic: false, palpitations: false, hypermobile: true },
+});
+ok(/joint hypermobility/.test(a4TriWithPattern.autonomicNote || ''), 'autonomicNote fires and names hypermobility when a relevant GI pattern co-occurs');
+const a4TriNoPattern = triage(scoring.computeScores({ gsrs_heartburn: 1 }, {}), [], [], { count: 0 }, {
+  autonomicFlag: true, autonomicSource: { orthostatic: false, palpitations: false, hypermobile: true },
+});
+ok(a4TriNoPattern.autonomicNote === null, 'autonomicNote does NOT fire on the autonomic signal alone without a relevant GI pattern');
+const a4TriNoFlag = triage(a4Score, a4Pats, [], { count: 0 }, { autonomicFlag: false, autonomicSource: {} });
+ok(a4TriNoFlag.autonomicNote === null, 'autonomicNote does NOT fire on a relevant GI pattern alone without an autonomic signal');
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

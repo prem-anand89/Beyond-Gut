@@ -589,10 +589,22 @@ const QUESTIONS = [
   // ── UG — Upper-GI / dyspepsia — adaptive ──
   { id: 'ug_earlysat', section: 'UG', optional: true, patientText: 'Feeling full very quickly when eating' },
   { id: 'ug_fullness', section: 'UG', optional: true, patientText: 'Uncomfortable fullness after normal-sized meals' },
+  // F5 — EPS discriminator. PDS (early satiety/fullness, above) and EPS (burning
+  // independent of meals) are Rome IV's two functional-dyspepsia subtypes and
+  // carry different first-line management (prokinetic/meal-spacing vs acid
+  // suppression/H. pylori-first) — this is the one new item needed to split them.
+  { id: 'ug_burning', section: 'UG', optional: true, patientText: 'Burning or pain in the upper abdomen, including when you have not eaten' },
 
   // ── SY — Systemic / autonomic — adaptive ──
   { id: 'sy_orthostatic', section: 'SY', optional: true, patientText: 'Light-headed or dizzy when standing up' },
   { id: 'sy_palpitations', section: 'SY', optional: true, patientText: 'Heart racing or palpitations' },
+  // Beighton-lite hypermobility screen (F4) — GI dysmotility secondary to
+  // joint hypermobility/POTS is under-recognised; this is the one item needed
+  // to add hypermobility as a third route into the existing autonomicNote
+  // (alongside orthostatic/palpitations), which already reframes management
+  // toward a connective-tissue/autonomic root cause rather than another
+  // gut-specific elimination trial.
+  { id: 'sy_hypermobile', section: 'SY', optional: true, patientText: 'Your joints bend further than normal, or dislocate/sublux easily' },
   { id: 'gy_cyclical',     section: 'SY', optional: true, femaleOnly: true,
     patientText: 'Gut symptoms that flare with your menstrual cycle',
     patientSub: 'If you have periods — skip if this does not apply' },
@@ -1895,12 +1907,20 @@ const PATTERNS = [
       const histamine = ge(av(a, 'im_histamine'), 2);  // merged from histamine_intolerance
       const skin      = ge(av(a, 'sk_skin'), 2);        // relocated gut–skin item
       const giPresent = ge(gi(s), 0.25);
-      const signals = [imHigh, knownDx, histamine, skin, giPresent];
+      // F3b — atopic/vasomotor corroborator (reuses the existing im_allergies
+      // item — no new question needed). NOT a firing requirement, same pattern
+      // as pelvic_floor's gsrs_incomplete corroborator: it only sharpens which
+      // already-firing patients get called out as a distinct histamine-reactive
+      // picture (flushing/hives/headache after high-histamine foods, WITH an
+      // atopic/allergic background) vs. a generic "food reactivity" read.
+      const atopic = ge(av(a, 'im_allergies'), 2);
+      const signals = [imHigh, knownDx, histamine, skin, giPresent, atopic];
       // Fires on a diagnosed condition OR a high immune domain OR a clear
       // histamine signal OR significant skin involvement, with GI present —
       // the desc explicitly names "skin involvement" as a qualifying feature,
       // so skin.t must gate firing, not just contribute to confidence.
-      return { fires: (knownDx.t || imHigh.t || histamine.t || skin.t) && giPresent.t, signals };
+      const subtype = (histamine.t && atopic.t) ? 'Histamine-reactive' : null;
+      return { fires: (knownDx.t || imHigh.t || histamine.t || skin.t) && giPresent.t, signals, subtype };
     },
   },
   {
@@ -1964,10 +1984,20 @@ const PATTERNS = [
     eval: (s, ex, a) => {
       const earlysat = ge(av(a, 'ug_earlysat'), 2);
       const fullness = ge(av(a, 'ug_fullness'), 2);
+      const burning  = ge(av(a, 'ug_burning'), 2);
       const reflux   = ge(clu(s, 'Reflux'), 0.3);      // coverage context
       const indig    = ge(clu(s, 'Indigestion'), 0.3); // coverage context
-      const signals = [earlysat, fullness, reflux, indig];
-      return { fires: earlysat.t || fullness.t, signals };
+      const signals = [earlysat, fullness, burning, reflux, indig];
+      // F5 — Rome IV PDS (postprandial distress: early satiety/fullness) vs EPS
+      // (epigastric pain syndrome: burning independent of meals) split. Text-only
+      // subtype label carried on the fired-pattern entry (see detectPatterns) —
+      // does not change whether the pattern fires or its Tier, only which
+      // management text triage attaches. 'Mixed' when both discriminators are
+      // present (Rome IV allows PDS/EPS overlap); null when unresolved (e.g. only
+      // one item answered).
+      const pds = earlysat.t || fullness.t, eps = burning.t;
+      const subtype = (pds && eps) ? 'Mixed' : pds ? 'PDS' : eps ? 'EPS' : null;
+      return { fires: pds || eps, signals, subtype };
     },
   },
   {
@@ -2006,11 +2036,16 @@ function detectPatterns(score, ex, answers) {
     const coverage = total > 0 ? answered / total : 0;
     const strength = total > 0 ? hits / total     : 0;
     const conf = CONFIDENCE_BANDS.find(c => coverage >= c.min);
+    // F5 — when a pattern resolves a subtype (functional_dyspepsia PDS/EPS/Mixed),
+    // fold it into the displayed desc once here so every render site (report
+    // table, pattern card) shows it without each needing its own subtype logic.
+    const desc = r.subtype ? `${p.desc} Subtype: ${r.subtype}.` : p.desc;
     fired.push({
-      id: p.id, axis: p.axis, label: p.label, desc: p.desc,
+      id: p.id, axis: p.axis, label: p.label, desc,
       confidence: conf.label, confColor: conf.color,
       coverage, strength,                              // 0–1 ratios; different concepts
       signalAnswered: answered, signalHits: hits, signalTotal: total,
+      subtype: r.subtype || null,                       // e.g. functional_dyspepsia PDS/EPS/Mixed
     });
   }
   // Stable order by confidence (data we have), then engine priority.
@@ -2053,6 +2088,7 @@ const TIERS = {
 // score: computeScores() output · patterns: detectPatterns() output · firedFlags: array
 function triage(score, patterns, firedFlags, dys, opts) {
   const pids = new Set((patterns || []).map(p => p.id));
+  const pById = new Map((patterns || []).map(p => [p.id, p]));
   const band = (score && score.severity) ? score.severity.label : null;
   const pain = (score && score.clusterNorm) ? score.clusterNorm.Pain : null;
   const flags = firedFlags || [];
@@ -2104,7 +2140,15 @@ function triage(score, patterns, firedFlags, dys, opts) {
   // evacuation WITH normal-or-loose stool points to dyssynergia, where laxatives
   // don't help — the management hint is deliberately different.
   if (has('pelvic_floor_paradox')) add(2, 'Paradoxical pelvic-floor (dyssynergic defecation) — straining/incomplete emptying despite non-hard stool: pelvic-floor physiotherapy + anorectal assessment (not laxatives)', 'pelvic');
-  if (has('functional_dyspepsia')) add(2, 'Functional dyspepsia pattern (early satiety / post-meal fullness)', 'symptom');
+  if (has('functional_dyspepsia')) {
+    // F5 — PDS/EPS carry different Rome IV first-line management, so the
+    // candidacy reason names the resolved subtype where known.
+    const fdSub = pById.get('functional_dyspepsia').subtype;
+    const fdTxt = fdSub === 'EPS' ? 'Functional dyspepsia pattern — epigastric pain syndrome (burning independent of meals)'
+      : fdSub === 'Mixed' ? 'Functional dyspepsia pattern — mixed postprandial-distress / epigastric-pain features'
+      : 'Functional dyspepsia pattern (early satiety / post-meal fullness)'; // PDS or unresolved
+    add(2, fdTxt, 'symptom');
+  }
   // Orphan pattern, now wired: gut-brain is a psychosocial-axis finding where
   // gut-directed / clinician-led therapy is the appropriate lever.
   if (has('gut_brain')) add(2, 'Gut-brain pattern (psychosocial axis) — gut-directed therapy may help', 'psychosocial');
@@ -2135,15 +2179,23 @@ function triage(score, patterns, firedFlags, dys, opts) {
   // unanswered follow-ups previously scored "Low confidence" and got routed to
   // Tier 3 despite having the single most specific trigger; conversely a
   // fully-answered-but-barely-over-threshold IM mean scored "High confidence"
-  // and got routed to Tier 2. signalHits >= 3 (of 5) requires at least one
-  // corroborating signal beyond the bare fires-minimum of 2. A diagnosed
-  // condition (o.immuneKnownDx) is ALSO sufficient on its own — otherwise it
+  // and got routed to Tier 2. signalHits >= 3 (of 6, since F3b added the
+  // atopic corroborator) requires at least one corroborating signal beyond
+  // the bare fires-minimum of 2 — unchanged direction, the extra signal can
+  // only help patients clear the threshold, never remove one already met.
+  // A diagnosed condition (o.immuneKnownDx) is ALSO sufficient on its own — otherwise it
   // can be out-ranked to Tier 3 by a lack of corroboration even though it is
   // the single most specific trigger this pattern can carry (the exact case
   // this signalHits routing was built to fix, but previously missed).
   const infl = (patterns || []).find(p => p.id === 'inflammatory_immune');
   if (infl) {
-    if (o.immuneKnownDx || infl.signalHits >= 3) add(2, 'Inflammatory / immune-leaning pattern (diagnosed condition or multiple corroborating signals) — consider a structured elimination trial', 'inflammatory');
+    // F3b — a resolved histamine-reactive subtype names the specific mechanism
+    // instead of the generic "structured elimination trial" wording, since the
+    // management is more targeted (low-histamine/DAO, not broad elimination).
+    const inflTxt = infl.subtype === 'Histamine-reactive'
+      ? 'Inflammatory / immune-leaning pattern — histamine-reactive (food-triggered flushing/hives with an atopic/allergic background) — consider a low-histamine / DAO approach'
+      : 'Inflammatory / immune-leaning pattern (diagnosed condition or multiple corroborating signals) — consider a structured elimination trial';
+    if (o.immuneKnownDx || infl.signalHits >= 3) add(2, inflTxt, 'inflammatory');
     else add(3, 'Inflammatory / immune-leaning pattern (single corroborating signal) — monitor alongside microbiome support', 'inflammatory');
   }
 
@@ -2194,9 +2246,21 @@ function triage(score, patterns, firedFlags, dys, opts) {
   result.medNote = (o.medConfounders && o.medConfounders.length)
     ? `Reported medication(s) can cause/aggravate GI symptoms: ${o.medConfounders.map(m => `${m.label} (${m.effect})`).join('; ')}. Symptoms may improve if discontinued (discuss with prescriber).`
     : null;
-  // Autonomic overlap (orthostatic / palpitations alongside a gut-brain picture).
-  result.autonomicNote = o.autonomicFlag
-    ? 'Autonomic symptoms reported (light-headedness on standing / palpitations) — consider gut-brain / autonomic overlap.'
+  // F4 — Autonomic / connective-tissue overlap. Gated on a relevant GI pattern
+  // (severe constipation, dyspepsia-type fullness, or reflux) co-occurring with
+  // orthostatic intolerance, palpitations, or joint hypermobility — an
+  // autonomic/hEDS root cause reframes management (autonomic/connective-tissue
+  // workup) rather than another gut-specific elimination trial, so the note is
+  // reserved for the presentations it's actually meant to redirect.
+  const autonomicRelevantPattern = has('constipation_dominant') || has('functional_dyspepsia') || has('reflux_upper_gi');
+  const autonomicSrc = o.autonomicSource || {};
+  const autonomicReported = [
+    autonomicSrc.orthostatic && 'light-headedness on standing',
+    autonomicSrc.palpitations && 'palpitations',
+    autonomicSrc.hypermobile && 'joint hypermobility',
+  ].filter(Boolean).join(' / ');
+  result.autonomicNote = (o.autonomicFlag && autonomicRelevantPattern)
+    ? `Autonomic/connective-tissue symptoms reported (${autonomicReported}) alongside this GI pattern — consider an autonomic or connective-tissue (hEDS/POTS) root cause rather than a primary gut-specific work-up.`
     : null;
   // Symptom duration (sx_duration) — plain context note, never a Tier trigger.
   // Universal (ungated) item, so this is available regardless of whether the
@@ -2316,10 +2380,28 @@ function triage(score, patterns, firedFlags, dys, opts) {
     // not specific to this one, and the suffix stopped this from exact-string
     // matching nutrient_malabsorption's identical test when both fire.
     inflammatory_immune: ['Coeliac serology (anti-tTG IgA + total IgA)', 'Clinician-guided structured elimination trial', 'Low-histamine / DAO discussion if a histamine pattern fits'],
+    // F3b — histamine-reactive branch (below) replaces the generic third line
+    // above with a firmer recommendation once atopic/vasomotor signs
+    // corroborate the histamine-food trigger, rather than leaving it as a
+    // maybe ("if a histamine pattern fits").
     pelvic_floor: ['Anorectal / pelvic-floor examination', 'Pelvic-floor physiotherapy referral', 'Bowel / defecation diary'],
     pelvic_floor_paradox: ['Anorectal physiology / balloon expulsion test (assess dyssynergia)', 'Pelvic-floor physiotherapy with biofeedback', 'Avoid escalating laxatives — address coordination first'],
-    functional_dyspepsia: ['H. pylori test (stool antigen or urea breath test)', 'Trial of acid suppression (4–8 weeks)', 'Review meal pattern, caffeine, alcohol, NSAID use'],
+    // Default/PDS management (postprandial distress — early satiety/fullness):
+    // prokinetic-leaning, meal-spacing first-line. EPS (below) branches to acid
+    // suppression instead — Rome IV treats these as different first-line paths
+    // under the same diagnosis (F5).
+    functional_dyspepsia: ['H. pylori test (stool antigen or urea breath test)', 'Trial of prokinetic therapy or meal-spacing advice (smaller, more frequent meals)', 'Review meal pattern, caffeine, alcohol, NSAID use'],
   };
+  // F5 — EPS (epigastric pain syndrome: burning independent of meals) gets
+  // acid-suppression-first management instead of PI.functional_dyspepsia's
+  // prokinetic/meal-spacing default; Mixed gets both. Kept as a side table
+  // rather than inline in PI so the subtype branch below stays a simple lookup.
+  const PI_FD_EPS = ['H. pylori test (stool antigen or urea breath test)', 'Trial of acid suppression (4–8 weeks)', 'Review meal pattern, caffeine, alcohol, NSAID use'];
+  const PI_FD_MIXED = [...new Set([...PI.functional_dyspepsia, ...PI_FD_EPS])];
+  // F3b — histamine-reactive branch: firms up the generic "if a histamine
+  // pattern fits" line once atopy/vasomotor signs corroborate the histamine-
+  // food trigger (im_histamine + im_allergies both positive).
+  const PI_IM_HISTAMINE = ['Coeliac serology (anti-tTG IgA + total IgA)', 'Clinician-guided structured elimination trial', 'Low-histamine / DAO discussion — histamine-reactive pattern (food-triggered flushing/hives with an atopic/allergic background)'];
   const RI = {
     // Low-FODMAP + pelvic-floor wording matched to PI.bloating_fermentation/
     // mixed_bowel and PI.constipation_dominant/pelvic_floor respectively —
@@ -2337,7 +2419,18 @@ function triage(score, patterns, firedFlags, dys, opts) {
     'IBS-U': ['2–4 week symptom diary before specialist referral', 'Dietary trigger review (FODMAP, fibre)', 'Gut-brain axis assessment'],
   };
   result.investigations = [];
-  pids.forEach(pid => { if (PI[pid]) result.investigations.push(...PI[pid]); });
+  pids.forEach(pid => {
+    if (pid === 'functional_dyspepsia') {
+      const fdSub = pById.get(pid).subtype;
+      result.investigations.push(...(fdSub === 'EPS' ? PI_FD_EPS : fdSub === 'Mixed' ? PI_FD_MIXED : PI.functional_dyspepsia));
+      return;
+    }
+    if (pid === 'inflammatory_immune' && pById.get(pid).subtype === 'Histamine-reactive') {
+      result.investigations.push(...PI_IM_HISTAMINE);
+      return;
+    }
+    if (PI[pid]) result.investigations.push(...PI[pid]);
+  });
   if (o.romeResult && o.romeResult.criteriaMet && o.romeResult.subtype && RI[o.romeResult.subtype])
     result.investigations.push(...RI[o.romeResult.subtype]);
   if (o.family && o.family.invest) result.investigations.push(...o.family.invest);
@@ -2351,7 +2444,18 @@ function triage(score, patterns, firedFlags, dys, opts) {
   // or corroborate a pattern already covered, rather than leading on their
   // own). Case-insensitive dedup keeps the FIRST (best-ranked) occurrence.
   const ranked = [];
-  (patterns || []).forEach((p, idx) => { if (PI[p.id]) PI[p.id].forEach(text => ranked.push({ text, rank: idx })); });
+  (patterns || []).forEach((p, idx) => {
+    if (p.id === 'functional_dyspepsia') {
+      const fdArr = p.subtype === 'EPS' ? PI_FD_EPS : p.subtype === 'Mixed' ? PI_FD_MIXED : PI.functional_dyspepsia;
+      fdArr.forEach(text => ranked.push({ text, rank: idx }));
+      return;
+    }
+    if (p.id === 'inflammatory_immune' && p.subtype === 'Histamine-reactive') {
+      PI_IM_HISTAMINE.forEach(text => ranked.push({ text, rank: idx }));
+      return;
+    }
+    if (PI[p.id]) PI[p.id].forEach(text => ranked.push({ text, rank: idx }));
+  });
   if (o.romeResult && o.romeResult.criteriaMet && o.romeResult.subtype && RI[o.romeResult.subtype])
     RI[o.romeResult.subtype].forEach(text => ranked.push({ text, rank: (patterns || []).length }));
   if (o.family && o.family.invest) o.family.invest.forEach(text => ranked.push({ text, rank: (patterns || []).length + 1 }));
@@ -4257,8 +4361,14 @@ function computeAll() {
   const meds = medConfounders(extras);
   const famhx = familyHistory(extras);
   const obstetric = obstetricHistory(extras);
-  const autonomicFlag = (typeof answers.sy_orthostatic === 'number' && answers.sy_orthostatic >= 2)
-    || (typeof answers.sy_palpitations === 'number' && answers.sy_palpitations >= 2);
+  // F4 — hypermobility is a third OR-branch into the same autonomic overlap
+  // flag as orthostatic/palpitations (autonomicSource records which route(s)
+  // fired, so the note wording can name what was actually reported).
+  const autonomicOrthostatic = typeof answers.sy_orthostatic === 'number' && answers.sy_orthostatic >= 2;
+  const autonomicPalpitations = typeof answers.sy_palpitations === 'number' && answers.sy_palpitations >= 2;
+  const autonomicHypermobile = typeof answers.sy_hypermobile === 'number' && answers.sy_hypermobile >= 2;
+  const autonomicFlag = autonomicOrthostatic || autonomicPalpitations || autonomicHypermobile;
+  const autonomicSource = { orthostatic: autonomicOrthostatic, palpitations: autonomicPalpitations, hypermobile: autonomicHypermobile };
   // Gynaecological / endometriosis overlap: cyclical flare (≥ moderate) with
   // abdominal pain present. gy_cyclical is already female-gated in the schema.
   const gynOverlap = (typeof answers.gy_cyclical === 'number' && answers.gy_cyclical >= 2)
@@ -4299,6 +4409,7 @@ function computeAll() {
     treatmentsTried: triedResolved.list.map(t => t.label),
     treatmentsTriedOther: triedResolved.other,
     autonomicFlag,
+    autonomicSource,
     family: famhx,
     gynOverlap,
     immuneKnownDx,
