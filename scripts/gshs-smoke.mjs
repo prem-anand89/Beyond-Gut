@@ -264,7 +264,7 @@ ok(lowIndig && lowIndig.quadrant === 'low', 'G: mild + infrequent cluster → lo
 // severity % — common since frequency rows are optional (source-level checks,
 // matching the existing G2 convention above for this non-exported renderer).
 ok(/function dominantClusterLine\(cells\)/.test(html), 'G3: dominantClusterLine() helper exists');
-ok(/domLine\}<div style="display:grid/.test(html) && /\$\{domLine\}<div style="font-size:10\.5px;font-weight:700;color:#777/.test(html),
+ok(/domLine\}<div style="display:grid/.test(html) && /\$\{domLine\}<div style="font-size:10\.5px;font-weight:700;color:#5C5C5C/.test(html),
   'G3: dominant-cluster line is prepended in both the no-frequency and quadrant layouts');
 ok(/incompleteWithSev\.length.*Frequency not recorded \(severity only\)/s.test(sfBodyFn) || /incompleteWithSev/.test(sfBodyFn),
   'G3: clusters with severity but no frequency answer keep their % (no longer silently dropped into a name-only footnote)');
@@ -1203,14 +1203,16 @@ ok(candidacyTier(b1Tri, 'Loose-stool') === 2, 'diarrhoea_dominant candidacy is f
 // B2 regression. A lab-confirmed deficiency (nu_known_def) fires
 // nutrient_malabsorption on its own, even when current GI symptoms are mild
 // (giPresent false) — previously gated out, silently dropping a
-// referral-grade signal for exactly the patient it targets.
+// referral-grade signal for exactly the patient it targets. Tier level: this
+// is a symptom/history-inferred candidacy, not a red flag or Severe burden,
+// so it routes to Tier 2 (clinician-led — arrange bloods/review), not Tier 1.
 const b2Answers = { gsrs_heartburn: 0, nu_known_def: 1 };
 const b2Score = scoring.computeScores(b2Answers, {});
 ok((b2Score.secNorm.GI || 0) < 0.2, 'sanity: b2Answers fixture keeps secNorm.GI below the 0.2 giPresent gate');
 const b2Pats = patterns.detectPatterns(b2Score, {}, b2Answers);
 ok(b2Pats.some(p => p.id === 'nutrient_malabsorption'), 'nutrient_malabsorption fires on lab-confirmed deficiency alone, independent of giPresent (B2)');
 const b2Tri = triage(b2Score, b2Pats, [], { count: 0 }, {});
-ok(b2Tri.level === 1, 'lab-confirmed deficiency alone reaches Tier 1 even with mild current GI symptoms (B2)');
+ok(b2Tri.level === 2, 'lab-confirmed deficiency alone reaches Tier 2 even with mild current GI symptoms (B2) — Tier 1 is reserved for red flags/Severe burden');
 
 // B5 regression. inflammatory_immune with a diagnosed condition
 // (im_known_dx) as the only specific signal reaches Tier 2, not Tier 3 —
@@ -1474,21 +1476,25 @@ ok(klD.count === 2 && /calprotectin/i.test(klD.summary) && /180/.test(klD.summar
   'knownLabs() summary folds the free-text value into the label');
 // Never enters the Index (extras-only).
 ok(scoring.computeScores({ gsrs_heartburn: 0 }, {}).index === 0, 'M2 labs are extras-only (no Index path)');
-// Routing: calprotectin + coeliac → Tier 1 regardless of symptom burden.
+// Routing: an ALREADY-reported abnormal lab means the patient has already
+// been tested and is already under a clinician's care for it — ongoing
+// clinician-led management (Tier 2), not a new same-day/urgent referral
+// (Tier 1, now reserved for real red flags and Severe GI burden only).
 const rCal = run(0, {}, { knownLabs: ['calprotectin'] });
-ok(rCal.tri.level === 1 && reasons(rCal.tri).some(r => /calprotectin/i.test(r.text)), 'raised calprotectin → Tier 1 referral');
+ok(rCal.tri.level === 2 && reasons(rCal.tri).some(r => /calprotectin/i.test(r.text)), 'raised calprotectin (already reported) → Tier 2, not a new Tier-1 referral');
 const rCoe = run(0, {}, { knownLabs: ['coeliac'] });
-ok(rCoe.tri.level === 1 && reasons(rCoe.tri).some(r => /coeliac/i.test(r.text)), 'positive coeliac serology → Tier 1 referral');
-// CRP: Tier 1 only when burden is Severe, else Tier 2.
+ok(rCoe.tri.level === 2 && reasons(rCoe.tri).some(r => /coeliac/i.test(r.text)), 'positive coeliac serology (already reported) → Tier 2, not a new Tier-1 referral');
+// CRP: Severe burden still independently forces Tier 1 (its own trigger) —
+// the already-reported CRP itself never manufactures Tier-1 urgency.
 const rCrpSevere = run(3, {}, { knownLabs: ['crp'] });
 const rCrpMild = run(0, {}, { knownLabs: ['crp'] });
-ok(rCrpSevere.tri.level === 1, 'raised CRP + Severe burden → Tier 1');
+ok(rCrpSevere.tri.level === 1, 'raised CRP + Severe burden → still Tier 1 (via Severe burden, not the lab report itself)');
 ok(reasons(rCrpMild.tri).some(r => /inflammatory markers/i.test(r.text)), 'raised CRP alone still surfaces as a candidacy reason');
-ok(rCrpMild.tri.level !== 1, 'raised CRP without Severe burden does NOT force Tier 1');
-// TSH: Tier 1 only with a constipation-dominant pattern.
+ok(rCrpMild.tri.level === 2, 'raised CRP without Severe burden → Tier 2');
+// TSH: always Tier 2 on its own now, regardless of a constipation-dominant pattern.
 const rTshConstip = run(0, { gsrs_constip: 3, gsrs_hard: 3, gsrs_incomplete: 3 }, { knownLabs: ['tsh'] });
-ok(rTshConstip.pat.some(p => p.id === 'constipation_dominant') && rTshConstip.tri.level === 1,
-  'abnormal TSH + constipation-dominant → Tier 1');
+ok(rTshConstip.pat.some(p => p.id === 'constipation_dominant') && rTshConstip.tri.level === 2,
+  'abnormal TSH + constipation-dominant → Tier 2 (already-reported lab never forces Tier 1 on its own)');
 // labNote summarises for the clinician; null when nothing reported.
 ok(rCal.tri.labNote && /calprotectin/i.test(rCal.tri.labNote), 'labNote summarises reported abnormal labs');
 ok(run(0, {}).tri.labNote == null, 'labNote null when no labs reported');
@@ -1846,6 +1852,18 @@ ok(/id: 'systemic'[\s\S]{0,600}targetedSymptomsArea\(\)/.test(bs),
 // Wizard machinery: paint + navigate.
 ok(/function paintWizard\(steps\)\s*\{/.test(html), 'paintWizard() defined');
 ok(/function goToStep\(i, steps\)\s*\{/.test(html), 'goToStep() defined');
+{
+  const gts = html.match(/function goToStep\(i, steps\)\s*\{[\s\S]*?\n\}\n/)[0];
+  // Regression guard: the scroll target must be a NON-sticky element
+  // (#gstepsub). #gstepper sits inside the sticky .stepper-wrap, so once the
+  // user has scrolled down to reach the bottom Next button its
+  // getBoundingClientRect().top reflects the pinned viewport offset, not the
+  // step's true document position — using it as the scroll target left users
+  // dropped mid-page (sometimes near the bottom) after clicking Next.
+  ok(/getElementById\('gstepsub'\)/.test(gts), 'goToStep() scroll target is the non-sticky #gstepsub, not the sticky stepper');
+  ok(!/getElementById\('gstepper'\)/.test(gts), 'goToStep() no longer reads a bounding rect off the sticky #gstepper (unreliable once pinned)');
+  ok(/stepperWrap \? stepperWrap\.offsetHeight : 0/.test(gts), 'goToStep() offset accounts for the stepper-wrap\'s own pinned height, not just the app-bar');
+}
 const pw = html.match(/function paintWizard\(steps\)\s*\{[\s\S]*?\n\}\n/)[0];
 // Stepper state: done → ✓, current → ringed number, upcoming → grey.
 ok(/i < currentStep \? 'done' : i === currentStep \? 'now' : ''/.test(pw),
@@ -1907,6 +1925,57 @@ ok(/trendChartSvg\(trend\.points, sortedTrendVisits\)/.test(trendPrintBlock), 'p
 ok(/latest\.delta[\s\S]{0,120}pr-pill/.test(trendPrintBlock), 'print trend section shows the headline delta pill, same as on-screen');
 ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span>/.test(trendPrintBlock),
   'print trend section shows cluster trajectory as before→after chips (Option D), same as on-screen');
+
+// ── KPI band tile alignment ──────────────────────────────────────────────
+// Tile labels vary in length ("Gut Symptom Burden" vs "Nutrient / Malabsorption
+// Risk" vs "Dysbiosis Correlate Load") — a label that wraps to 2 lines used to
+// push that tile's value/badge down relative to a sibling tile whose label
+// stayed on 1 line, so the numbers across the KPI band didn't line up. Fixed
+// by reserving a fixed 2-line-tall label slot in both the on-screen
+// headlineCard() tile and the print .pr-kpi-tile .k so the value row always
+// starts at the same offset regardless of how many lines the label wrapped to.
+{
+  const kpiCss = html.match(/\.pr-kpi-tile \.k\{[^}]*\}/);
+  ok(!!kpiCss && /min-height:21px/.test(kpiCss[0]), 'print .pr-kpi-tile .k reserves a fixed label height so values align across tiles regardless of wrap');
+  const hcFn = html.match(/function headlineCard\(heads, rome\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!hcFn, 'sanity: headlineCard() function body captured');
+  ok(/min-height:30px/.test(hcFn[0]), 'on-screen headlineCard() tile label reserves a fixed height so values align across tiles regardless of wrap');
+}
+
+// ── Tier-1 scheduling text must match WHY Tier 1 fired ──────────────────────
+// Tier 1 now fires for exactly two reasons — a safety red flag, or Severe GI
+// burden — but only the first is an actual safety alarm. schedulingPriorityHtml()
+// used to say "Same-day / urgent — set by red flags" for EVERY Tier-1 case,
+// including ones with zero red flags fired, which read as an inappropriate
+// same-day/emergency instruction. redFlagUrgency (set on the triage() result)
+// now drives the wording, and a null value (no flag fired — i.e. Severe burden
+// alone) gets an explicitly non-urgent "priority referral" message instead.
+{
+  const triFn = html.match(/function triage\(score, patterns, firedFlags, dys, opts\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!triFn, 'sanity: triage() function body captured');
+  const t = triFn[0];
+  ok(/redFlagUrgency: topFlagUrgency/.test(t), 'triage() exposes redFlagUrgency on its result (null when no red flag fired)');
+  ok(/let topFlagUrgency = null;/.test(t), 'topFlagUrgency defaults to null — a Tier 1 via Severe burden alone carries no red-flag urgency');
+  // Regression guard: Tier 1 must be reserved for red flags + Severe burden
+  // ONLY — a symptom-inferred malabsorption pattern (not yet investigated) or
+  // an already-reported abnormal lab (patient already under clinician care for
+  // it) must never sit at Tier 1 alongside genuine safety concerns.
+  ok(/has\('nutrient_malabsorption'\)\) add\(2,/.test(t), 'nutrient_malabsorption pattern routes to Tier 2 (symptom-inferred, not yet investigated), not Tier 1');
+  ok(!/has\('nutrient_malabsorption'\)\) add\(1,/.test(t), 'nutrient_malabsorption pattern no longer forces Tier 1 on its own');
+  ok(/add\(2, 'Raised faecal calprotectin already reported/.test(t),
+    'an already-reported raised calprotectin routes to Tier 2, not a new Tier-1 referral');
+  ok(/add\(2, 'Positive coeliac blood test already reported/.test(t),
+    'an already-reported positive coeliac serology routes to Tier 2, not a new Tier-1 referral');
+
+  const schedFn = html.match(/function schedulingPriorityHtml\(tri, cells\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!schedFn, 'sanity: schedulingPriorityHtml() function body captured');
+  const s = schedFn[0];
+  ok(!/Same-day \/ urgent — set by red flags, frequency does not override safety\./.test(s),
+    'schedulingPriorityHtml() no longer hardcodes "same-day/urgent" for every Tier-1 reason');
+  ok(/tri\.redFlagUrgency/.test(s), 'schedulingPriorityHtml() branches on redFlagUrgency instead of blanket-assuming a red flag');
+  ok(/no safety red flag present/.test(s),
+    'schedulingPriorityHtml() gives a priority-referral message (not same-day) when Tier 1 fired without any red flag');
+}
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);
