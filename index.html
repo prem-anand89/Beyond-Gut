@@ -2251,10 +2251,14 @@ return __e;
    never names products or specific organisms. The mapping is deliberately simple
    and auditable; thresholds are provisional and refit at pilot.
 
-   Tier 1 Refer            — safety flags, or uncapped Severe burden, or a
-                             malabsorption signal that needs bloods/clinical review.
-   Tier 2 Clinician-led    — Significant burden or functional motility/visceral
-                             patterns; manual / physical therapy may be an adjunct.
+   Tier 1 Refer            — reserved for genuine safety concerns only: a real
+                             safety red flag, or uncapped Severe GI burden.
+   Tier 2 Clinician-led    — Significant burden, functional motility/visceral
+                             patterns, a symptom-inferred (not-yet-investigated)
+                             malabsorption signal, or an ALREADY-reported abnormal
+                             lab result (the patient has already been tested and
+                             is already under a clinician's care for it — this is
+                             ongoing management, not a new urgent referral).
    Tier 3 Microbiome-support— recent disruptor exposure (strongest rationale) or a
                              bloating / loose-stool pattern, absent Tier-1 features.
    Tier 4 Self-management  — lifestyle-led / minimal burden; re-screen to track.
@@ -2326,11 +2330,18 @@ function triage(score, patterns, firedFlags, dys, opts) {
       : topFlagUrgency === 'urgent' ? ' — prompt (within-days) assessment advised' : '';
     add(1, flags.length + ' safety red-flag answer' + (flags.length > 1 ? 's' : '') + ' present' + urgWord, 'safety');
   }
+  // Tier 1 is now reserved for genuine safety concerns only — a real red flag
+  // (above) or Severe GI symptom burden. A symptom-INFERRED malabsorption
+  // pattern (below, Tier 2) is a "worth arranging bloods" steer, not a same-day
+  // safety alarm, so it no longer sits at Tier 1 alongside actual red flags.
   if (band === 'Severe') add(1, 'Severe GI symptom burden', 'symptom');
-  if (has('nutrient_malabsorption')) add(1, 'Possible malabsorption — bloods / clinical review advised', 'nutrient');
 
   // Tier 2 — clinician-led / manual-therapy candidacy
   if (band === 'Significant') add(2, 'Significant GI symptom burden', 'symptom');
+  // Symptom-inferred (not yet investigated) — distinct from the M2 "already
+  // reported abnormal labs" case below, which means bloods have already been
+  // done and the patient is already under a clinician's care for this.
+  if (has('nutrient_malabsorption')) add(2, 'Possible malabsorption (symptom-inferred, not yet investigated) — arrange bloods / clinical review', 'nutrient');
   if (has('constipation_dominant')) add(2, 'Constipation-dominant (slow-transit) pattern', 'symptom');
   if (has('mixed_bowel')) add(2, 'Mixed / alternating bowel pattern', 'symptom');
   if (has('reflux_upper_gi')) add(2, 'Reflux / upper-GI pattern', 'symptom');
@@ -2380,18 +2391,22 @@ function triage(score, patterns, firedFlags, dys, opts) {
     add(2, 'High functional / quality-of-life impact (Impact axis) — consider escalation even if symptom severity alone is lower', 'impact');
   // Family-history-driven candidacy (e.g. bowel-cancer family history → screening).
   (o.family && o.family.tierReasons || []).forEach(r => add(r.tier, r.text, r.axis));
-  // M2 — patient-reported abnormal lab results route directly. These are
-  // objective findings (a clinician already flagged them), so unlike the soft
-  // symptom-proxy notes elsewhere they DO drive the Tier. Context-dependent:
-  // CRP escalates with severe burden, TSH with a constipation pattern, and a
-  // confirmed low vitamin/mineral with an already-firing nutrient pattern.
+  // M2 — patient-reported abnormal lab results. These are objective findings,
+  // but a value the patient can already report means they've already been
+  // tested and are already engaged with a clinician for it — that's ongoing
+  // clinician-led management (Tier 2), not a new same-day/urgent referral
+  // (Tier 1, reserved for red flags and Severe burden). If the underlying
+  // picture is ALSO Severe, Tier 1 still fires independently above — these
+  // stay Tier 2 (or Tier 3 for HbA1c, a metabolic- not GI-referral item)
+  // regardless, so they never on their own manufacture urgency the patient's
+  // report doesn't carry.
   (o.labResults && o.labResults.items || []).forEach(L => {
-    if (L.id === 'calprotectin') add(1, 'Raised faecal calprotectin reported — GI physician referral / organic-disease work-up before any gut-health or manual-therapy program', 'inflammatory');
-    else if (L.id === 'coeliac')  add(1, 'Positive coeliac blood test reported — physician / dietitian review before any dietary change (keep eating gluten until confirmed)', 'nutrient');
-    else if (L.id === 'crp')      add(band === 'Severe' ? 1 : 2, 'Raised inflammatory markers (CRP/ESR) reported — physician review to help separate organic from functional disease', 'inflammatory');
-    else if (L.id === 'tsh')      add(has('constipation_dominant') ? 1 : 2, 'Abnormal thyroid (TSH) reported — thyroid disease can drive constipation or loose stool; factor into the bowel-habit read', 'symptom');
-    else if (L.id === 'hba1c')    add(3, 'Raised blood sugar / HbA1c reported — metabolic review and dietitian input (metabolic–gut axis)', 'nutrient');
-    else if (L.id === 'vitamins') add(has('nutrient_malabsorption') ? 1 : 2, 'Confirmed low vitamin D / B12 / iron reported — corroborates the nutrient read; replace and investigate the cause', 'nutrient');
+    if (L.id === 'calprotectin') add(2, 'Raised faecal calprotectin already reported — continue/complete the GI work-up already under way before any gut-health or manual-therapy program', 'inflammatory');
+    else if (L.id === 'coeliac')  add(2, 'Positive coeliac blood test already reported — physician / dietitian review before any dietary change (keep eating gluten until confirmed)', 'nutrient');
+    else if (L.id === 'crp')      add(2, 'Raised inflammatory markers (CRP/ESR) already reported — factor into interpretation; continue the work-up already under way to separate organic from functional disease', 'inflammatory');
+    else if (L.id === 'tsh')      add(2, 'Abnormal thyroid (TSH) already reported — thyroid disease can drive constipation or loose stool; factor into the bowel-habit read', 'symptom');
+    else if (L.id === 'hba1c')    add(3, 'Raised blood sugar / HbA1c already reported — metabolic review and dietitian input (metabolic–gut axis)', 'nutrient');
+    else if (L.id === 'vitamins') add(2, 'Confirmed low vitamin D / B12 / iron already reported — corroborates the nutrient read; replace and investigate the cause', 'nutrient');
   });
   // Orphan pattern, now wired: inflammatory_immune spans a wide specificity range
   // (clear histamine/diagnosed signal vs. a high-but-noisy IM mean) — route by
@@ -3483,11 +3498,11 @@ function frequencyPatternSummary(cells) {
 // an all-episodic picture can reasonably wait for the next routine slot.
 // Returns null when there's no frequency data to base a tie-breaker on (never
 // defaults to "Routine" from an absence of data).
-// Tier 1 fires for three distinct reasons (safety red flag, Severe burden, or
-// a malabsorption pattern) — only the first is an actual safety alarm. E2's
-// redFlagUrgency (emergency/urgent/routine, or null when no flag fired) drives
-// the wording here so "Severe burden"/"possible malabsorption" alone reads as
-// a priority referral, not a same-day/emergency instruction it didn't earn.
+// Tier 1 now fires for exactly two reasons (a safety red flag, or Severe GI
+// burden) — only the first is an actual safety alarm. E2's redFlagUrgency
+// (emergency/urgent/routine, or null when no flag fired) drives the wording
+// here so "Severe burden" alone reads as a priority referral, not a
+// same-day/emergency instruction it didn't earn.
 const TIER1_SCHEDULE_BY_URGENCY = {
   emergency: 'Same-day / urgent — set by a safety red flag; frequency does not override safety.',
   urgent:    'Prompt — within days — set by a safety red flag; frequency does not override safety.',
@@ -3497,7 +3512,7 @@ function schedulingPriorityHtml(tri, cells) {
   if (tri.level === 1) {
     const text = tri.redFlagUrgency
       ? TIER1_SCHEDULE_BY_URGENCY[tri.redFlagUrgency]
-      : 'Routine referral timeframe — arrange clinician review/bloods; not a same-day or emergency instruction (no safety red flag present).';
+      : 'Priority referral (Severe GI symptom burden) — arrange clinician review promptly; not a same-day or emergency instruction (no safety red flag present).';
     return `<div style="font-size:10.5px;margin-top:4px"><b>Scheduling:</b> ${text}</div>`;
   }
   const hasFreq = (cells || []).some(c => c.freqIdx != null);

@@ -1203,14 +1203,16 @@ ok(candidacyTier(b1Tri, 'Loose-stool') === 2, 'diarrhoea_dominant candidacy is f
 // B2 regression. A lab-confirmed deficiency (nu_known_def) fires
 // nutrient_malabsorption on its own, even when current GI symptoms are mild
 // (giPresent false) — previously gated out, silently dropping a
-// referral-grade signal for exactly the patient it targets.
+// referral-grade signal for exactly the patient it targets. Tier level: this
+// is a symptom/history-inferred candidacy, not a red flag or Severe burden,
+// so it routes to Tier 2 (clinician-led — arrange bloods/review), not Tier 1.
 const b2Answers = { gsrs_heartburn: 0, nu_known_def: 1 };
 const b2Score = scoring.computeScores(b2Answers, {});
 ok((b2Score.secNorm.GI || 0) < 0.2, 'sanity: b2Answers fixture keeps secNorm.GI below the 0.2 giPresent gate');
 const b2Pats = patterns.detectPatterns(b2Score, {}, b2Answers);
 ok(b2Pats.some(p => p.id === 'nutrient_malabsorption'), 'nutrient_malabsorption fires on lab-confirmed deficiency alone, independent of giPresent (B2)');
 const b2Tri = triage(b2Score, b2Pats, [], { count: 0 }, {});
-ok(b2Tri.level === 1, 'lab-confirmed deficiency alone reaches Tier 1 even with mild current GI symptoms (B2)');
+ok(b2Tri.level === 2, 'lab-confirmed deficiency alone reaches Tier 2 even with mild current GI symptoms (B2) — Tier 1 is reserved for red flags/Severe burden');
 
 // B5 regression. inflammatory_immune with a diagnosed condition
 // (im_known_dx) as the only specific signal reaches Tier 2, not Tier 3 —
@@ -1474,21 +1476,25 @@ ok(klD.count === 2 && /calprotectin/i.test(klD.summary) && /180/.test(klD.summar
   'knownLabs() summary folds the free-text value into the label');
 // Never enters the Index (extras-only).
 ok(scoring.computeScores({ gsrs_heartburn: 0 }, {}).index === 0, 'M2 labs are extras-only (no Index path)');
-// Routing: calprotectin + coeliac → Tier 1 regardless of symptom burden.
+// Routing: an ALREADY-reported abnormal lab means the patient has already
+// been tested and is already under a clinician's care for it — ongoing
+// clinician-led management (Tier 2), not a new same-day/urgent referral
+// (Tier 1, now reserved for real red flags and Severe GI burden only).
 const rCal = run(0, {}, { knownLabs: ['calprotectin'] });
-ok(rCal.tri.level === 1 && reasons(rCal.tri).some(r => /calprotectin/i.test(r.text)), 'raised calprotectin → Tier 1 referral');
+ok(rCal.tri.level === 2 && reasons(rCal.tri).some(r => /calprotectin/i.test(r.text)), 'raised calprotectin (already reported) → Tier 2, not a new Tier-1 referral');
 const rCoe = run(0, {}, { knownLabs: ['coeliac'] });
-ok(rCoe.tri.level === 1 && reasons(rCoe.tri).some(r => /coeliac/i.test(r.text)), 'positive coeliac serology → Tier 1 referral');
-// CRP: Tier 1 only when burden is Severe, else Tier 2.
+ok(rCoe.tri.level === 2 && reasons(rCoe.tri).some(r => /coeliac/i.test(r.text)), 'positive coeliac serology (already reported) → Tier 2, not a new Tier-1 referral');
+// CRP: Severe burden still independently forces Tier 1 (its own trigger) —
+// the already-reported CRP itself never manufactures Tier-1 urgency.
 const rCrpSevere = run(3, {}, { knownLabs: ['crp'] });
 const rCrpMild = run(0, {}, { knownLabs: ['crp'] });
-ok(rCrpSevere.tri.level === 1, 'raised CRP + Severe burden → Tier 1');
+ok(rCrpSevere.tri.level === 1, 'raised CRP + Severe burden → still Tier 1 (via Severe burden, not the lab report itself)');
 ok(reasons(rCrpMild.tri).some(r => /inflammatory markers/i.test(r.text)), 'raised CRP alone still surfaces as a candidacy reason');
-ok(rCrpMild.tri.level !== 1, 'raised CRP without Severe burden does NOT force Tier 1');
-// TSH: Tier 1 only with a constipation-dominant pattern.
+ok(rCrpMild.tri.level === 2, 'raised CRP without Severe burden → Tier 2');
+// TSH: always Tier 2 on its own now, regardless of a constipation-dominant pattern.
 const rTshConstip = run(0, { gsrs_constip: 3, gsrs_hard: 3, gsrs_incomplete: 3 }, { knownLabs: ['tsh'] });
-ok(rTshConstip.pat.some(p => p.id === 'constipation_dominant') && rTshConstip.tri.level === 1,
-  'abnormal TSH + constipation-dominant → Tier 1');
+ok(rTshConstip.pat.some(p => p.id === 'constipation_dominant') && rTshConstip.tri.level === 2,
+  'abnormal TSH + constipation-dominant → Tier 2 (already-reported lab never forces Tier 1 on its own)');
 // labNote summarises for the clinician; null when nothing reported.
 ok(rCal.tri.labNote && /calprotectin/i.test(rCal.tri.labNote), 'labNote summarises reported abnormal labs');
 ok(run(0, {}).tri.labNote == null, 'labNote null when no labs reported');
@@ -1937,20 +1943,29 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
 }
 
 // ── Tier-1 scheduling text must match WHY Tier 1 fired ──────────────────────
-// Tier 1 fires for three distinct reasons — a safety red flag, Severe GI
-// burden, or a malabsorption pattern — but only the first is an actual safety
-// alarm. schedulingPriorityHtml() used to say "Same-day / urgent — set by red
-// flags" for EVERY Tier-1 case, including ones with zero red flags fired
-// (e.g. Tier 1 via "Possible malabsorption" alone), which read as an
-// inappropriate same-day/emergency instruction. redFlagUrgency (set on the
-// triage() result) now drives the wording, and a null value (no flag fired)
-// gets an explicitly non-urgent "routine referral" message instead.
+// Tier 1 now fires for exactly two reasons — a safety red flag, or Severe GI
+// burden — but only the first is an actual safety alarm. schedulingPriorityHtml()
+// used to say "Same-day / urgent — set by red flags" for EVERY Tier-1 case,
+// including ones with zero red flags fired, which read as an inappropriate
+// same-day/emergency instruction. redFlagUrgency (set on the triage() result)
+// now drives the wording, and a null value (no flag fired — i.e. Severe burden
+// alone) gets an explicitly non-urgent "priority referral" message instead.
 {
   const triFn = html.match(/function triage\(score, patterns, firedFlags, dys, opts\)\s*\{[\s\S]*?\n\}\n/);
   ok(!!triFn, 'sanity: triage() function body captured');
   const t = triFn[0];
   ok(/redFlagUrgency: topFlagUrgency/.test(t), 'triage() exposes redFlagUrgency on its result (null when no red flag fired)');
-  ok(/let topFlagUrgency = null;/.test(t), 'topFlagUrgency defaults to null — a Tier 1 via Severe burden/malabsorption alone carries no red-flag urgency');
+  ok(/let topFlagUrgency = null;/.test(t), 'topFlagUrgency defaults to null — a Tier 1 via Severe burden alone carries no red-flag urgency');
+  // Regression guard: Tier 1 must be reserved for red flags + Severe burden
+  // ONLY — a symptom-inferred malabsorption pattern (not yet investigated) or
+  // an already-reported abnormal lab (patient already under clinician care for
+  // it) must never sit at Tier 1 alongside genuine safety concerns.
+  ok(/has\('nutrient_malabsorption'\)\) add\(2,/.test(t), 'nutrient_malabsorption pattern routes to Tier 2 (symptom-inferred, not yet investigated), not Tier 1');
+  ok(!/has\('nutrient_malabsorption'\)\) add\(1,/.test(t), 'nutrient_malabsorption pattern no longer forces Tier 1 on its own');
+  ok(/add\(2, 'Raised faecal calprotectin already reported/.test(t),
+    'an already-reported raised calprotectin routes to Tier 2, not a new Tier-1 referral');
+  ok(/add\(2, 'Positive coeliac blood test already reported/.test(t),
+    'an already-reported positive coeliac serology routes to Tier 2, not a new Tier-1 referral');
 
   const schedFn = html.match(/function schedulingPriorityHtml\(tri, cells\)\s*\{[\s\S]*?\n\}\n/);
   ok(!!schedFn, 'sanity: schedulingPriorityHtml() function body captured');
@@ -1959,7 +1974,7 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
     'schedulingPriorityHtml() no longer hardcodes "same-day/urgent" for every Tier-1 reason');
   ok(/tri\.redFlagUrgency/.test(s), 'schedulingPriorityHtml() branches on redFlagUrgency instead of blanket-assuming a red flag');
   ok(/no safety red flag present/.test(s),
-    'schedulingPriorityHtml() gives a routine-referral message (not same-day) when Tier 1 fired without any red flag');
+    'schedulingPriorityHtml() gives a priority-referral message (not same-day) when Tier 1 fired without any red flag');
 }
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
