@@ -264,7 +264,7 @@ ok(lowIndig && lowIndig.quadrant === 'low', 'G: mild + infrequent cluster → lo
 // severity % — common since frequency rows are optional (source-level checks,
 // matching the existing G2 convention above for this non-exported renderer).
 ok(/function dominantClusterLine\(cells\)/.test(html), 'G3: dominantClusterLine() helper exists');
-ok(/domLine\}<div style="display:grid/.test(html) && /\$\{domLine\}<div style="font-size:10\.5px;font-weight:700;color:#777/.test(html),
+ok(/domLine\}<div style="display:grid/.test(html) && /\$\{domLine\}<div style="font-size:10\.5px;font-weight:700;color:#5C5C5C/.test(html),
   'G3: dominant-cluster line is prepended in both the no-frequency and quadrant layouts');
 ok(/incompleteWithSev\.length.*Frequency not recorded \(severity only\)/s.test(sfBodyFn) || /incompleteWithSev/.test(sfBodyFn),
   'G3: clusters with severity but no frequency answer keep their % (no longer silently dropped into a name-only footnote)');

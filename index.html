@@ -19,13 +19,13 @@
   --ok:#2E7D5B;--alert:#B23A3A;--alert-p:#F7E6E6;--alert-d:#7A2626;
   --am:#BA7517;--ap:#FAEEDA;
   --pu:#534AB7;--pp:#EEEDFE;--bl:#185FA5;--blp:#E6F1FB;
-  --ink:#1B2226;--inks:#48555B;--inkt:#6C777C;
+  --ink:#1B2226;--inks:#48555B;--inkt:#525C60;
   --bdr:#DCE2E2;--bdrm:#C2CBCD;--chrome:#EDF1F0;--paper2:#FFFFFF;--paper:#F2F5F4;
   --r6:6px;--r8:8px;--r12:12px;
   --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{background:var(--chrome);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.5;min-height:100vh;-webkit-text-size-adjust:100%}
+html,body{background:var(--chrome);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.5;min-height:100vh;-webkit-text-size-adjust:100%}
 button,input,select,textarea{font-family:var(--font)}
 button{-webkit-tap-highlight-color:transparent;touch-action:manipulation;cursor:pointer}
 small{font-size:.82em}
@@ -63,12 +63,12 @@ small{font-size:.82em}
 .step.done .lb{color:var(--inks)}
 .step .ln{width:20px;height:2px;background:var(--bdr);margin-right:6px;flex:none}
 .step.done .ln{background:var(--brand)}
-.stepsub{font-size:11.5px;color:var(--inkt);margin:0 0 12px}
+.stepsub{font-size:12.5px;color:var(--inkt);margin:0 0 12px}
 .gstep{display:none}
 .gstep.active{display:block}
 .gstep-head{margin:2px 0 12px}
 .gstep-head .t{font-size:18px;font-weight:800;letter-spacing:-.01em}
-.gstep-head .s{font-size:12px;color:var(--inkt);margin-top:2px}
+.gstep-head .s{font-size:13px;color:var(--inkt);margin-top:2px}
 .gstep-empty{display:none;text-align:center;color:var(--inkt);font-size:12.5px;padding:26px 16px;background:var(--paper2);border:1px dashed var(--bdrm);border-radius:var(--r12)}
 /* contextual action bar — names the neighbouring steps */
 .actionbar{display:flex;justify-content:space-between;align-items:stretch;gap:10px;margin:16px 0 4px}
@@ -107,24 +107,24 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 /* Quiet, dismissible one-liner (shared-device notice, storage warning) — a
    single row, not a full paragraph card, so it doesn't dominate the top of
    the form the way a full-width coloured block did. */
-.notice-line{display:flex;align-items:center;gap:8px;background:var(--paper2);border:1px solid var(--bdr);border-radius:var(--r8);padding:7px 10px 7px 12px;margin-bottom:10px;font-size:12px;color:var(--inks)}
+.notice-line{display:flex;align-items:center;gap:8px;background:var(--paper2);border:1px solid var(--bdr);border-radius:var(--r8);padding:7px 10px 7px 12px;margin-bottom:10px;font-size:13px;color:var(--inks)}
 .notice-line.warn{border-color:#E8C77A}
 .notice-line .x{margin-left:auto;flex:none;background:transparent;border:none;color:var(--inkt);font-size:13px;line-height:1;padding:2px 4px;border-radius:5px}
 .notice-line .x:hover{background:var(--tint);color:var(--ink)}
 .sec-card{background:var(--paper2);border:1px solid var(--bdr);border-radius:var(--r12);margin-bottom:12px;overflow:hidden}
-.sec-head{padding:11px 15px;font-weight:700;font-size:13px;color:#fff;display:flex;justify-content:space-between;align-items:center}
+.sec-head{padding:11px 15px;font-weight:700;font-size:14px;color:#fff;display:flex;justify-content:space-between;align-items:center}
 .sec-body{padding:6px 15px 12px}
 .q{padding:11px 0;border-bottom:1px solid var(--paper)}
 .q:last-child{border-bottom:none}
-.q-txt{font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:2px}
-.q-sub{font-size:11.5px;color:var(--inkt);margin-bottom:8px}
+.q-txt{font-size:14.5px;font-weight:600;color:var(--ink);margin-bottom:2px}
+.q-sub{font-size:12.5px;color:var(--inkt);margin-bottom:8px}
 /* --n-opts is set per-question (labels.length) in questionRow() — the 0–4
    scale migration widened DEFAULT from 4 to 5 options, and a hardcoded
    repeat(4,1fr) here made the 5th option wrap onto its own row. Driven by a
    custom property (not an inline grid-template-columns) so the mobile
    media query below can still override it uniformly regardless of scale length. */
 .opts{display:grid;grid-template-columns:repeat(var(--n-opts,4),1fr);gap:6px}
-.opt{border:1.5px solid var(--bdr);background:var(--paper2);border-radius:8px;padding:9px 6px;text-align:center;font-size:11.5px;font-weight:600;color:var(--inks);line-height:1.25;transition:all .12s}
+.opt{border:1.5px solid var(--bdr);background:var(--paper2);border-radius:8px;padding:9px 6px;text-align:center;font-size:12.5px;font-weight:600;color:var(--inks);line-height:1.3;transition:all .12s}
 .opt:hover{border-color:var(--bdrm)}
 .opt .on{display:block;font-size:14px;font-weight:800;margin-bottom:2px}
 /* Generic selected state for segmented rows that carry no s{v} colour class
@@ -246,7 +246,7 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 .visit-num{width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}
 .visit-info{flex:1;min-width:140px}.visit-date{font-weight:600;font-size:13px}.visit-sub{font-size:11px;color:var(--inkt);margin-top:1px}
 .visit-score{text-align:center}.visit-score .v{font-weight:800;font-size:17px}.visit-score .l{font-size:10px;color:var(--inkt)}
-.delta-down{color:var(--ok)}.delta-up{color:var(--alert)}.delta-flat{color:#999}
+.delta-down{color:var(--ok)}.delta-up{color:var(--alert)}.delta-flat{color:#707070}
 
 /* ── Clinician view ──────────────────────────── */
 .clin-badge{display:inline-block;padding:2px 8px;background:var(--neutral);color:#fff;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-left:6px;vertical-align:middle}
@@ -286,9 +286,9 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
      of the on-screen headlineCard()/kpi band. */
   .pr-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:6px}
   .pr-kpi-tile{border:1px solid #D0D0C8;border-radius:6px;padding:5px 8px;background:#fff}
-  .pr-kpi-tile .k{font-size:8px;font-weight:700;color:#777;text-transform:uppercase;letter-spacing:.02em;line-height:1.3;min-height:21px}
+  .pr-kpi-tile .k{font-size:8px;font-weight:700;color:#5C5C5C;text-transform:uppercase;letter-spacing:.02em;line-height:1.3;min-height:21px}
   .pr-kpi-tile .v{font-size:16px;font-weight:800;color:var(--brand);margin:1px 0 2px}
-  .pr-kpi-meta{font-size:9.5px;color:#777;margin-bottom:6px}
+  .pr-kpi-meta{font-size:9.5px;color:#5C5C5C;margin-bottom:6px}
   .pr-alert{background:var(--alert-p);border:1px solid var(--alert);border-radius:6px;padding:6px 8px;margin-bottom:6px;page-break-inside:avoid;break-inside:avoid}
   .pr-alert-t{font-weight:700;color:var(--alert);font-size:11.5px;margin-bottom:2px}
   .pr-info{background:#FFF3CD;border:1px solid #FECB1F;border-radius:6px;padding:6px 8px;margin-bottom:6px}
@@ -306,7 +306,7 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
   .pr-tbl td{padding:1.5px 6px;border-bottom:1px solid #ECEAEA;vertical-align:top}
   .pr-tbl tr:last-child td{border-bottom:none}
   .pr-tbl tr{page-break-inside:avoid;break-inside:avoid}
-  .pr-footer{font-size:9px;color:#999;margin-top:5px;padding-top:4px;border-top:1px solid #D0D0C8;text-align:center}
+  .pr-footer{font-size:9px;color:#707070;margin-top:5px;padding-top:4px;border-top:1px solid #D0D0C8;text-align:center}
   .pr-page-break{page-break-before:always}
 }
 </style>
@@ -3395,7 +3395,7 @@ function dominantClusterLine(cells) {
   const withSev = (cells || []).filter(c => c.severity != null);
   if (!withSev.length) return '';
   const top = withSev.reduce((a, b) => (b.severity > a.severity ? b : a));
-  return `<div style="font-size:11px;margin-bottom:6px"><span style="font-weight:600;color:#333">Dominant cluster:</span> ${esc(top.cluster)} <span style="color:#777;font-variant-numeric:tabular-nums">(${Math.round(top.severity * 100)}%)</span></div>`;
+  return `<div style="font-size:11px;margin-bottom:6px"><span style="font-weight:600;color:#333">Dominant cluster:</span> ${esc(top.cluster)} <span style="color:#5C5C5C;font-variant-numeric:tabular-nums">(${Math.round(top.severity * 100)}%)</span></div>`;
 }
 
 function sevFreqBodyHtml(cells) {
@@ -3412,7 +3412,7 @@ function sevFreqBodyHtml(cells) {
         <span style="width:34px;flex:none;text-align:right;font-variant-numeric:tabular-nums">${pct}%</span>
         <span style="width:14px;flex:none;text-align:left">${c.sevHi ? '<b style="color:#A9463F">▲</b>' : ''}</span></div>`;
     }).join('');
-    return `${domLine}<div style="font-size:10.5px;font-weight:700;color:#777;margin-bottom:5px">Frequency: Not recorded this visit — severity only</div>
+    return `${domLine}<div style="font-size:10.5px;font-weight:700;color:#5C5C5C;margin-bottom:5px">Frequency: Not recorded this visit — severity only</div>
       <div>${rows || '<div style="font-size:11px;color:#555">No severity data recorded.</div>'}</div>`;
   }
   const byQuad = { priority: [], 'severe-intermittent': [], 'frequent-mild': [], low: [] };
@@ -3435,7 +3435,7 @@ function sevFreqBodyHtml(cells) {
         background:${active ? q.bg : '#F7F7F5'};color:${active ? '#333' : '#9A9A93'};
         border:1px solid ${active ? q.c : '#E4E1D9'};border-top:3px solid ${active ? q.c : '#E4E1D9'}">
       <div style="font-weight:700;font-size:10px;margin-bottom:3px;color:${active ? q.c : '#9A9A93'}">${esc(q.t)}</div>
-      ${active ? items.map(c => `<div style="font-size:11px;color:#333">${esc(c.cluster)} <span style="color:#777;font-variant-numeric:tabular-nums">(${Math.round(c.severity * 100)}%)</span></div>`).join('') : '<div style="font-size:10.5px;opacity:.75">—</div>'}
+      ${active ? items.map(c => `<div style="font-size:11px;color:#333">${esc(c.cluster)} <span style="color:#5C5C5C;font-variant-numeric:tabular-nums">(${Math.round(c.severity * 100)}%)</span></div>`).join('') : '<div style="font-size:10.5px;opacity:.75">—</div>'}
     </div>`;
   };
   let out = `${domLine}<div style="display:grid;grid-template-columns:64px 1fr 1fr;gap:5px;font-size:12px">
@@ -3450,7 +3450,7 @@ function sevFreqBodyHtml(cells) {
   // Severity is still shown for clusters missing only frequency — previously
   // these silently lost their % entirely.
   if (incompleteWithSev.length) out += `<div style="font-size:10px;color:#666;margin-top:6px">Frequency not recorded (severity only): ${incompleteWithSev.map(c => `${esc(c.cluster)} (${Math.round(c.severity * 100)}%)`).join(', ')}.</div>`;
-  if (incompleteNoData.length) out += `<div style="font-size:9px;color:#888;margin-top:2px">No data: ${incompleteNoData.map(c => esc(c.cluster)).join(', ')}.</div>`;
+  if (incompleteNoData.length) out += `<div style="font-size:9px;color:#5C5C5C;margin-top:2px">No data: ${incompleteNoData.map(c => esc(c.cluster)).join(', ')}.</div>`;
   return out;
 }
 
@@ -5135,9 +5135,9 @@ function triageCard(tri, rome, showInvestigations, includeInvestigationsList) {
     tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-weight:600;color:var(--inks)' }, 'Suggested investigations / management:'));
     tcard.appendChild(el('ul', { class: 'rf-list', style: 'color:var(--inks);margin-top:2px' },
       dedupeList(tri.investigations).map(i => `<li>${esc(i)}</li>`).join('')));
-    tcard.appendChild(el('div', { class: 'q-sub', style: 'color:#888;font-style:italic;margin-top:3px' }, 'Pattern-matched — apply clinical judgement. Not a protocol.'));
+    tcard.appendChild(el('div', { class: 'q-sub', style: 'color:#5C5C5C;font-style:italic;margin-top:3px' }, 'Pattern-matched — apply clinical judgement. Not a protocol.'));
   }
-  tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-style:italic;color:#999' },
+  tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-style:italic;color:#707070' },
     'Clinical guidance for discussion — not a diagnosis or prescription.'));
   return tcard;
 }
@@ -5181,8 +5181,8 @@ function clinicianDetailCard(c) {
       const val = answers[q.id];
       const labels = scaleFor(q.scale);
       const disp = q.freeText
-        ? (typeof val === 'string' && val.trim() ? esc(val) : '<span style="color:#999">—</span>')
-        : val === 'na' ? '<i>N/A</i>' : val == null ? '<span style="color:#999">—</span>' : `${val} — ${esc(labels[val] || '')}`;
+        ? (typeof val === 'string' && val.trim() ? esc(val) : '<span style="color:#707070">—</span>')
+        : val === 'na' ? '<i>N/A</i>' : val == null ? '<span style="color:#707070">—</span>' : `${val} — ${esc(labels[val] || '')}`;
       return `<tr><td>${esc(q.patientText)}</td><td>${disp}</td></tr>`;
     }).join('');
     card.appendChild(tbl(['Question', 'Answer'], rows));
@@ -5202,7 +5202,7 @@ function clinicianDetailCard(c) {
     ...ROME_ASSOC.map(a => [esc(a.clinLabel || a.label), r[a.id] ? '<b>Yes</b>' : 'No']),
     ['Result', rome.criteriaMet
       ? `<b style="color:#185FA5">Criteria met — ${esc(rome.subtype || '')}</b>`
-      : rome.answered ? 'Criteria not met' : '<span style="color:#999">Not answered</span>'],
+      : rome.answered ? 'Criteria not met' : '<span style="color:#707070">Not answered</span>'],
   ].map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
   card.appendChild(tbl(['Item', 'Response'], rRows));
 
@@ -5483,12 +5483,12 @@ function actionColumnsHtml(tri, physio) {
     if (!cap.shown.length) body = `<div style="font-size:10.5px;color:#555">None suggested.</div>`;
     else if (shownPriority.length && shownConsider.length) {
       body = `<div style="font-size:9px;font-weight:700;color:#A9463F;text-transform:uppercase;letter-spacing:.03em">Priority</div>${list(shownPriority)}`
-        + `<div style="font-size:9px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.03em;margin-top:2px">Also consider</div>${list(shownConsider)}`;
+        + `<div style="font-size:9px;font-weight:700;color:#5C5C5C;text-transform:uppercase;letter-spacing:.03em;margin-top:2px">Also consider</div>${list(shownConsider)}`;
     } else body = list(cap.shown);
     return `<div style="flex:1;min-width:0">
       <div style="font-weight:600;font-size:11px;margin-bottom:2px">${title}</div>
       ${body}
-      ${cap.extra ? `<div style="font-size:9.5px;color:#888">+${cap.extra} further suggestion${cap.extra > 1 ? 's' : ''}.</div>` : ''}
+      ${cap.extra ? `<div style="font-size:9.5px;color:#5C5C5C">+${cap.extra} further suggestion${cap.extra > 1 ? 's' : ''}.</div>` : ''}
     </div>`;
   };
   const empty = !dx.priority.length && !dx.consider.length && !mgmt.priority.length && !mgmt.consider.length;
@@ -5497,7 +5497,7 @@ function actionColumnsHtml(tri, physio) {
     ${col('Investigations &amp; Diagnostics', dx)}
     ${col('Management &amp; Therapeutics', mgmt)}
   </div>
-  <div style="font-size:9.5px;color:#888;font-style:italic;margin-top:4px">Pattern-matched — not a protocol. Physiotherapy is an adjunct after medical assessment, not a substitute for it.</div>`;
+  <div style="font-size:9.5px;color:#5C5C5C;font-style:italic;margin-top:4px">Pattern-matched — not a protocol. Physiotherapy is an adjunct after medical assessment, not a substitute for it.</div>`;
 }
 
 function buildClinicianPrint(c, opts) {
@@ -5616,7 +5616,7 @@ function buildClinicianPrint(c, opts) {
   {
     h += `<div style="page-break-inside:avoid;break-inside:avoid">${sevFreqBodyHtml(sfCells)}</div>`;
     if (sfCells.length && sfCells.some(c => c.freqIdx != null)) {
-      h += `<div style="font-size:9px;color:#888;margin-top:4px">Frequency is display-only (not in the Index). Priority = severe + frequent.</div>`;
+      h += `<div style="font-size:9px;color:#5C5C5C;margin-top:4px">Frequency is display-only (not in the Index). Priority = severe + frequent.</div>`;
       const flareRead = frequencyPatternSummary(sfCells);
       if (flareRead) h += `<div style="font-size:10.5px;margin-top:5px;color:#333">${esc(flareRead)}</div>`;
     }
@@ -5636,7 +5636,7 @@ function buildClinicianPrint(c, opts) {
       <table class="pr-tbl"><colgroup><col style="width:12%"><col style="width:22%"><col style="width:66%"></colgroup><thead><tr><th>Priority</th><th>Pattern</th><th>Rationale &amp; management hint</th></tr></thead><tbody>
         ${patCap.shown.map(p => { const m = patternPriorityMeta(p.strength || 0); return `<tr><td><span class="pr-pill" style="background:${bandBg(m.label === 'High' ? 'Severe' : m.label === 'Moderate' ? 'Mild–Moderate' : '')};font-size:9px">${esc(m.label)}</span></td><td><b>${esc(p.label)}</b></td><td>${esc(p.desc)}</td></tr>`; }).join('')}
       </tbody></table>
-      ${patCap.extra ? `<div style="font-size:9px;color:#888;margin-top:2px">+${patCap.extra} further lower-priority pattern${patCap.extra > 1 ? 's' : ''}: ${esc(ranked.slice(8).map(p => p.label).join(', '))}.</div>` : ''}
+      ${patCap.extra ? `<div style="font-size:9px;color:#5C5C5C;margin-top:2px">+${patCap.extra} further lower-priority pattern${patCap.extra > 1 ? 's' : ''}: ${esc(ranked.slice(8).map(p => p.label).join(', '))}.</div>` : ''}
       ${(tri.patternOverlapNotes && tri.patternOverlapNotes.length) ? `<ul style="font-size:9.5px;color:#185FA5;padding-left:16px;margin:4px 0 0">${tri.patternOverlapNotes.map(n => `<li>🔗 ${esc(n)}</li>`).join('')}</ul>` : ''}
       </div></div>`;
   }
@@ -5684,13 +5684,13 @@ function buildClinicianPrint(c, opts) {
       : '';
     h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Rome IV-informed bowel-pain pattern</div>
       <table class="pr-tbl"><tbody>
-        <tr><td>Pain frequency</td><td>${r.painFreq != null ? `${r.painFreq} — ${esc(ROME_FREQ[r.painFreq] || '')} ${checkTag(freqMetNow)} <span style="color:#888;font-size:9.5px">(needs ≥1 day/wk)</span>` : '—'}</td></tr>
-        <tr><td>Onset</td><td>${onsetIdx != null ? `${onsetIdx} — ${esc(ROME_ONSET[onsetIdx] || '')} ${checkTag(onsetMetNow)} <span style="color:#888;font-size:9.5px">(needs ≥6 months)</span>` : '—'}</td></tr>
+        <tr><td>Pain frequency</td><td>${r.painFreq != null ? `${r.painFreq} — ${esc(ROME_FREQ[r.painFreq] || '')} ${checkTag(freqMetNow)} <span style="color:#5C5C5C;font-size:9.5px">(needs ≥1 day/wk)</span>` : '—'}</td></tr>
+        <tr><td>Onset</td><td>${onsetIdx != null ? `${onsetIdx} — ${esc(ROME_ONSET[onsetIdx] || '')} ${checkTag(onsetMetNow)} <span style="color:#5C5C5C;font-size:9.5px">(needs ≥6 months)</span>` : '—'}</td></tr>
         ${ROME_ASSOC.map(a => `<tr><td>${esc(a.clinLabel || a.label)}</td><td>${r[a.id] ? '<b>Yes</b>' : 'No'}</td></tr>`).join('')}
-        <tr><td>Associations</td><td>${rome.assocCount || 0}/${ROME_ASSOC.length} ${checkTag(assocMetNow)} <span style="color:#888;font-size:9.5px">(needs ≥2)</span></td></tr>
+        <tr><td>Associations</td><td>${rome.assocCount || 0}/${ROME_ASSOC.length} ${checkTag(assocMetNow)} <span style="color:#5C5C5C;font-size:9.5px">(needs ≥2)</span></td></tr>
         <tr><td><b>Result</b></td><td><b>${rome.criteriaMet ? `Criteria met — ${esc(rome.subtype)}` : `Criteria not met${failReason ? ` — ${esc(failReason)}` : ''}`}</b></td></tr>
       </tbody></table>
-      <div style="font-size:9.5px;color:#888;margin-top:3px">Single-visit estimate — not a prospective Bristol/pain diary.</div>
+      <div style="font-size:9.5px;color:#5C5C5C;margin-top:3px">Single-visit estimate — not a prospective Bristol/pain diary.</div>
     </div>`;
   } else {
     h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Rome IV-informed bowel-pain pattern</div>
@@ -5712,7 +5712,7 @@ function buildClinicianPrint(c, opts) {
   // Disruption Load / Dysbiosis Correlate Load have no domain-breakdown
   // equivalent at all (they're exposure/phenotype counts, not GSRS items).
   const bandPillFromPct = (pct) => {
-    if (pct == null) return '<span style="color:#AAA">n/a</span>';
+    if (pct == null) return '<span style="color:#707070">n/a</span>';
     const bnd = bandForPct(pct);
     return `<span class="pr-pill" style="background:${bnd.bg};color:#000;font-size:9.5px">${esc(bnd.label)}</span>`;
   };
@@ -5720,7 +5720,7 @@ function buildClinicianPrint(c, opts) {
     const sc = score.secScores[s.id] || 0, mx = score.secApplicableMax[s.id] || 0;
     const giNorm = s.id === 'GI' ? score.secNorm.GI : null;
     const pct = giNorm != null ? Math.round(giNorm * 100) : (mx ? Math.round(sc / mx * 100) : null);
-    return `<tr><td>${esc(s.full || s.label)}</td><td style="white-space:nowrap">${sc}/${mx}</td><td>${pct != null ? `${pct}%` : '<span style="color:#AAA">n/a</span>'}</td><td>${bandPillFromPct(pct)}</td></tr>`;
+    return `<tr><td>${esc(s.full || s.label)}</td><td style="white-space:nowrap">${sc}/${mx}</td><td>${pct != null ? `${pct}%` : '<span style="color:#707070">n/a</span>'}</td><td>${bandPillFromPct(pct)}</td></tr>`;
   };
   const loadValueTxt = (o) => o.key === 'dysbiosis_correlate_load' && o.tier
     ? `${o.value} signal${o.value === 1 ? '' : 's'} · Dys-R ${o.tier}${o.weightedScore != null ? ` (${o.weightedScore})` : ''}`
@@ -5728,9 +5728,9 @@ function buildClinicianPrint(c, opts) {
   const loadRow = (o) => `<tr><td>${esc(o.label)}</td><td>—</td><td style="white-space:nowrap">${esc(loadValueTxt(o))}</td><td>${prBandPill(o.band)}</td></tr>`;
   const psychRow = () => {
     const ps = heads.secondary.psychosocial;
-    return `<tr><td>Psychosocial load <span style="font-weight:400;color:#888">(PSS-4 composite)</span></td><td>—</td><td>${ps.value != null ? `${ps.value}%` : '<span style="color:#AAA">n/a</span>'}</td><td>${prBandPill(ps.band)}</td></tr>`;
+    return `<tr><td>Psychosocial load <span style="font-weight:400;color:#5C5C5C">(PSS-4 composite)</span></td><td>—</td><td>${ps.value != null ? `${ps.value}%` : '<span style="color:#707070">n/a</span>'}</td><td>${prBandPill(ps.band)}</td></tr>`;
   };
-  const groupRow = (label) => `<tr><td colspan="4" style="font-size:9px;color:#888;font-weight:700;letter-spacing:.04em;background:#F5F4EF;padding-top:3px;padding-bottom:3px">${label}</td></tr>`;
+  const groupRow = (label) => `<tr><td colspan="4" style="font-size:9px;color:#5C5C5C;font-weight:700;letter-spacing:.04em;background:#F5F4EF;padding-top:3px;padding-bottom:3px">${label}</td></tr>`;
   const byId = id => SECTIONS.find(s => s.id === id);
   const disruptSig = (heads.primary.disruption && heads.primary.disruption.signals) || [];
   const correlateSig = (heads.primary.correlate && heads.primary.correlate.signals) || [];
@@ -5773,7 +5773,7 @@ function buildClinicianPrint(c, opts) {
     if (anthro && (anthro.bmi != null || anthro.whtr != null)) {
       const bmiTxt = anthro.bmi != null ? `BMI ${anthro.bmi}${anthro.bmiBand ? ` (${anthro.bmiBand})` : ''}` : null;
       const whtrTxt = anthro.whtr != null ? `WHtR ${anthro.whtr}${anthro.whtrBand ? ` (${anthro.whtrBand})` : ''}` : null;
-      row('Anthropometrics', esc([bmiTxt, whtrTxt].filter(Boolean).join(' · ')) + (anthro.caveat ? ` <i style="color:#888">${esc(anthro.caveat)}</i>` : ''));
+      row('Anthropometrics', esc([bmiTxt, whtrTxt].filter(Boolean).join(' · ')) + (anthro.caveat ? ` <i style="color:#5C5C5C">${esc(anthro.caveat)}</i>` : ''));
     }
     if (meds && meds.list && meds.list.length) row('Medication confounders', esc(meds.list.map(m => m.label + (m.effect ? ` (${m.effect})` : '')).join('; ')));
     const medsOtherTxt = (driverExtras && driverExtras.medsOther || '').trim();
@@ -5797,7 +5797,7 @@ function buildClinicianPrint(c, opts) {
     const flagsBlock = flagCap.shown.length
       ? `<div style="font-size:10.5px;margin-top:6px"><b>Clinical flags:</b>
           ${flagCap.shown.map(n => `<div style="padding-left:8px;margin-top:2px;color:#5A3A10">• ${esc(n)}</div>`).join('')}
-          ${flagCap.extra ? `<div style="padding-left:8px;color:#888;margin-top:2px">+${flagCap.extra} more flag${flagCap.extra > 1 ? 's' : ''}</div>` : ''}</div>`
+          ${flagCap.extra ? `<div style="padding-left:8px;color:#5C5C5C;margin-top:2px">+${flagCap.extra} more flag${flagCap.extra > 1 ? 's' : ''}</div>` : ''}</div>`
       : '';
     const leftInner = (hxRows.length ? hxRows.join('') : `<div style="font-size:10.5px;color:#555">No additional history recorded.</div>`)
       + `<div style="font-size:10.5px;margin-top:6px"><b>Interventions this visit:</b> ${ivNow ? esc(ivNow) : '<span style="color:#555">none recorded</span>'}</div>`
@@ -5810,7 +5810,7 @@ function buildClinicianPrint(c, opts) {
     const rightInner = drivers.allEmpty
       ? `<div style="font-size:10.5px;color:#555">No modifiable-driver data recorded this visit.</div>`
       : `<table class="pr-tbl" style="font-size:10.5px"><tbody>${drivers.map(f =>
-          `<tr><td style="white-space:nowrap">${factorIcon(f)}${esc(f.label)}</td><td><b style="color:${f.color}">${esc(f.band)}</b>${f.score ? ` <span style="color:#777">· ${esc(f.score)}</span>` : ''}</td></tr>`
+          `<tr><td style="white-space:nowrap">${factorIcon(f)}${esc(f.label)}</td><td><b style="color:${f.color}">${esc(f.band)}</b>${f.score ? ` <span style="color:#5C5C5C">· ${esc(f.score)}</span>` : ''}</td></tr>`
         ).join('')}</tbody></table>`;
 
     h += `<div style="display:flex;gap:18px;align-items:flex-start;page-break-inside:avoid;break-inside:avoid">
@@ -5849,7 +5849,7 @@ function buildClinicianPrint(c, opts) {
 
     h += `<div style="display:flex;gap:14px;align-items:center;margin-bottom:8px;page-break-inside:avoid;break-inside:avoid">
       <div>${trendChartSvg(trend.points, sortedTrendVisits)}</div>
-      <div style="font-size:9.5px;color:#777;max-width:220px"><b style="display:block;color:#222;font-size:10.5px;margin-bottom:2px">Gut Symptom Burden</b>Lower = improvement. The <b style="color:var(--bl)">Rx</b> flag marks a visit with a recorded intervention.</div>
+      <div style="font-size:9.5px;color:#5C5C5C;max-width:220px"><b style="display:block;color:#222;font-size:10.5px;margin-bottom:2px">Gut Symptom Burden</b>Lower = improvement. The <b style="color:var(--bl)">Rx</b> flag marks a visit with a recorded intervention.</div>
     </div>`;
 
     h += `<table class="pr-tbl" style="margin-bottom:6px"><thead><tr><th>Date</th><th>Type</th><th>Index</th><th>Band</th><th>Δ</th><th>Interventions</th></tr></thead><tbody>
@@ -5875,7 +5875,7 @@ function buildClinicianPrint(c, opts) {
         return `<div style="display:flex;align-items:center;gap:6px;font-size:10px;margin:3px 0">
           <span style="width:90px;font-weight:600;color:#333">${esc(k)}</span>
           <span style="background:#F0F2F2;color:#555;border-radius:8px;padding:1px 7px;font-weight:700">${f}%</span>
-          <span style="color:#AAA">→</span>
+          <span style="color:#707070">→</span>
           <span style="background:${lastBg};color:${lastFg};border-radius:8px;padding:1px 7px;font-weight:700">${l}%</span>
           <span style="margin-left:auto;font-weight:700;color:${d === 0 ? '#777' : worse ? '#8A4B0F' : 'var(--ok)'}">${deltaTxt}</span>
         </div>`;
@@ -5897,7 +5897,7 @@ function buildClinicianPrint(c, opts) {
   if (includeAppendix) {
     h += `<div class="pr-page-break"></div>`;
     h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('appendix')}</div>
-      <div style="font-size:9.5px;color:#888;font-style:italic;margin-bottom:6px">Reference — every item, exactly as answered.</div>
+      <div style="font-size:9.5px;color:#5C5C5C;font-style:italic;margin-bottom:6px">Reference — every item, exactly as answered.</div>
       <div style="column-count:2;column-gap:16px">`;
     SECTIONS.forEach(s => {
       const qs = questionsOf(s.id);
