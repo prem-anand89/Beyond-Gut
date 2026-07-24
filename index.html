@@ -9,14 +9,12 @@
    Single self-contained offline file. Palette ported from BM_Gut_Suite v7.
    ========================================================================== */
 :root{
-  /* Palette A · Softened Teal. --brand is the primary-action/identity colour
+  /* Palette A · Softened Teal — light theme only, always (no dark-mode
+     variant; the app no longer reacts to prefers-color-scheme or a
+     data-theme override). --brand is the primary-action/identity colour
      (app-bar, hero numbers, buttons); --section is a lighter mid-teal used
      ONLY for section-card header bars, so the page doesn't read as a wall of
-     near-black bars. Both — plus --ok, the accent used for legible text/
-     borders on tinted or dark surfaces — get their own dark-theme values
-     below rather than staying fixed, which is what made the old dark theme
-     feel like a different, harsher app instead of the same app at a
-     different brightness. */
+     near-black bars. */
   --brand:#0E4049;--brand-d:#082C33;--section:#16636F;--tint:#E2EEEC;--neutral:#253238;
   --ok:#2E7D5B;--alert:#B23A3A;--alert-p:#F7E6E6;--alert-d:#7A2626;
   --am:#BA7517;--ap:#FAEEDA;
@@ -25,18 +23,6 @@
   --bdr:#DCE2E2;--bdrm:#C2CBCD;--chrome:#EDF1F0;--paper2:#FFFFFF;--paper:#F2F5F4;
   --r6:6px;--r8:8px;--r12:12px;
   --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
-}
-:root[data-theme="dark"]{
-  --paper:#141B1D;--paper2:#1E2A2C;--ink:#E4ECEB;--inks:#AEBABC;--inkt:#8A9699;
-  --bdr:#2C3A3D;--bdrm:#3C4C50;--chrome:#152021;--tint:#193338;
-  --brand:#123C44;--section:#1C5560;--ok:#5FB59E;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --paper:#141B1D;--paper2:#1E2A2C;--ink:#E4ECEB;--inks:#AEBABC;--inkt:#8A9699;
-    --bdr:#2C3A3D;--bdrm:#3C4C50;--chrome:#152021;--tint:#193338;
-    --brand:#123C44;--section:#1C5560;--ok:#5FB59E;
-  }
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:var(--chrome);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.5;min-height:100vh;-webkit-text-size-adjust:100%}
