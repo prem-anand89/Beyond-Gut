@@ -1795,8 +1795,8 @@ ok(!!calcFn2 && /severityFrequencyCard\(score, extras\)/.test(calcFn2[0]),
 const buildStepsFn = html.match(/function buildSteps\(\)\s*\{[\s\S]*?\n\}\n/);
 ok(!!buildStepsFn, 'buildSteps() defined — the guided-steps flow spec');
 const bs = buildStepsFn ? buildStepsFn[0] : '';
-// The six clinical steps, in order.
-const STEP_IDS = ['history', 'safety', 'gut', 'lifestyle', 'systemic', 'treatments'];
+// The seven clinical steps, in order.
+const STEP_IDS = ['about', 'meds', 'safety', 'gut', 'lifestyle', 'systemic', 'treatments'];
 STEP_IDS.forEach(id => ok(new RegExp(`id: '${id}'`).test(bs), `buildSteps() declares the '${id}' step`));
 ok(/id: 'safety'[\s\S]{0,120}showIf: \(\) => RED_FLAGS\.length > 0/.test(bs),
   "Safety step drops out (showIf) when the schema carries no red flags — numbering stays gap-free");
