@@ -435,7 +435,7 @@ function patientForm(initial = {}, { title = 'Patient details', okLabel = 'Start
         <input data-key="age" inputmode="numeric" value="${esc(v.age)}" placeholder="Age">
         <label style="${lblStyle}">Gender</label>
         <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">${genderChips}</div>
-        <label style="${lblStyle}">Applicability notes (optional)</label>
+        <label style="${lblStyle}">Pregnancy status (optional)</label>
         <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">${pregChips}</div>
         <label style="${lblStyle}">Reference / ID (optional)</label>
         <input data-key="ref" value="${esc(v.ref)}" placeholder="e.g. P-1042">
@@ -587,13 +587,13 @@ const QUESTIONS = [
   { id: 'gsrs_burping', section: 'GI', cluster: 'Indigestion',
     patientText: 'Burping or belching', patientSub: 'Bringing up air to relieve pressure' },
   { id: 'gsrs_gas', section: 'GI', cluster: 'Indigestion',
-    patientText: 'Passing gas / wind', patientSub: 'Needing to pass wind frequently' },
+    patientText: 'Passing gas / wind', patientSub: 'Needing to pass gas frequently' },
 
   // ── GI core — Diarrhoea cluster ──
   { id: 'gsrs_diarrhoea', section: 'GI', cluster: 'Diarrhoea',
     patientText: 'Diarrhoea', patientSub: 'Passing stools more often than normal' },
   { id: 'gsrs_loose', section: 'GI', cluster: 'Diarrhoea',
-    patientText: 'Loose or watery stools', patientSub: 'Soft, sloppy, or liquid stools' },
+    patientText: 'Loose or watery stools', patientSub: "Soft, sloppy, or liquid stools — this is about consistency, not how often you go (that's the question above)" },
   { id: 'gsrs_urgency', section: 'GI', cluster: 'Diarrhoea',
     patientText: 'Urgency', patientSub: 'A sudden, urgent need to pass stool with little warning' },
 
@@ -609,13 +609,14 @@ const QUESTIONS = [
     patientText: 'Bowel movements that are pale, greasy, or hard to flush' },
   { id: 'bam_fatty', section: 'GI', optional: true,
     revealIf: { any: [ { type: 'cluster', cluster: 'Diarrhoea', min: 0.30 }, { type: 'flag', flag: 'cholecystectomy' } ] },
-    patientText: 'Symptoms triggered more by fatty or greasy meals than by high-fibre or fermentable foods' },
+    patientText: 'Fatty or greasy meals trigger your symptoms more than fibre-rich or gassy foods do',
+    patientSub: "If you're not sure which triggers your symptoms more, it's fine to skip this" },
 
   // ── GI core — Constipation cluster ──
   { id: 'gsrs_constip', section: 'GI', cluster: 'Constipation',
     patientText: 'Constipation', patientSub: 'Passing stools less often than normal' },
   { id: 'gsrs_hard', section: 'GI', cluster: 'Constipation',
-    patientText: 'Hard stools', patientSub: 'Hard stools that are difficult to pass' },
+    patientText: 'Hard stools', patientSub: "Difficult to pass — this is about consistency, not how often you go (that's the question above)" },
   { id: 'gsrs_incomplete', section: 'GI', cluster: 'Constipation',
     patientText: 'Incomplete emptying', patientSub: "A feeling your bowel isn't completely empty afterward" },
 
@@ -641,15 +642,12 @@ const QUESTIONS = [
   // Gut–skin axis: the one retained skin item (atopic/inflammatory readout), folded
   // into the immune domain (TRIM_PLAN §6.1). Feeds the inflammatory_immune pattern.
   { id: 'sk_skin', section: 'IM', patientText: 'Acne, eczema, or unexplained skin rashes' },
-  // Objective inflammatory anchor (§7b) — gives IM a diagnosed-condition anchor the
-  // way NU has nu_known_def, so the domain isn't purely symptom-proxy. Optional
-  // (only counts when answered); weighted like a lab anchor in inflammatory_immune.
-  { id: 'im_known_dx', section: 'IM', optional: true, optionalLabel: 'if diagnosed',
-    patientText: 'Diagnosed autoimmune or inflammatory condition',
-    patientSub: 'e.g. rheumatoid arthritis, psoriasis, lupus, or thyroid disease' },
-  { id: 'im_known_dx_which', section: 'IM', optional: true, freeText: true,
-    revealIf: { type: 'item', id: 'im_known_dx', min: 1 },
-    patientText: 'Which condition?' },
+  // The objective inflammatory-condition anchor (§7b, formerly its own severity-
+  // scale question here) now lives as an 'autoimmune' chip in KNOWN_CONDITIONS —
+  // a diagnosis is a yes/no fact, not something with a "None/Mild/.../Very
+  // severe" severity, and the app already has a clean binary-chip mechanism for
+  // exactly this (conditionsCard()). inflammatory_immune's `knownDx` signal now
+  // reads extras.conditions.includes('autoimmune') instead of this item.
 
   // ── BG — Brain-gut & mood (DRAFT) ──
   { id: 'bg_brainfog', section: 'BG', patientText: 'Brain fog or poor concentration',
@@ -671,11 +669,12 @@ const QUESTIONS = [
   { id: 'bg_headache', section: 'BG', patientText: 'Headaches or migraines' },
 
   // ── NU — Nutrient & absorption (DRAFT) ──
-  { id: 'nu_known_def', section: 'NU', optional: true, optionalLabel: 'if tested',
-    patientText: 'Known low B12, iron, vitamin D, or magnesium', patientSub: 'Found on past blood work' },
-  { id: 'nu_known_def_which', section: 'NU', optional: true, freeText: true,
-    revealIf: { type: 'item', id: 'nu_known_def', min: 1 },
-    patientText: 'Which ones? (B12 / iron / vitamin D / magnesium)' },
+  // A lab-confirmed deficiency (formerly its own severity-scale question here)
+  // now lives as the 'vitamins' chip in KNOWN_LABS — the app already has a
+  // clean mechanism for "a clinician already told me this was abnormal"
+  // (labsCard(), with its own optional value/detail free-text per chip), so
+  // this duplicated it under a different name. nutrient_malabsorption's
+  // `known` signal now reads extras.knownLabs.includes('vitamins') instead.
   { id: 'nu_hair', section: 'NU', patientText: 'Hair thinning or hair loss' },
   { id: 'nu_iron', section: 'NU', patientText: 'Looking pale, breathlessness, or restless legs',
     patientSub: 'Possible iron-deficiency signs' },
@@ -703,7 +702,7 @@ const QUESTIONS = [
     patientSub: 'Leakage because you could not reach a toilet quickly enough' },
   { id: 'ar_incont_passive', section: 'AR', optional: true, patientText: 'Leakage or soiling of stool without realising, or without any warning',
     patientSub: 'Finding stool on underwear when you did not feel it happen' },
-  { id: 'ar_incont_flatus',  section: 'AR', optional: true, patientText: 'Trouble controlling wind (gas)' },
+  { id: 'ar_incont_flatus',  section: 'AR', optional: true, patientText: 'Trouble controlling gas' },
   { id: 'ar_straining',    section: 'AR', optional: true, patientText: 'Straining to pass stool' },
   { id: 'ar_blockage',     section: 'AR', optional: true, patientText: 'A sensation of blockage at the back passage' },
   { id: 'ar_maneuvers',    section: 'AR', optional: true, patientText: 'Needing to press around or below the back passage to empty',
@@ -886,7 +885,7 @@ const STOOL_FREQ_LEVELS = ['<3 times/week', '3–6 times/week', '1–3 times/day
 // F1 — Rome IV proportion bands for stool-form subtyping (>25% rule). The band
 // index maps to a representative percentage midpoint used by romeDisplaySubtype:
 // index 0 = <25% (below Rome's threshold), 1 = 25–50%, 2 = >50%.
-const PROPORTION_LEVELS = ['Rarely — under a quarter', 'About a quarter to half', 'More than half']; // 0–2
+const PROPORTION_LEVELS = ['Rarely — under 25%', '25–50%', 'More than 50%']; // 0–2
 const PROPORTION_PCT_MID = [10, 40, 70]; // midpoints: only index 0 is ≤25%
 const SMOKING_LEVELS    = ['Never smoked', 'Former smoker', 'Current smoker'];                   // 0–2
 // Shared with lifestyleCard()'s diet-frequency rows AND the new caffeine row —
@@ -1026,6 +1025,11 @@ const KNOWN_CONDITIONS = [
   { id: 'lactose',    label: 'Lactose intolerance' },
   { id: 'foodallergy',label: 'Food allergy / intolerance', clinNote: 'Known food allergy/intolerance — factor into the food-reaction / IM read.' },
   { id: 'mood',       label: 'Diagnosed anxiety or depression' },
+  // §7b anchor (formerly a standalone severity-scale question, im_known_dx) —
+  // a diagnosis is a yes/no fact, so it belongs here with the rest of the
+  // known-condition chips, not on a None–Very-severe scale of its own.
+  { id: 'autoimmune', label: 'Autoimmune or inflammatory condition (e.g. RA, psoriasis, lupus)',
+    clinNote: 'Known autoimmune/inflammatory condition — relevant to the inflammatory/immune read.' },
 ];
 function knownConditions(extras) {
   const ids = new Set(((extras || {}).conditions) || []);
@@ -1055,7 +1059,7 @@ const KNOWN_LABS = [
   { id: 'crp',          label: 'CRP or ESR (raised)' },
   { id: 'tsh',          label: 'Thyroid — TSH (abnormal)' },
   { id: 'hba1c',        label: 'Blood sugar / HbA1c (raised)' },
-  { id: 'vitamins',     label: 'Low vitamin D / B12 / iron (confirmed)' },
+  { id: 'vitamins',     label: 'Low vitamin D / B12 / iron / magnesium (confirmed)' },
 ];
 function knownLabs(extras) {
   const ids = new Set(((extras || {}).knownLabs) || []);
@@ -2015,18 +2019,19 @@ const PATTERNS = [
     label: 'Nutrient-malabsorption pattern',
     desc: 'Low-nutrient-status signs (hair thinning, iron-type signs, mouth changes, or known deficiency) with GI symptoms — consider malabsorption; check relevant bloods.',
     eval: (s, ex, a) => {
-      const known  = ge(av(a, 'nu_known_def'), 1); // lab-confirmed deficiency (optional item)
+      // A lab-confirmed deficiency is now reported via the 'vitamins' chip in
+      // KNOWN_LABS (labsCard()) rather than its own standalone question — same
+      // "a: true" treatment as epiOrBariatric below, since an unticked chip
+      // list is a complete (negative) answer, not missing data.
+      const known  = { a: true, t: (ex.knownLabs || []).includes('vitamins') };
       const hair   = ge(av(a, 'nu_hair'), 2);
       const iron   = ge(av(a, 'nu_iron'), 2);
       const mouth  = ge(av(a, 'nu_mouth'), 2);
       const giPresent = ge(gi(s), 0.2);
       // D1: two more objective known-tier signals, same standing as
-      // nu_known_def — low BMI and a diagnosed EPI/bariatric-surgery history
-      // are themselves malabsorption risk factors, independent of a lab
-      // result the patient may not have had drawn yet. `a: true` for the
-      // condition/surgery flag since an empty selection is a complete answer
-      // (no conditions ticked), not missing data — unlike nu_known_def, which
-      // is a genuinely optional single item.
+      // `known` — low BMI and a diagnosed EPI/bariatric-surgery history are
+      // themselves malabsorption risk factors, independent of a lab result
+      // the patient may not have had drawn yet.
       const lowBMI = { a: !!(ex.anthro && ex.anthro.bmi != null), t: !!(ex.anthro && ex.anthro.bmi != null && ex.anthro.bmi < 18.5) };
       const epiOrBariatric = { a: true, t: (ex.conditions || []).includes('pancreas') || (ex.surgeries || []).includes('bariatric') };
       const proxyCount = [hair, iron, mouth].filter(x => x.t).length;
@@ -2076,7 +2081,9 @@ const PATTERNS = [
     eval: (s, ex, a) => {
       const imNorm    = s.secNorm && s.secNorm.IM;
       const imHigh    = ge(imNorm, 0.4);
-      const knownDx   = ge(av(a, 'im_known_dx'), 1);   // §7b diagnosed-condition anchor (lab-like, parallels nu_known_def)
+      // §7b diagnosed-condition anchor — now the 'autoimmune' chip in
+      // KNOWN_CONDITIONS (conditionsCard()) rather than its own question.
+      const knownDx   = { a: true, t: (ex.conditions || []).includes('autoimmune') };
       const histamine = ge(av(a, 'im_histamine'), 2);  // merged from histamine_intolerance
       const skin      = ge(av(a, 'sk_skin'), 2);        // relocated gut–skin item
       const giPresent = ge(gi(s), 0.25);
@@ -4820,11 +4827,12 @@ function computeAll() {
   // abdominal pain present. gy_cyclical is already female-gated in the schema.
   const gynOverlap = (typeof answers.gy_cyclical === 'number' && answers.gy_cyclical >= 2)
     && (typeof answers.gsrs_pain === 'number' && answers.gsrs_pain >= 2);
-  // A diagnosed autoimmune/inflammatory condition (§7b lab-like anchor) is the
-  // single most specific signal inflammatory_immune can carry — triage.js
-  // routes it to Tier 2 on its own, independent of signalHits, so it can't be
-  // out-ranked by a noisy-but-fully-answered IM mean.
-  const immuneKnownDx = typeof answers.im_known_dx === 'number' && answers.im_known_dx >= 1;
+  // A diagnosed autoimmune/inflammatory condition (§7b anchor — the
+  // 'autoimmune' KNOWN_CONDITIONS chip) is the single most specific signal
+  // inflammatory_immune can carry — triage.js routes it to Tier 2 on its own,
+  // independent of signalHits, so it can't be out-ranked by a noisy-but-
+  // fully-answered IM mean.
+  const immuneKnownDx = (extras.conditions || []).includes('autoimmune');
   // Universal duration/chronicity item — resolved to its label here so triage.js
   // stays pure (no scales.js dependency for one lookup).
   const durationLabel = typeof answers.sx_duration === 'number' ? scaleFor('DURATION')[answers.sx_duration] : null;
@@ -5778,13 +5786,6 @@ function buildClinicianPrint(c, opts) {
     if (meds && meds.list && meds.list.length) row('Medication confounders', esc(meds.list.map(m => m.label + (m.effect ? ` (${m.effect})` : '')).join('; ')));
     const medsOtherTxt = (driverExtras && driverExtras.medsOther || '').trim();
     if (medsOtherTxt) row('Other medications', esc(medsOtherTxt));
-    // Free-text detail on the two "known diagnosed condition" anchor items —
-    // previously captured but only visible in the opt-in appendix, unlike
-    // every other free-text field here (labs, treatments, other meds).
-    const knownDxWhich = (typeof answers.im_known_dx_which === 'string' ? answers.im_known_dx_which : '').trim();
-    if (knownDxWhich) row('Diagnosed immune/inflammatory condition', esc(knownDxWhich));
-    const knownDefWhich = (typeof answers.nu_known_def_which === 'string' ? answers.nu_known_def_which : '').trim();
-    if (knownDefWhich) row('Known nutrient deficiency', esc(knownDefWhich));
     // Reported abnormal labs + treatments already tried — moved here from the
     // triage box (they are context, not action-modifying flags).
     if (tri.labNote) row('Reported abnormal labs', esc(tri.labNote.replace(/^Patient-reported abnormal test result\(s\): /, '').replace(/\.$/, '')));

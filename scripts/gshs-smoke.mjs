@@ -89,7 +89,7 @@ ok(r4r.some(t => /inflammator/i.test(t)), 'inflammatory_immune wired into triage
 
 // 5. Nutrient tightening: single proxy no fire; lab-confirmed fires.
 ok(!run(2, { nu_hair: 3 }).pat.some(p => p.id === 'nutrient_malabsorption'), 'single nutrient proxy does not fire');
-ok(run(2, { nu_known_def: 1 }).pat.some(p => p.id === 'nutrient_malabsorption'), 'lab-confirmed deficiency fires');
+ok(run(2, {}, { knownLabs: ['vitamins'] }).pat.some(p => p.id === 'nutrient_malabsorption'), 'lab-confirmed deficiency (known-lab chip) fires');
 
 // 6. Impact escalation independent of symptom severity.
 const r6 = run(1, { imp_work: 3, imp_social: 3, imp_food: 3, imp_global: 3 });
@@ -187,7 +187,17 @@ ok(schema.revealMet({ type: 'item', id: 'im_histamine', min: 2 }, { answers: { i
 ok(schema.revealMet({ type: 'item', id: 'gsrs_pain', min: 1 }, { answers: { gsrs_pain: 0 } }) === false, 'pain/Rome cards hidden when gsrs_pain == 0');
 ok(schema.revealMet({ type: 'item', id: 'gsrs_pain', min: 1 }, { answers: { gsrs_pain: 1 } }) === true, 'pain/Rome cards shown when gsrs_pain ≥ 1');
 // free-text follow-up items exist and carry revealIf
-ok(schema.QUESTIONS.some(q => q.id === 'nu_known_def_which' && q.freeText && q.revealIf), 'nu_known_def_which is a gated free-text follow-up');
+ok(schema.QUESTIONS.some(q => q.id === 'im_histamine_foods' && q.freeText && q.revealIf), 'im_histamine_foods is a gated free-text follow-up');
+// nu_known_def / im_known_dx were removed as standalone severity-scale
+// questions — a diagnosis/lab result is a yes/no fact, so they now live as
+// the 'vitamins' chip in KNOWN_LABS and the 'autoimmune' chip in
+// KNOWN_CONDITIONS respectively (both pre-existing binary-chip mechanisms).
+ok(!schema.QUESTIONS.some(q => q.id === 'nu_known_def' || q.id === 'im_known_dx'),
+  'nu_known_def / im_known_dx removed as standalone questions');
+ok(scales.KNOWN_LABS.some(L => L.id === 'vitamins' && /magnesium/i.test(L.label)),
+  'KNOWN_LABS vitamins chip now also covers magnesium (absorbs nu_known_def)');
+ok(scales.KNOWN_CONDITIONS.some(c => c.id === 'autoimmune'),
+  'KNOWN_CONDITIONS gained an autoimmune/inflammatory chip (absorbs im_known_dx)');
 
 // 14. Conditional sections never enter the validated Index.
 const aPelvic = {}; GI_IDS.forEach(id => (aPelvic[id] = 0));
@@ -1200,29 +1210,32 @@ ok(b1Pats.some(p => p.id === 'diarrhoea_dominant'), 'sanity: diarrhoea_dominant 
 const b1Tri = triage(b1Score, b1Pats, [], { count: 0 }, {});
 ok(candidacyTier(b1Tri, 'Loose-stool') === 2, 'diarrhoea_dominant candidacy is filed under Tier 2, not Tier 3 (B1)');
 
-// B2 regression. A lab-confirmed deficiency (nu_known_def) fires
-// nutrient_malabsorption on its own, even when current GI symptoms are mild
-// (giPresent false) — previously gated out, silently dropping a
+// B2 regression. A lab-confirmed deficiency (the 'vitamins' KNOWN_LABS chip)
+// fires nutrient_malabsorption on its own, even when current GI symptoms are
+// mild (giPresent false) — previously gated out, silently dropping a
 // referral-grade signal for exactly the patient it targets. Tier level: this
 // is a symptom/history-inferred candidacy, not a red flag or Severe burden,
 // so it routes to Tier 2 (clinician-led — arrange bloods/review), not Tier 1.
-const b2Answers = { gsrs_heartburn: 0, nu_known_def: 1 };
+const b2Answers = { gsrs_heartburn: 0 };
+const b2Extras = { knownLabs: ['vitamins'] };
 const b2Score = scoring.computeScores(b2Answers, {});
 ok((b2Score.secNorm.GI || 0) < 0.2, 'sanity: b2Answers fixture keeps secNorm.GI below the 0.2 giPresent gate');
-const b2Pats = patterns.detectPatterns(b2Score, {}, b2Answers);
+const b2Pats = patterns.detectPatterns(b2Score, b2Extras, b2Answers);
 ok(b2Pats.some(p => p.id === 'nutrient_malabsorption'), 'nutrient_malabsorption fires on lab-confirmed deficiency alone, independent of giPresent (B2)');
 const b2Tri = triage(b2Score, b2Pats, [], { count: 0 }, {});
 ok(b2Tri.level === 2, 'lab-confirmed deficiency alone reaches Tier 2 even with mild current GI symptoms (B2) — Tier 1 is reserved for red flags/Severe burden');
 
-// B5 regression. inflammatory_immune with a diagnosed condition
-// (im_known_dx) as the only specific signal reaches Tier 2, not Tier 3 —
-// previously signalHits=2 (<3) routed it to Tier 3 despite the routing
-// comment's stated intent that a diagnosed condition should reach Tier 2.
-const b5Answers = { gsrs_heartburn: 2, im_known_dx: 1 };
+// B5 regression. inflammatory_immune with a diagnosed condition (the
+// 'autoimmune' KNOWN_CONDITIONS chip) as the only specific signal reaches
+// Tier 2, not Tier 3 — previously signalHits=2 (<3) routed it to Tier 3
+// despite the routing comment's stated intent that a diagnosed condition
+// should reach Tier 2.
+const b5Answers = { gsrs_heartburn: 2 };
+const b5Extras = { conditions: ['autoimmune'] };
 const b5Score = scoring.computeScores(b5Answers, {});
-const b5Pats = patterns.detectPatterns(b5Score, {}, b5Answers);
+const b5Pats = patterns.detectPatterns(b5Score, b5Extras, b5Answers);
 const b5Infl = b5Pats.find(p => p.id === 'inflammatory_immune');
-ok(!!b5Infl, 'sanity: inflammatory_immune fires on im_known_dx alone (GI present)');
+ok(!!b5Infl, 'sanity: inflammatory_immune fires on a known autoimmune/inflammatory condition alone (GI present)');
 ok(b5Infl.signalHits < 3, 'sanity: this fixture has signalHits < 3 (the case that was previously mis-routed)');
 const b5Tri = triage(b5Score, b5Pats, [], { count: 0 }, { immuneKnownDx: true });
 ok(candidacyTier(b5Tri, 'Inflammatory') === 2, 'diagnosed condition (im_known_dx) alone routes inflammatory_immune to Tier 2, not Tier 3 (B5)');
