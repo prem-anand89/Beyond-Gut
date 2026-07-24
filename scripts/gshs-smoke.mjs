@@ -1846,6 +1846,18 @@ ok(/id: 'systemic'[\s\S]{0,600}targetedSymptomsArea\(\)/.test(bs),
 // Wizard machinery: paint + navigate.
 ok(/function paintWizard\(steps\)\s*\{/.test(html), 'paintWizard() defined');
 ok(/function goToStep\(i, steps\)\s*\{/.test(html), 'goToStep() defined');
+{
+  const gts = html.match(/function goToStep\(i, steps\)\s*\{[\s\S]*?\n\}\n/)[0];
+  // Regression guard: the scroll target must be a NON-sticky element
+  // (#gstepsub). #gstepper sits inside the sticky .stepper-wrap, so once the
+  // user has scrolled down to reach the bottom Next button its
+  // getBoundingClientRect().top reflects the pinned viewport offset, not the
+  // step's true document position — using it as the scroll target left users
+  // dropped mid-page (sometimes near the bottom) after clicking Next.
+  ok(/getElementById\('gstepsub'\)/.test(gts), 'goToStep() scroll target is the non-sticky #gstepsub, not the sticky stepper');
+  ok(!/getElementById\('gstepper'\)/.test(gts), 'goToStep() no longer reads a bounding rect off the sticky #gstepper (unreliable once pinned)');
+  ok(/stepperWrap \? stepperWrap\.offsetHeight : 0/.test(gts), 'goToStep() offset accounts for the stepper-wrap\'s own pinned height, not just the app-bar');
+}
 const pw = html.match(/function paintWizard\(steps\)\s*\{[\s\S]*?\n\}\n/)[0];
 // Stepper state: done → ✓, current → ringed number, upcoming → grey.
 ok(/i < currentStep \? 'done' : i === currentStep \? 'now' : ''/.test(pw),
@@ -1907,6 +1919,48 @@ ok(/trendChartSvg\(trend\.points, sortedTrendVisits\)/.test(trendPrintBlock), 'p
 ok(/latest\.delta[\s\S]{0,120}pr-pill/.test(trendPrintBlock), 'print trend section shows the headline delta pill, same as on-screen');
 ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span>/.test(trendPrintBlock),
   'print trend section shows cluster trajectory as before→after chips (Option D), same as on-screen');
+
+// ── KPI band tile alignment ──────────────────────────────────────────────
+// Tile labels vary in length ("Gut Symptom Burden" vs "Nutrient / Malabsorption
+// Risk" vs "Dysbiosis Correlate Load") — a label that wraps to 2 lines used to
+// push that tile's value/badge down relative to a sibling tile whose label
+// stayed on 1 line, so the numbers across the KPI band didn't line up. Fixed
+// by reserving a fixed 2-line-tall label slot in both the on-screen
+// headlineCard() tile and the print .pr-kpi-tile .k so the value row always
+// starts at the same offset regardless of how many lines the label wrapped to.
+{
+  const kpiCss = html.match(/\.pr-kpi-tile \.k\{[^}]*\}/);
+  ok(!!kpiCss && /min-height:21px/.test(kpiCss[0]), 'print .pr-kpi-tile .k reserves a fixed label height so values align across tiles regardless of wrap');
+  const hcFn = html.match(/function headlineCard\(heads, rome\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!hcFn, 'sanity: headlineCard() function body captured');
+  ok(/min-height:30px/.test(hcFn[0]), 'on-screen headlineCard() tile label reserves a fixed height so values align across tiles regardless of wrap');
+}
+
+// ── Tier-1 scheduling text must match WHY Tier 1 fired ──────────────────────
+// Tier 1 fires for three distinct reasons — a safety red flag, Severe GI
+// burden, or a malabsorption pattern — but only the first is an actual safety
+// alarm. schedulingPriorityHtml() used to say "Same-day / urgent — set by red
+// flags" for EVERY Tier-1 case, including ones with zero red flags fired
+// (e.g. Tier 1 via "Possible malabsorption" alone), which read as an
+// inappropriate same-day/emergency instruction. redFlagUrgency (set on the
+// triage() result) now drives the wording, and a null value (no flag fired)
+// gets an explicitly non-urgent "routine referral" message instead.
+{
+  const triFn = html.match(/function triage\(score, patterns, firedFlags, dys, opts\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!triFn, 'sanity: triage() function body captured');
+  const t = triFn[0];
+  ok(/redFlagUrgency: topFlagUrgency/.test(t), 'triage() exposes redFlagUrgency on its result (null when no red flag fired)');
+  ok(/let topFlagUrgency = null;/.test(t), 'topFlagUrgency defaults to null — a Tier 1 via Severe burden/malabsorption alone carries no red-flag urgency');
+
+  const schedFn = html.match(/function schedulingPriorityHtml\(tri, cells\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!schedFn, 'sanity: schedulingPriorityHtml() function body captured');
+  const s = schedFn[0];
+  ok(!/Same-day \/ urgent — set by red flags, frequency does not override safety\./.test(s),
+    'schedulingPriorityHtml() no longer hardcodes "same-day/urgent" for every Tier-1 reason');
+  ok(/tri\.redFlagUrgency/.test(s), 'schedulingPriorityHtml() branches on redFlagUrgency instead of blanket-assuming a red flag');
+  ok(/no safety red flag present/.test(s),
+    'schedulingPriorityHtml() gives a routine-referral message (not same-day) when Tier 1 fired without any red flag');
+}
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

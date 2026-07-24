@@ -300,7 +300,7 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
      of the on-screen headlineCard()/kpi band. */
   .pr-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:6px}
   .pr-kpi-tile{border:1px solid #D0D0C8;border-radius:6px;padding:5px 8px;background:#fff}
-  .pr-kpi-tile .k{font-size:8px;font-weight:700;color:#777;text-transform:uppercase;letter-spacing:.02em}
+  .pr-kpi-tile .k{font-size:8px;font-weight:700;color:#777;text-transform:uppercase;letter-spacing:.02em;line-height:1.3;min-height:21px}
   .pr-kpi-tile .v{font-size:16px;font-weight:800;color:var(--brand);margin:1px 0 2px}
   .pr-kpi-meta{font-size:9.5px;color:#777;margin-bottom:6px}
   .pr-alert{background:var(--alert-p);border:1px solid var(--alert);border-radius:6px;padding:6px 8px;margin-bottom:6px;page-break-inside:avoid;break-inside:avoid}
@@ -2311,14 +2311,19 @@ function triage(score, patterns, firedFlags, dys, opts) {
   // fired flags (emergency > urgent > routine), so a same-day feature (GI bleed,
   // jaundice) reads differently from a routine 2-week-wait alarm. Never downgrades
   // below "refer" — the lowest tier is still a Tier-1 referral reason.
+  // E2 — the highest urgency among fired red flags, kept on the result so the
+  // scheduling line (schedulingPriorityHtml) can tell a genuine safety-driven
+  // Tier 1 (same-day/urgent) apart from a Tier 1 reached via Severe burden or a
+  // malabsorption signal alone (routine referral — no red flag present at all).
+  let topFlagUrgency = null;
   if (flags.length) {
     const rank = { emergency: 3, urgent: 2, routine: 1 };
-    const top = flags.reduce((t, f) => {
+    topFlagUrgency = flags.reduce((t, f) => {
       const u = f.urgency || 'routine';
       return (rank[u] > rank[t]) ? u : t;
     }, 'routine');
-    const urgWord = top === 'emergency' ? ' — same-day assessment advised'
-      : top === 'urgent' ? ' — prompt (within-days) assessment advised' : '';
+    const urgWord = topFlagUrgency === 'emergency' ? ' — same-day assessment advised'
+      : topFlagUrgency === 'urgent' ? ' — prompt (within-days) assessment advised' : '';
     add(1, flags.length + ' safety red-flag answer' + (flags.length > 1 ? 's' : '') + ' present' + urgWord, 'safety');
   }
   if (band === 'Severe') add(1, 'Severe GI symptom burden', 'symptom');
@@ -2446,7 +2451,7 @@ function triage(score, patterns, firedFlags, dys, opts) {
   let primary = 4;
   for (const lvl of [1, 2, 3]) { if (candidacy[lvl].length) { primary = lvl; break; } }
 
-  const result = Object.assign({}, TIERS[primary], { reasons: candidacy[primary].slice() });
+  const result = Object.assign({}, TIERS[primary], { reasons: candidacy[primary].slice(), redFlagUrgency: topFlagUrgency });
   // Secondary candidacies worth flagging (lower-urgency tiers that still apply).
   // Kept in full here — clinicians should see the whole tier landscape — but
   // patient-facing render sites (triageCard's patient call, buildPatientPrint)
@@ -3324,7 +3329,7 @@ function headlineCard(heads, rome) {
     const isPct = o.key === 'gut_symptom_burden' || o.key === 'nutrient_malabsorption_risk';
     const val = o.value == null ? '—' : (isPct ? o.value + '%' : o.value);
     grid.appendChild(el('div', { style: 'border:1px solid var(--bdr);border-radius:10px;padding:11px 12px;background:var(--paper)' },
-      `<div style="font-size:11.5px;font-weight:700;color:var(--inks)">${esc(o.label)} ${provTag(o.validated)}</div>
+      `<div style="font-size:11.5px;font-weight:700;color:var(--inks);line-height:1.3;min-height:30px">${esc(o.label)} ${provTag(o.validated)}</div>
        <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px">
          <div style="font-size:24px;font-weight:800;color:var(--ink)">${esc(String(val))}</div>
          ${o.band ? `<span class="pill ${bandPillClass(o.band)}">${esc(o.band)}</span>` : ''}
@@ -3472,15 +3477,29 @@ function frequencyPatternSummary(cells) {
 }
 
 // Advisory SCHEDULING-priority tie-breaker — NEVER changes the clinical Tier,
-// which stays entirely red-flag/pattern driven (Tier 1 always reads "same-day/
-// urgent" here regardless of frequency). Within a tier, frequency distinguishes
-// how soon to book: multiple clusters that are both severe AND frequent (the
-// burden matrix's "priority" quadrant) push toward expediting; an all-episodic
-// picture can reasonably wait for the next routine slot. Returns null when
-// there's no frequency data to base a tie-breaker on (never defaults to
-// "Routine" from an absence of data).
+// which stays entirely red-flag/pattern driven. Within a tier, frequency
+// distinguishes how soon to book: multiple clusters that are both severe AND
+// frequent (the burden matrix's "priority" quadrant) push toward expediting;
+// an all-episodic picture can reasonably wait for the next routine slot.
+// Returns null when there's no frequency data to base a tie-breaker on (never
+// defaults to "Routine" from an absence of data).
+// Tier 1 fires for three distinct reasons (safety red flag, Severe burden, or
+// a malabsorption pattern) — only the first is an actual safety alarm. E2's
+// redFlagUrgency (emergency/urgent/routine, or null when no flag fired) drives
+// the wording here so "Severe burden"/"possible malabsorption" alone reads as
+// a priority referral, not a same-day/emergency instruction it didn't earn.
+const TIER1_SCHEDULE_BY_URGENCY = {
+  emergency: 'Same-day / urgent — set by a safety red flag; frequency does not override safety.',
+  urgent:    'Prompt — within days — set by a safety red flag; frequency does not override safety.',
+  routine:   'Refer promptly (routine-urgency red flag) — frequency does not override safety.',
+};
 function schedulingPriorityHtml(tri, cells) {
-  if (tri.level === 1) return `<div style="font-size:10.5px;margin-top:4px"><b>Scheduling:</b> Same-day / urgent — set by red flags, frequency does not override safety.</div>`;
+  if (tri.level === 1) {
+    const text = tri.redFlagUrgency
+      ? TIER1_SCHEDULE_BY_URGENCY[tri.redFlagUrgency]
+      : 'Routine referral timeframe — arrange clinician review/bloods; not a same-day or emergency instruction (no safety red flag present).';
+    return `<div style="font-size:10.5px;margin-top:4px"><b>Scheduling:</b> ${text}</div>`;
+  }
   const hasFreq = (cells || []).some(c => c.freqIdx != null);
   if (!hasFreq) return '';
   const priorityCount = cells.filter(c => c.quadrant === 'priority').length;
@@ -3878,16 +3897,25 @@ function paintWizard(steps) {
   });
 }
 
-// Move to step `i` and scroll the stepper to just below the sticky header (a
-// plain scrollIntoView would tuck it under the header on mobile).
+// Move to step `i` and scroll to just below the sticky header + stepper (a
+// plain scrollIntoView would tuck it under the header on mobile). Once the
+// user has scrolled down within a step to reach the bottom Next button, both
+// the app-bar and the stepper are pinned via position:sticky — so their own
+// getBoundingClientRect().top no longer reflects true document position, it
+// reads as their pinned viewport offset regardless of scroll depth. Targeting
+// #gstepsub (the "Previous/Next up" line, non-sticky, immediately below the
+// stepper) instead of the sticky #gstepper gives an accurate target, so
+// switching from a long step to a short one lands at that step's top instead
+// of wherever the old scroll position happened to fall inside it.
 function goToStep(i, steps) {
   currentStep = i;
   paintWizard(steps || buildSteps());
-  const stepper = document.getElementById('gstepper');
-  if (stepper) {
+  const anchor = document.getElementById('gstepsub');
+  if (anchor) {
     const bar = document.querySelector('.app-bar');
-    const off = (bar ? bar.offsetHeight : 0) + 8;
-    const y = stepper.getBoundingClientRect().top + window.scrollY - off;
+    const stepperWrap = document.querySelector('.stepper-wrap');
+    const off = (bar ? bar.offsetHeight : 0) + (stepperWrap ? stepperWrap.offsetHeight : 0) + 8;
+    const y = anchor.getBoundingClientRect().top + window.scrollY - off;
     window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
   }
 }
