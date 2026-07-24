@@ -427,37 +427,45 @@ ok(!/Screening synthesis only — not a diagnosis/.test(html), 'clinician: impre
 ok((html.match(/not a diagnosis or prescription\. Apply clinical judgement/g) || []).length === 2,
   'clinician: single "not a diagnosis" disclaimer at the end of each surface (print footer + on-screen closing note)');
 
-// Page-group headers + hero.
-ok(/Page 1 · At a glance/.test(clSrc), 'clinician: Page 1 group header present');
-ok(/Page 2 · Assessment &amp; clinical detail/.test(clSrc), 'clinician: Page 2 group header present');
-ok(/Page 3\+ · Appendix/.test(clSrc), 'clinician: Page 3+ group header present');
-ok(/class="pr-hero"/.test(clSrc), 'clinician: headline score hero present in print');
-ok(clSrc.indexOf('Page 1 ·') < clSrc.indexOf('Page 2 ·') && clSrc.indexOf('Page 2 ·') < clSrc.indexOf('Page 3+ ·'),
-  'clinician: the 3 pages appear in order');
+// Page-group headers removed (both surfaces): "Clinical Summary" as a
+// document title and the "Page 1/2/3 · ..." divider bars were dropped as
+// redundant chrome — the KPI band + section headers already say what's what,
+// and the single-continuous-document design doesn't need page numbering.
+// pr-page-break markers (invisible — no label/background) still force the
+// print PDF to break before Interpretation and before the Appendix.
+ok(!/Clinical Summary/.test(clSrc), 'clinician: "Clinical Summary" document-title line removed from print');
+ok(!/Page 1 · At a glance|Page 2 · Assessment|Page 3\+ · Appendix/.test(clSrc), 'clinician: "Page 1/2/3" divider wording removed from print');
+ok((clSrc.match(/class="pr-page-break"/g) || []).length === 2, 'clinician: print still forces 2 page breaks (before Interpretation, before Appendix), just without a visible label');
+// Report restructure: the single-stat pr-hero was replaced by a 4-tile KPI
+// band (pr-kpi), mirroring the on-screen headlineCard()/kpi band.
+ok(/class="pr-kpi"/.test(clSrc), 'clinician: KPI band (4-tile) present in print');
 
 // Every section header present, sourced from REPORT_SECTIONS via sectionTitle(key).
 // (History & context + Modifiable drivers are now one 'context' section; 'trend'
 // only renders when a prior visit exists, so it may sit after 'context'.)
-['flags', 'impression', 'burden', 'plan', 'interp', 'context', 'trend', 'actions', 'appendix'].forEach(k => {
+['flags', 'impression', 'burden', 'patterns', 'plan', 'interp', 'context', 'trend', 'actions', 'appendix'].forEach(k => {
   ok(clSrc.includes(`sectionTitle('${k}')`), `clinician: ${k} section header present`);
 });
-// Sections appear in the intended order across the report — hybrid page-1 reorg
-// (item 8): plan (triage box + care-track badges) then flags lead page 1, then
-// impression (+ peak alert + clinical flags), then the burden matrix; page 2
-// opens with interp → context → trend → actions (last) → appendix.
-const secIdx = ['plan', 'flags', 'impression', 'burden', 'interp', 'context', 'trend', 'actions', 'appendix'].map(k => clSrc.indexOf(`sectionTitle('${k}')`));
+// Sections appear in the intended order across the report — report restructure:
+// plan (triage box + care-track badges) then flags lead page 1, then impression
+// (+ peak alert), the burden matrix, then patterns & mechanisms (ranked by
+// priority, closes page 1); page 2 opens with interp → context → actions (now
+// BEFORE the trend) → trend → appendix.
+const secIdx = ['plan', 'flags', 'impression', 'burden', 'patterns', 'interp', 'context', 'actions', 'trend', 'appendix'].map(k => clSrc.indexOf(`sectionTitle('${k}')`));
 ok(secIdx.every((v, i) => v >= 0 && (i === 0 || v > secIdx[i - 1])), 'clinician: sections appear in the intended order (plan → … → appendix)');
-// Page 1 is: hero → triage/plan + care-track badges → red flags → impression +
-// peak alert + clinical flags → burden matrix (LAST section before page-2 break).
-ok(clSrc.indexOf('class="pr-hero"') < clSrc.indexOf(`sectionTitle('plan')`), 'clinician: hero leads, ahead of the triage/plan box');
-ok(clSrc.indexOf(`sectionTitle('burden')`) < clSrc.indexOf('Page 2 ·'), 'clinician: burden matrix is the last page-1 section');
+// Page 1 is: KPI band → triage/plan + care-track badges → red flags →
+// impression + peak alert → burden matrix → patterns (LAST page-1 section,
+// i.e. immediately before the page-break marker that opens Interpretation).
+ok(clSrc.indexOf('class="pr-kpi"') < clSrc.indexOf(`sectionTitle('plan')`), 'clinician: KPI band leads, ahead of the triage/plan box');
+ok(clSrc.indexOf(`sectionTitle('burden')`) < clSrc.indexOf(`sectionTitle('patterns')`), 'clinician: burden matrix precedes patterns & mechanisms');
+ok(clSrc.indexOf(`sectionTitle('patterns')`) < clSrc.indexOf(`sectionTitle('interp')`), 'clinician: patterns & mechanisms is the last page-1 section (precedes Interpretation)');
 
 // REPORT_SECTIONS is the single source of truth both surfaces read from.
 const reportSecMatch = html.match(/const REPORT_SECTIONS = \{[\s\S]*?\n\};/);
 const reportSecSrc = reportSecMatch ? reportSecMatch[0] : '';
 ok(!!reportSecMatch, 'REPORT_SECTIONS constant defined (single source of truth for section titles)');
 [['flags', 'Red flags'], ['impression', 'Clinical impression'], ['burden', 'Symptom burden — severity × frequency'],
- ['plan', 'Assessment & plan'], ['interp', 'Interpretation'], ['context', 'Context & drivers'],
+ ['plan', 'Assessment & plan'], ['patterns', 'Patterns & mechanisms'], ['interp', 'Interpretation'], ['context', 'Context & drivers'],
  ['trend', 'Longitudinal trend'], ['actions', 'Suggested Actions'], ['appendix', 'Full item-level responses']].forEach(([k, title]) => {
   ok(reportSecSrc.includes(`${k}:`) && reportSecSrc.includes(`'${title}'`), `REPORT_SECTIONS.${k} === '${title}'`);
 });
@@ -468,12 +476,14 @@ ok(!/reportItemHeader|REPORT_ITEMS/.test(html), 'old numbered item-header scheme
 // physiotherapy candidacy all sit inside the plan section — no cross-page pointer.
 ok(clSrc.indexOf(`sectionTitle('plan')`) < clSrc.indexOf('pr-triage'), 'clinician: triage box sits inside the plan section');
 // Suggested Actions (2-column investigations/management) now sits in its own
-// 'actions' section at the END of page 2, after Context & drivers/trend — a
-// clinician reads the verdict + evidence before the action list (item 1).
+// 'actions' section right after Context & drivers, BEFORE the trend — a
+// clinician reads the verdict + evidence, wants the action list next, and
+// treats the trend as a look-back rather than part of "what to do now".
 ok(clSrc.indexOf(`sectionTitle('context')`) < clSrc.indexOf(`sectionTitle('actions')`)
-  && clSrc.indexOf(`sectionTitle('actions')`) < clSrc.indexOf('Page 3+'),
-  'clinician: Suggested Actions sits after Context & drivers, before the appendix');
-ok(clSrc.indexOf('pr-triage') < clSrc.indexOf('Page 2 ·'), 'clinician: the triage/plan is on page 1 (hybrid reorg), not page 2');
+  && clSrc.indexOf(`sectionTitle('actions')`) < clSrc.indexOf(`sectionTitle('trend')`),
+  'clinician: Suggested Actions sits after Context & drivers, before the trend');
+ok(clSrc.indexOf(`sectionTitle('trend')`) < clSrc.indexOf(`sectionTitle('appendix')`), 'clinician: trend sits before the appendix');
+ok(clSrc.indexOf('pr-triage') < clSrc.indexOf(`sectionTitle('interp')`), 'clinician: the triage/plan is on page 1 (hybrid reorg), not page 2');
 ok(!/are in item 6|item 6 \(/.test(clSrc), 'clinician: the old cross-page "see item 6" pointer is gone');
 // Readability trims (de-wall): "also consider" is tier-names-only (no per-pattern
 // reason dump), and the triage box carries only action-modifying "Clinical flags"
@@ -497,12 +507,21 @@ ok(/capList\(group\.priority\.concat\(group\.consider\), 10\)/.test(html),
 // subtype/family add-ons, physiotherapy candidacy).
 ok(/investigationsRanked/.test(html) && /r\.rank === 0 \? bucket\.priority : bucket\.consider/.test(html),
   'clinician: Suggested Actions items are tagged Priority vs Also-consider by pattern rank');
-ok(/capList\(patterns, 6\)/.test(clSrc), 'clinician: patterns table capped to the top 6 prominent patterns');
+// Patterns table capped to top 8, ranked by priority (not confidence) — a
+// display-only re-sort (rankPatternsByPriority never mutates `patterns`, so
+// the Impression's leading-pattern pick above is unaffected).
+ok(/function rankPatternsByPriority\(patterns\)/.test(html) && /\(b\.strength \|\| 0\) - \(a\.strength \|\| 0\)/.test(html),
+  'rankPatternsByPriority() re-sorts by strength (intensity), not confidence');
+ok(/const ranked = rankPatternsByPriority\(patterns\);[\s\S]{0,60}capList\(ranked, 8\)/.test(clSrc),
+  'clinician: print patterns table is ranked by priority and capped to the top 8');
 ok(/function dedupeList\(arr\)/.test(html) && /function capList\(arr, n\)/.test(html), 'dedupeList/capList helpers defined');
 
-// Interpretation: patterns → Rome IV → axis & domain profile, in order.
-ok(clSrc.indexOf(`sectionTitle('interp')`) < clSrc.indexOf('Prominent patterns'), 'clinician: Patterns sits inside the interpretation section');
-ok(clSrc.indexOf('Prominent patterns') < clSrc.indexOf('>Axis &amp; domain profile<'), 'clinician: Patterns leads the Axis & domain profile');
+// Patterns & mechanisms (page 1, ranked by priority) leads Interpretation's
+// Rome IV → axis & domain profile, which now opens straight into Rome IV
+// (patterns no longer repeat inside Interpretation at all).
+ok(clSrc.indexOf(`sectionTitle('patterns')`) < clSrc.indexOf(`sectionTitle('interp')`), 'clinician: Patterns & mechanisms precedes Interpretation (promoted to page 1)');
+ok(!/Prominent patterns/.test(clSrc.slice(clSrc.indexOf(`sectionTitle('interp')`))),
+  'clinician: patterns table is not duplicated inside Interpretation');
 ok(clSrc.indexOf('Rome IV-informed bowel-pain pattern') < clSrc.indexOf('>Axis &amp; domain profile<'), 'clinician: Rome IV leads the Axis & domain profile');
 ok((clSrc.match(/sectionTitle\('burden'\)/g) || []).length === 1, 'clinician: burden matrix section renders exactly once');
 
@@ -604,34 +623,48 @@ ok(/manual\[- \]therapy|pelvic-floor/.test(physioSrc), 'physioCandidacy regex st
 const rcFn = html.match(/function renderClinician\(\)\s*\{[\s\S]*?\n\}\n/);
 ok(!!rcFn, 'renderClinician present');
 const rcSrc = rcFn ? rcFn[0] : '';
+// A small helper so an accidental `-1` (string not found) can never make an
+// ordering assertion vacuously pass — both indices must be real matches.
+const idxBoth = (a, b) => { const ia = rcSrc.indexOf(a), ib = rcSrc.indexOf(b); return ia >= 0 && ib >= 0 && ia < ib; };
 ok(/clinicalImpression\(c\)/.test(rcSrc), 'clinician tab: clinical impression added');
-ok(rcSrc.indexOf('clinicalImpression') < rcSrc.indexOf('headlineCard(heads'), 'clinician tab: impression above the headline');
 // Physio candidacy folded into the on-screen Suggested Actions card too (no
 // separate heading), same as print — see actionColumnsHtml.
 ok(/physioCandidacy\(tri\)/.test(rcSrc) && /actionColumnsHtml\(tri, physio\)/.test(rcSrc), 'clinician tab: physio candidacy folded into Suggested Actions');
 ok(/No red flags identified this visit/.test(rcSrc), 'clinician tab: foregrounded red-flags card (with none-reassurance)');
-ok(rcSrc.indexOf(`sectionTitle('flags')`) < rcSrc.indexOf('axisProfileCard'), 'clinician tab: red flags (page 1) before axis profile (page 2)');
-// Same hybrid page-1 layout mirrored on-screen (matches the print reorg):
-// page 1 = hero → Triage/plan + care-track badges → red flags → impression +
-// peak alert → burden matrix; page 2 opens with interpretation → context →
-// trend → Suggested Actions (last); page 3 is the appendix (which on-screen
-// also carries the history & context detail card).
-['Page 1 · At a glance', `sectionTitle('plan')`, `sectionTitle('flags')`,
- `sectionTitle('impression')`, `sectionTitle('burden')`,
- 'Page 2 · Assessment & clinical detail',
- `sectionTitle('interp')`, `sectionTitle('context')`, `sectionTitle('trend')`, `sectionTitle('actions')`,
- 'Page 3+ · Appendix', `sectionTitle('appendix')`,
+ok(idxBoth(`sectionTitle('flags')`, 'axisProfileCard'), 'clinician tab: red flags (page 1) before axis profile (page 2)');
+// Report structure (report restructure — KPI band + patterns-by-priority).
+// "Page 1/2/3" divider wording was dropped (redundant chrome, single
+// continuous document) — same section order remains, just without labels.
+// KPI band (the four headline reads, promoted from Interpretation) →
+// Triage/plan + care-track badges → red flags → impression + peak alert →
+// burden matrix → patterns & mechanisms (ranked by priority) → interpretation
+// (axis/domain) → context → Suggested Actions (now BEFORE the trend) →
+// trend → appendix.
+ok(!/Page 1 · At a glance|Page 2 · Assessment|Page 3\+ · Appendix/.test(rcSrc), 'clinician tab: "Page 1/2/3" divider wording removed on-screen');
+[`sectionTitle('plan')`, `sectionTitle('flags')`,
+ `sectionTitle('impression')`, `sectionTitle('burden')`, `sectionTitle('patterns')`,
+ `sectionTitle('interp')`, `sectionTitle('context')`, `sectionTitle('actions')`, `sectionTitle('trend')`,
+ `sectionTitle('appendix')`,
 ].forEach(txt => ok(rcSrc.includes(txt), `clinician tab: on-screen section header "${txt}" present`));
-ok(rcSrc.indexOf('class="hero"') < rcSrc.indexOf('triageCard(tri'), 'clinician tab: headline score hero leads, before the triage/plan card');
-ok(rcSrc.indexOf('triageCard(tri') < rcSrc.indexOf('rfCard'), 'clinician tab: triage/plan card precedes the red-flag card');
-ok(rcSrc.indexOf('rfCard') < rcSrc.indexOf('impCard'), 'clinician tab: red-flag card precedes the impression card');
-ok(rcSrc.indexOf('impCard') < rcSrc.indexOf('severityFrequencyCard'), 'clinician tab: impression precedes the burden matrix');
-ok(rcSrc.indexOf('severityFrequencyCard') < rcSrc.indexOf('Page 2 ·'), 'clinician tab: burden matrix is the last page-1 element');
-ok(rcSrc.indexOf(`sectionTitle('plan')`) < rcSrc.indexOf('triageCard(tri'), 'clinician tab: triage card sits inside the plan section');
-ok(rcSrc.indexOf(`sectionTitle('interp')`) < rcSrc.indexOf('headlineCard(heads'), 'clinician tab: headline/axis reads sit inside the interpretation section');
-ok(rcSrc.indexOf(`sectionTitle('context')`) < rcSrc.lastIndexOf('modifiableDriversCard'), 'clinician tab: modifiable-driver card sits inside the context section');
-ok(rcSrc.indexOf(`sectionTitle('actions')`) < rcSrc.indexOf('Page 3+'), 'clinician tab: Suggested Actions sits before the appendix');
-ok(rcSrc.indexOf('clinicianDetailCard(c)') > rcSrc.lastIndexOf(`sectionTitle('actions')`), 'clinician tab: clinicianDetailCard renders after Suggested Actions, under the appendix header');
+// KPI band leads the whole report — before Impression, before Triage.
+ok(idxBoth('const kpi = headlineCard(heads, rome)', 'clinicalImpression(c)'), 'clinician tab: KPI band (headlineCard) leads, before the impression');
+ok(idxBoth('const kpi = headlineCard(heads, rome)', 'triageCard(tri'), 'clinician tab: KPI band leads, before the triage/plan card');
+ok(idxBoth('triageCard(tri', 'rfCard'), 'clinician tab: triage/plan card precedes the red-flag card');
+ok(idxBoth('rfCard', 'impCard'), 'clinician tab: red-flag card precedes the impression card');
+ok(idxBoth('impCard', 'severityFrequencyCard'), 'clinician tab: impression precedes the burden matrix');
+ok(idxBoth('severityFrequencyCard', 'patternsMechanismsCard'), 'clinician tab: burden matrix precedes patterns & mechanisms');
+ok(idxBoth('patternsMechanismsCard', `sectionTitle('interp')`), 'clinician tab: patterns & mechanisms is the last page-1 element (precedes Interpretation)');
+ok(idxBoth(`sectionTitle('plan')`, 'triageCard(tri'), 'clinician tab: triage card sits inside the plan section');
+// The headline no longer repeats inside Interpretation (it now leads as the
+// KPI band) — Interpretation opens straight into the axis profile.
+ok(!/headlineCard\(heads, rome\)/.test(rcSrc.slice(rcSrc.indexOf(`sectionTitle('interp')`))),
+  'clinician tab: headlineCard is not duplicated inside the interpretation section');
+ok(idxBoth(`sectionTitle('interp')`, 'axisProfileCard'), 'clinician tab: interpretation opens with the axis profile (headline promoted to the KPI band)');
+ok(idxBoth(`sectionTitle('context')`, 'modifiableDriversCard'), 'clinician tab: modifiable-driver card sits inside the context section');
+// Suggested Actions now comes BEFORE the trend (was last).
+ok(idxBoth(`sectionTitle('actions')`, `sectionTitle('trend')`), "clinician tab: Suggested Actions sits before the trend (moved off 'last')");
+ok(idxBoth(`sectionTitle('trend')`, `sectionTitle('appendix')`), 'clinician tab: trend sits before the appendix');
+ok(idxBoth(`sectionTitle('actions')`, 'clinicianDetailCard(c)'), 'clinician tab: clinicianDetailCard (appendix) renders after Suggested Actions');
 // De-dup — the buried red-flag block is gone from clinicianDetailCard.
 const cdFn = html.match(/function clinicianDetailCard\(c\)\s*\{[\s\S]*?\n\}\n/);
 ok(cdFn && !/Red flags — \$\{fired\.length\} answered Yes/.test(cdFn[0]), 'clinician detail: buried red-flag block removed (no duplication)');
@@ -1500,13 +1533,13 @@ ok(/These are symptom-frequency questions/.test(html), 'clusterFreqCard clarifie
 ok(/Constipation: shown only if bowelFreq < 2[\s\S]{0,300}Diarrhoea: shown only if bowelFreq >= 2/.test(html),
   'clusterFreqCard comment documents hierarchical reveal logic');
 
-// ── Treatments already tried moved to the end of intake ──
-// It used to sit in the History group (before red flags); it should now be its
-// own group after the Adaptive deep dive, right before the "See results" action.
-ok(/'Treatments already tried'[\s\S]{0,60}treatmentsTriedCard\(\)/.test(html),
-  'treatmentsTriedCard() renders under its own "Treatments already tried" group');
-ok(/targetedSymptomsArea\(\)\);[\s\S]{0,400}treatmentsTriedCard\(\)[\s\S]{0,300}justify-content:flex-end/.test(html),
-  'treatmentsTriedCard() now renders after the adaptive deep dive, just before the See-results action row');
+// ── Treatments already tried is the last content step of the guided flow ──
+// It used to sit in the History group (before red flags); in the guided-steps
+// wizard it is its own final step, after the Systemic step's adaptive deep dive.
+ok(/id: 'treatments', label: 'Treatments'[\s\S]{0,220}treatmentsTriedCard\(\)/.test(html),
+  'treatmentsTriedCard() renders in its own "Treatments" step');
+ok(/targetedSymptomsArea\(\)\);[\s\S]{0,600}id: 'treatments'[\s\S]{0,220}treatmentsTriedCard\(\)/.test(html),
+  'treatmentsTriedCard() (Treatments step) comes after the adaptive deep dive (Systemic step) — last content step');
 ok(!/medConfoundersCard\(\)\);\s*root\.appendChild\(treatmentsTriedCard\(\)\);/.test(html),
   'treatmentsTriedCard() no longer sits directly after medConfoundersCard() in the History group');
 
@@ -1747,13 +1780,13 @@ ok(/@media\(max-width:520px\)\{\.opts\{grid-template-columns:repeat\(2,1fr\)\}\}
 
 // ── Clinician-tab provisional caveat (was calc()-only, screen looked broken
 // when incomplete since empty cards had no explanation) ──
-ok(/score\.completeness < 80\) hero\.appendChild\(el\('div', \{ class: 'prov-caveat' \}/.test(rcSrc),
-  'renderClinician() hero now shows the same conditional provisional caveat as calc() (only when completeness < 80)');
+ok(/score\.completeness < 80\) kpi\.appendChild\(el\('div', \{ class: 'prov-caveat' \}/.test(rcSrc),
+  'renderClinician() KPI band shows the same conditional provisional caveat as calc() (only when completeness < 80)');
 
 // ── Print page-1 trim: "Also noted" pattern-names line + Rome IV one-liner
 // removed from page 1; Clinical flags moved from page 1 to Context & drivers
 // (page 2) rather than appearing on both. ──
-const page1Src = html.slice(html.indexOf("h += `<div class=\"pr-grp\">Page 1"), html.indexOf('PAGE 2 — Assessment'));
+const page1Src = html.slice(html.indexOf('function buildClinicianPrint'), html.indexOf('PAGE 2 — Assessment'));
 ok(!/Also noted:/.test(page1Src), 'print page 1 no longer shows the "Also noted" extra-pattern-names line');
 ok(!/Rome IV:.*criteria met \(single-visit estimate\)/.test(page1Src), 'print page 1 no longer shows the Rome IV one-liner');
 ok(!/Clinical flags:/.test(page1Src), 'print page 1 no longer shows the Clinical flags list');
@@ -1787,6 +1820,93 @@ ok(!/if \(!cells\.length\) return null;/.test(html.match(/function severityFrequ
 const calcFn2 = html.match(/function calc\(\)\s*\{[\s\S]*?\n(?=function )/);
 ok(!!calcFn2 && /severityFrequencyCard\(score, extras\)/.test(calcFn2[0]),
   'calc() (patient-facing screen) now renders the symptom severity × frequency card, per direction');
+
+// ── Guided-steps wizard (questionnaire-flow refactor) ────────────────────
+// The single-page scroll became a step-at-a-time wizard. These are source-level
+// checks; the end-to-end navigation/reveal behaviour is covered by the Playwright
+// browser-verification run.
+const buildStepsFn = html.match(/function buildSteps\(\)\s*\{[\s\S]*?\n\}\n/);
+ok(!!buildStepsFn, 'buildSteps() defined — the guided-steps flow spec');
+const bs = buildStepsFn ? buildStepsFn[0] : '';
+// The seven clinical steps, in order.
+const STEP_IDS = ['about', 'meds', 'safety', 'gut', 'lifestyle', 'systemic', 'treatments'];
+STEP_IDS.forEach(id => ok(new RegExp(`id: '${id}'`).test(bs), `buildSteps() declares the '${id}' step`));
+ok(/id: 'safety'[\s\S]{0,120}showIf: \(\) => RED_FLAGS\.length > 0/.test(bs),
+  "Safety step drops out (showIf) when the schema carries no red flags — numbering stays gap-free");
+ok(/return steps\.filter\(s => !s\.showIf \|\| s\.showIf\(\)\)/.test(bs),
+  'buildSteps() renumbers over surviving steps (hidden steps do not leave a gap)');
+
+// Each step keeps the SAME cards/holders the old scroll produced — the reveal
+// engine + de-blend invariant depend on these ids being present untouched.
+ok(/id: 'gut'[\s\S]{0,400}wrapHidden\('reveal-card-pain'[\s\S]{0,120}wrapHidden\('reveal-card-rome'/.test(bs),
+  'Gut step still emits the pain/Rome reveal holders (gated by refreshReveals, unchanged)');
+ok(/id: 'systemic'[\s\S]{0,600}targetedSymptomsArea\(\)/.test(bs),
+  'Systemic step still emits the adaptive deep-dive area (AR/UG/SY reveal holders)');
+
+// Wizard machinery: paint + navigate.
+ok(/function paintWizard\(steps\)\s*\{/.test(html), 'paintWizard() defined');
+ok(/function goToStep\(i, steps\)\s*\{/.test(html), 'goToStep() defined');
+const pw = html.match(/function paintWizard\(steps\)\s*\{[\s\S]*?\n\}\n/)[0];
+// Stepper state: done → ✓, current → ringed number, upcoming → grey.
+ok(/i < currentStep \? 'done' : i === currentStep \? 'now' : ''/.test(pw),
+  'stepper marks completed steps done, the current step now, the rest upcoming');
+ok(/i < currentStep \? '✓' : String\(i \+ 1\)/.test(pw),
+  'completed steps show a tick, others show their number');
+ok(/btn\.disabled = i > currentStep/.test(pw),
+  'stepper only lets you jump to the current step or a completed one (no skipping ahead)');
+// Contextual nav bar: Back names the previous step + is disabled on step 1;
+// Next names the next step, or becomes "View results" on the last step.
+ok(/const first = currentStep === 0, last = currentStep === n - 1/.test(pw),
+  'nav bar knows first/last step');
+ok(/navbtn back[\s\S]{0,120}disabled: first \? '' : null/.test(pw),
+  'Back button is disabled on the first step');
+ok(/first \? '—' : esc\(steps\[currentStep - 1\]\.label\)/.test(pw),
+  'Back button names the previous step');
+ok(/last[\s\S]{0,80}View results[\s\S]{0,120}esc\(steps\[currentStep \+ 1\]\.label\)/.test(pw),
+  'Next button reads "View results" on the last step, otherwise names the next step');
+ok(/next\.onclick = \(\) => \{ last \? calc\(\) : goToStep\(currentStep \+ 1, steps\); \}/.test(pw),
+  'the last step\'s Next button runs calc() (View results); earlier steps advance');
+// Defensive empty-step handling.
+ok(/\.gstep-empty/.test(pw) && /No questions in this section apply/.test(html),
+  'a step with no visible cards shows a graceful empty-state note (defensive)');
+
+// State: currentStep is module-level, reset on a fresh questionnaire / loaded visit.
+ok(/let currentStep = 0;/.test(html), 'currentStep is module-level wizard state');
+ok(/function reset\(\) \{[\s\S]{0,200}currentStep = 0;/.test(html), 'reset() returns the wizard to step 1');
+ok(/loadedVisitId = v\.id \|\| null;[\s\S]{0,120}currentStep = 0;/.test(html),
+  'loadVisit() opens a loaded visit at the first step');
+
+// The de-blend invariant is presentation-agnostic, but re-confirm the wizard did
+// not smuggle any driver/frequency answer into the scored index. computeScores'
+// 2nd arg is the driver/extras bag — loading it must not move .index.
+const giAns = { gsrs_reflux: 2, gsrs_heartburn: 2, gsrs_pain: 2 };
+const idxNoDrivers = scoring.computeScores(giAns, {}).index;
+const idxWithDrivers = scoring.computeScores(giAns, { bristol: 7, bowelFreq: 3, clusterFreq: { Pain: 3, Diarrhoea: 3 } }).index;
+ok(idxNoDrivers === idxWithDrivers,
+  'guided-steps refactor is presentation-only — frequency/Bristol drivers still do not move the Gut Symptom Index');
+
+// ── Band-colour distinguishability regression guard ──────────────────────
+// sev-sig previously fell back to an undefined --cop token, landing on a
+// pale pink nearly identical to sev-sev's red (Significant ≈ Severe); and
+// bandBg() (print) had no entries at all for High/Moderate (Dysbiosis
+// Correlate Load's tier vocabulary), so they silently fell through to the
+// same green as Minimal/Low. Guard all three fixed sources.
+ok(!/var\(--cop,#FAECE7\)/.test(html), 'sev-sig no longer falls back through an undefined --cop token');
+ok(/\.sev-sig\{background:#FBDCC2/.test(html), 'sev-sig has its own distinct orange background (not a near-duplicate of sev-sev)');
+const bandBgFn = html.match(/function bandBg\(band\)\s*\{[\s\S]*?\n\}/);
+ok(!!bandBgFn && /High: '#FBDCC2'/.test(bandBgFn[0]) && /Moderate: '#FAEEDA'/.test(bandBgFn[0]),
+  "print bandBg() now maps the Dys-R tier vocabulary (High/Moderate) instead of falling through to Minimal's green");
+ok(/bg: '#FBDCC2', cls: 'sev-sig'/.test(html), 'BANDS.Significant uses the distinct orange, not the old pink near-duplicate of Severe');
+
+// ── Print trend section parity with the on-screen redesign ───────────────
+// Print previously kept its own older plain 8-column table here instead of
+// the redesigned trendCard() (delta pill, SVG chart with Rx marker,
+// before→after cluster chips) — both surfaces must render the same document.
+const trendPrintBlock = clSrc.slice(clSrc.indexOf(`sectionTitle('trend')`));
+ok(/trendChartSvg\(trend\.points, sortedTrendVisits\)/.test(trendPrintBlock), 'print trend section renders the SVG chart (with Rx marker), same as on-screen');
+ok(/latest\.delta[\s\S]{0,120}pr-pill/.test(trendPrintBlock), 'print trend section shows the headline delta pill, same as on-screen');
+ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span>/.test(trendPrintBlock),
+  'print trend section shows cluster trajectory as before→after chips (Option D), same as on-screen');
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

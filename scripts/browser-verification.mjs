@@ -25,6 +25,10 @@ async function runTests() {
   const context = await browser.newContext();
   const page = await context.newPage();
 
+  // Capture runtime errors across the whole run (used by Tests 5 & 8).
+  const pageErrors = [];
+  page.on('pageerror', e => pageErrors.push('PAGEERROR: ' + e.message));
+
   try {
     console.log('\n🧪 GSHS Browser Verification Suite\n');
     console.log(`Opening: ${BASE_URL}\n`);
@@ -146,8 +150,75 @@ async function runTests() {
     // Reset viewport
     await page.setViewportSize({ width: 1280, height: 720 });
 
+    // Test 8: Guided-steps wizard — navigation, context nav bar, reveal engine, results
+    console.log('TEST 8: Guided-steps wizard flow');
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(400);
+
+    const nSteps = await page.$$eval('#gstepper .step', els => els.length);
+    console.log(`  Stepper renders ${nSteps} steps`);
+    if (nSteps < 2) throw new Error('guided-steps stepper did not render');
+
+    // Step 1: Back disabled, Next names step 2, current step is ringed.
+    const backDisabled1 = await page.$eval('.navbtn.back', el => el.disabled);
+    const nextName1 = await page.$eval('.navbtn.next .nm', el => el.textContent.trim());
+    const nowLabel1 = await page.$eval('#gstepper .step.now .lb', el => el.textContent.trim());
+    if (!backDisabled1) throw new Error('Back button should be disabled on step 1');
+    console.log(`  Step 1 "${nowLabel1}": Back disabled ✓, Next → "${nextName1}"`);
+
+    // Advance to the Gut symptoms step and confirm a reveal fires (pain→Rome cards).
+    // Walk forward until the active step contains the GI section.
+    for (let i = 0; i < nSteps - 1; i++) {
+      const onGut = await page.$('.gstep.active #reveal-card-pain');
+      if (onGut) break;
+      await page.click('.navbtn.next');
+      await page.waitForTimeout(180);
+    }
+    const painBefore = await page.$eval('#reveal-card-pain', el => getComputedStyle(el).display);
+    await page.evaluate(() => {
+      const rows = Array.from(document.querySelectorAll('.gstep.active .q'));
+      for (const r of rows) {
+        const t = r.querySelector('.q-txt');
+        if (t && /abdominal pain/i.test(t.textContent)) {
+          const opts = r.querySelectorAll('.opt');
+          if (opts[2]) opts[2].click();
+          return;
+        }
+      }
+    });
+    await page.waitForTimeout(250);
+    const painAfter = await page.$eval('#reveal-card-pain', el => getComputedStyle(el).display);
+    if (painBefore !== 'none' || painAfter === 'none') {
+      throw new Error(`reveal engine broke inside the wizard (pain card ${painBefore}→${painAfter})`);
+    }
+    console.log(`  Reveal engine intact: pain card ${painBefore} → ${painAfter} after answering pain ✓`);
+
+    // Walk to the last step; Next should read "View results" and run calc().
+    for (let i = 0; i < nSteps; i++) {
+      const isLast = await page.$eval('.navbtn.next .nm', el => /view results/i.test(el.textContent));
+      if (isLast) break;
+      await page.click('.navbtn.next');
+      await page.waitForTimeout(150);
+    }
+    const lastNext = await page.$eval('.navbtn.next .nm', el => el.textContent.trim());
+    console.log(`  Last step Next button: "${lastNext}"`);
+    await page.click('.navbtn.next');
+    await page.waitForTimeout(500);
+    const hasResults = await page.$eval('#patient-results', el => el.children.length > 0);
+    const hasHero = !!(await page.$('#patient-results .hero'));
+    if (!hasResults || !hasHero) throw new Error('View results did not render the results screen');
+    console.log(`  "View results" rendered the headline + hero score ✓`);
+    await page.screenshot({ path: `${SCREENSHOTS_DIR}/04-guided-steps-results.png` });
+
+    if (pageErrors.length) {
+      console.log(`  ⚠ ${pageErrors.length} runtime error(s) during wizard flow:`);
+      pageErrors.forEach(e => console.log(`    - ${e}`));
+      throw new Error('runtime errors during guided-steps navigation');
+    }
+    console.log(`✓ Guided-steps wizard verified (navigation, reveal, results, no errors)\n`);
+
     console.log('📊 Summary:');
-    console.log(`  Total tests: 7`);
+    console.log(`  Total tests: 8`);
     console.log(`  Screenshots saved: ${SCREENSHOTS_DIR}/`);
     console.log(`  Basic functionality verified\n`);
 

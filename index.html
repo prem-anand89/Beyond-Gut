@@ -9,53 +9,126 @@
    Single self-contained offline file. Palette ported from BM_Gut_Suite v7.
    ========================================================================== */
 :root{
-  --g:#0F6E56;--gm:#1D9E75;--gl:#5DCAA5;--gp:#E1F5EE;--gf:#F4FBF7;
-  --am:#BA7517;--ap:#FAEEDA;--re:#A32D2D;--rp:#FCEBEB;
+  /* Palette A · Softened Teal. --brand is the primary-action/identity colour
+     (app-bar, hero numbers, buttons); --section is a lighter mid-teal used
+     ONLY for section-card header bars, so the page doesn't read as a wall of
+     near-black bars. Both — plus --ok, the accent used for legible text/
+     borders on tinted or dark surfaces — get their own dark-theme values
+     below rather than staying fixed, which is what made the old dark theme
+     feel like a different, harsher app instead of the same app at a
+     different brightness. */
+  --brand:#0E4049;--brand-d:#082C33;--section:#16636F;--tint:#E2EEEC;--neutral:#253238;
+  --ok:#2E7D5B;--alert:#B23A3A;--alert-p:#F7E6E6;--alert-d:#7A2626;
+  --am:#BA7517;--ap:#FAEEDA;
   --pu:#534AB7;--pp:#EEEDFE;--bl:#185FA5;--blp:#E6F1FB;
-  --ink:#1A1A17;--inks:#3A3A37;--inkt:#707070;
-  --bdr:#E0DDD6;--bdrm:#C0BDB6;--bg:#F5F3EE;--surf:#FFFFFF;--surf2:#FAFAF8;
+  --ink:#1B2226;--inks:#48555B;--inkt:#6C777C;
+  --bdr:#DCE2E2;--bdrm:#C2CBCD;--chrome:#EDF1F0;--paper2:#FFFFFF;--paper:#F2F5F4;
   --r6:6px;--r8:8px;--r12:12px;
   --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
 }
+:root[data-theme="dark"]{
+  --paper:#141B1D;--paper2:#1E2A2C;--ink:#E4ECEB;--inks:#AEBABC;--inkt:#8A9699;
+  --bdr:#2C3A3D;--bdrm:#3C4C50;--chrome:#152021;--tint:#193338;
+  --brand:#123C44;--section:#1C5560;--ok:#5FB59E;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#141B1D;--paper2:#1E2A2C;--ink:#E4ECEB;--inks:#AEBABC;--inkt:#8A9699;
+    --bdr:#2C3A3D;--bdrm:#3C4C50;--chrome:#152021;--tint:#193338;
+    --brand:#123C44;--section:#1C5560;--ok:#5FB59E;
+  }
+}
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.5;min-height:100vh;-webkit-text-size-adjust:100%}
+html,body{background:var(--chrome);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.5;min-height:100vh;-webkit-text-size-adjust:100%}
 button,input,select,textarea{font-family:var(--font)}
 button{-webkit-tap-highlight-color:transparent;touch-action:manipulation;cursor:pointer}
 small{font-size:.82em}
 
-.app-bar{background:var(--g);color:#fff;display:flex;align-items:center;gap:12px;padding:14px 18px;padding-top:max(14px,env(safe-area-inset-top));position:sticky;top:0;z-index:500;box-shadow:0 1px 0 rgba(0,0,0,.08);flex-wrap:wrap}
+.app-bar{background:var(--brand);color:#fff;display:flex;align-items:center;gap:12px;padding:14px 18px;padding-top:max(14px,env(safe-area-inset-top));position:sticky;top:0;z-index:500;box-shadow:0 1px 0 rgba(0,0,0,.08);flex-wrap:wrap}
 .app-logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:21px;letter-spacing:-.01em;white-space:nowrap}
-.app-logo .dot{width:11px;height:11px;border-radius:50%;background:var(--gl);box-shadow:0 0 0 4px rgba(93,202,165,.25)}
+.app-logo .dot{width:11px;height:11px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(46,125,91,.25)}
 .app-sub{display:block;font-size:12.5px;font-weight:600;color:rgba(255,255,255,.82)}
 .app-name-wrap{display:flex;flex-direction:column;gap:1px;line-height:1.15}
 /* Thin live progress strip along the bottom edge of the (sticky) header. */
 .app-progress{position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,.18)}
-.app-progress-fill{height:100%;width:0;background:var(--gl);transition:width .25s ease}
+.app-progress-fill{height:100%;width:0;background:var(--ok);transition:width .25s ease}
 /* Form intro: question count / time estimate + live answered counter. */
-.form-meta{background:var(--gf);border:1px solid var(--gl);border-radius:var(--r8);padding:9px 13px;margin-bottom:12px;font-size:12.5px;color:var(--inks);display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
-.form-meta b{color:var(--g)}
+.form-meta{background:var(--tint);border:1px solid var(--ok);border-radius:var(--r8);padding:9px 13px;margin-bottom:12px;font-size:12.5px;color:var(--inks);display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.form-meta b{color:var(--ok)}
 .app-spacer{flex:1}
 .app-tag{font-size:10.5px;color:rgba(255,255,255,.7);background:rgba(255,255,255,.13);border-radius:20px;padding:4px 10px}
 
+/* ── Guided-steps wizard ─────────────────────────
+   One section per step. All step containers stay in the DOM (so the reveal
+   engine and answer state are untouched); only the active one is displayed. */
+/* Sticky wrapper keeps the stepper visible while scrolling through a step's
+   questions — previously only the thin progress strip in the header showed
+   position, which didn't say which step or what's next. top is a CSS var
+   synced to the app-bar's real (possibly-wrapped) height by syncHeaderHeight(). */
+.stepper-wrap{position:sticky;top:var(--header-h,58px);z-index:400;background:var(--chrome);padding-top:8px}
+.stepper{display:flex;align-items:center;margin:2px 0 6px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.step{display:flex;align-items:center;flex:none;border:none;background:transparent;padding:0;cursor:pointer;font-family:inherit}
+.step[disabled]{cursor:default}
+.step .b{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800;background:var(--paper2);border:2px solid var(--bdrm);color:var(--inkt);transition:all .15s}
+.step.done .b{background:var(--brand);border-color:var(--brand);color:#fff}
+.step.now .b{background:var(--paper2);border-color:var(--brand);color:var(--brand);box-shadow:0 0 0 4px var(--tint)}
+.step .lb{font-size:10.5px;font-weight:600;color:var(--inkt);margin:0 8px 0 6px;white-space:nowrap}
+.step.now .lb{color:var(--ok);font-weight:800}
+.step.done .lb{color:var(--inks)}
+.step .ln{width:20px;height:2px;background:var(--bdr);margin-right:6px;flex:none}
+.step.done .ln{background:var(--brand)}
+.stepsub{font-size:11.5px;color:var(--inkt);margin:0 0 12px}
+.gstep{display:none}
+.gstep.active{display:block}
+.gstep-head{margin:2px 0 12px}
+.gstep-head .t{font-size:18px;font-weight:800;letter-spacing:-.01em}
+.gstep-head .s{font-size:12px;color:var(--inkt);margin-top:2px}
+.gstep-empty{display:none;text-align:center;color:var(--inkt);font-size:12.5px;padding:26px 16px;background:var(--paper2);border:1px dashed var(--bdrm);border-radius:var(--r12)}
+/* contextual action bar — names the neighbouring steps */
+.actionbar{display:flex;justify-content:space-between;align-items:stretch;gap:10px;margin:16px 0 4px}
+.navbtn{display:flex;flex-direction:column;justify-content:center;border:1.5px solid var(--bdr);border-radius:11px;padding:8px 15px;background:var(--paper2);min-width:0;max-width:42%;cursor:pointer;font-family:inherit;text-align:left}
+.navbtn:disabled{opacity:.4;cursor:not-allowed}
+.navbtn .k{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--inkt)}
+.navbtn .nm{font-size:13px;font-weight:700;color:var(--inks);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.navbtn.next{background:var(--brand);border-color:var(--brand);align-items:flex-end;text-align:right}
+.navbtn.next .k{color:rgba(255,255,255,.75)}
+.navbtn.next .nm{color:#fff}
+.navbtn.back .k .ar{color:var(--brand)}
+.centerprog{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;flex:1;min-width:0}
+.centerprog .c{font-size:10.5px;font-weight:700;color:var(--inkt)}
+.centerprog .bar{width:100%;max-width:130px;height:5px;border-radius:3px;background:var(--bdr);overflow:hidden}
+.centerprog .bar i{display:block;height:100%;background:var(--brand);transition:width .2s ease}
+
 .wrap{max-width:880px;margin:0 auto;padding:16px}
 .btn{border:none;border-radius:var(--r8);font-size:13px;font-weight:600;padding:9px 15px;transition:all .15s;white-space:nowrap}
-.btn-g{background:var(--g);color:#fff}.btn-g:hover{background:var(--gm)}
-.btn-o{background:var(--surf);color:var(--g);border:1px solid var(--g)}.btn-o:hover{background:var(--gp)}
-.btn-gh{background:transparent;color:var(--inkt);border:1px solid var(--bdr)}.btn-gh:hover{background:var(--surf);color:var(--ink)}
-.card{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r12);padding:16px;margin-bottom:14px}
+.btn-g{background:var(--brand);color:#fff}.btn-g:hover{background:var(--brand-d)}
+.btn-o{background:var(--paper2);color:var(--ok);border:1px solid var(--ok)}.btn-o:hover{background:var(--tint)}
+.btn-gh{background:transparent;color:var(--inkt);border:1px solid var(--bdr)}.btn-gh:hover{background:var(--paper2);color:var(--ink)}
+.card{background:var(--paper2);border:1px solid var(--bdr);border-radius:var(--r12);padding:16px;margin-bottom:14px}
 .muted{color:var(--inkt)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 .pill{display:inline-block;padding:3px 11px;border-radius:20px;font-size:12px;font-weight:700}
-.sev-min{background:var(--gp);color:#085041}.sev-mod{background:var(--ap);color:#7A5800}
-.sev-sig{background:var(--cop,#FAECE7);color:#7A3410}.sev-sev{background:var(--rp);color:#7A1515}
+/* A clear 4-step severity ramp (green → amber → orange → red) — sev-sig
+   previously fell back to an undefined --cop token, landing on a pale pink
+   almost identical to sev-sev's red, so "Significant" and "Severe" were
+   indistinguishable at a glance. Each step now has its own distinct hue. */
+.sev-min{background:var(--tint);color:var(--ok)}.sev-mod{background:var(--ap);color:#7A5800}
+.sev-sig{background:#FBDCC2;color:#8A4B0F}.sev-sev{background:var(--alert-p);color:var(--alert-d)}
 .sev-unknown{background:#E5E5E5;color:#555}
 
-.intro{background:var(--gf);border:1px solid var(--gl);border-radius:var(--r12);padding:14px 16px;margin-bottom:14px;font-size:13px;color:var(--inks)}
-.sec-card{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r12);margin-bottom:12px;overflow:hidden}
+.intro{background:var(--tint);border:1px solid var(--ok);border-radius:var(--r12);padding:14px 16px;margin-bottom:14px;font-size:13px;color:var(--inks)}
+/* Quiet, dismissible one-liner (shared-device notice, storage warning) — a
+   single row, not a full paragraph card, so it doesn't dominate the top of
+   the form the way a full-width coloured block did. */
+.notice-line{display:flex;align-items:center;gap:8px;background:var(--paper2);border:1px solid var(--bdr);border-radius:var(--r8);padding:7px 10px 7px 12px;margin-bottom:10px;font-size:12px;color:var(--inks)}
+.notice-line.warn{border-color:#E8C77A}
+.notice-line .x{margin-left:auto;flex:none;background:transparent;border:none;color:var(--inkt);font-size:13px;line-height:1;padding:2px 4px;border-radius:5px}
+.notice-line .x:hover{background:var(--tint);color:var(--ink)}
+.sec-card{background:var(--paper2);border:1px solid var(--bdr);border-radius:var(--r12);margin-bottom:12px;overflow:hidden}
 .sec-head{padding:11px 15px;font-weight:700;font-size:13px;color:#fff;display:flex;justify-content:space-between;align-items:center}
 .sec-body{padding:6px 15px 12px}
-.q{padding:11px 0;border-bottom:1px solid var(--surf2)}
+.q{padding:11px 0;border-bottom:1px solid var(--paper)}
 .q:last-child{border-bottom:none}
 .q-txt{font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:2px}
 .q-sub{font-size:11.5px;color:var(--inkt);margin-bottom:8px}
@@ -65,60 +138,85 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
    custom property (not an inline grid-template-columns) so the mobile
    media query below can still override it uniformly regardless of scale length. */
 .opts{display:grid;grid-template-columns:repeat(var(--n-opts,4),1fr);gap:6px}
-.opt{border:1.5px solid var(--bdr);background:var(--surf);border-radius:8px;padding:9px 6px;text-align:center;font-size:11.5px;font-weight:600;color:var(--inks);line-height:1.25;transition:all .12s}
+.opt{border:1.5px solid var(--bdr);background:var(--paper2);border-radius:8px;padding:9px 6px;text-align:center;font-size:11.5px;font-weight:600;color:var(--inks);line-height:1.25;transition:all .12s}
 .opt:hover{border-color:var(--bdrm)}
 .opt .on{display:block;font-size:14px;font-weight:800;margin-bottom:2px}
 /* Generic selected state for segmented rows that carry no s{v} colour class
    (diet/lifestyle, sleep, the abx/stool/gas microbiome rows). The s0–s4 rules
    below are more specific, so colour-coded items still win. */
-.opt.sel{border-color:var(--g);background:var(--gp);color:var(--g)}
-.opt.s0.sel{border-color:#0F6E56;background:#E1F5EE;color:#085041}
+.opt.sel{border-color:var(--ok);background:var(--tint);color:var(--ok)}
+.opt.s0.sel{border-color:var(--ok);background:var(--tint);color:var(--ok)}
 .opt.s1.sel{border-color:#BA7517;background:#FCEFCF;color:#7A5800}
 .opt.s2.sel{border-color:#C2622E;background:#FAD7C2;color:#7A3410}
-.opt.s3.sel{border-color:#A32D2D;background:#F7CBCB;color:#7A1515}
-.opt.s4.sel{border-color:#A32D2D;background:#F7CBCB;color:#7A1515}
+.opt.s3.sel{border-color:var(--alert);background:var(--alert-p);color:var(--alert-d)}
+.opt.s4.sel{border-color:var(--alert);background:var(--alert-p);color:var(--alert-d)}
 @media(max-width:520px){.opts{grid-template-columns:repeat(2,1fr)}}
 .chips{display:flex;gap:7px;flex-wrap:wrap}
-.chip-opt{border:1.5px solid var(--bdr);background:var(--surf);border-radius:20px;padding:7px 14px;font-size:12px;font-weight:600;color:var(--inks)}
-.chip-opt.sel{border-color:var(--g);background:var(--gp);color:var(--g)}
+.chip-opt{border:1.5px solid var(--bdr);background:var(--paper2);border-radius:20px;padding:7px 14px;font-size:12px;font-weight:600;color:var(--inks)}
+.chip-opt.sel{border-color:var(--ok);background:var(--tint);color:var(--ok)}
 .opt-tag{display:inline-block;font-size:9px;font-weight:700;color:var(--bl);background:var(--blp);border-radius:9px;padding:1px 7px;margin-left:4px;text-transform:uppercase;letter-spacing:.03em;vertical-align:middle}
 .na-wrap{margin-top:6px}
 .na-opt{font-size:11px;padding:5px 12px}
 .na-opt.sel{border-color:var(--inkt);background:#ECEAE4;color:var(--inks)}
 /* instruments (modifiable drivers) */
 .bristol-grid{display:grid;grid-template-columns:1fr;gap:6px}
-.bristol-opt{display:flex;gap:10px;align-items:center;border:1.5px solid var(--bdr);border-radius:8px;padding:9px 12px;background:var(--surf);text-align:left;width:100%}
-.bristol-opt.sel{border-color:var(--g);background:var(--gp)}
+.bristol-opt{display:flex;gap:10px;align-items:center;border:1.5px solid var(--bdr);border-radius:8px;padding:9px 12px;background:var(--paper2);text-align:left;width:100%}
+.bristol-opt.sel{border-color:var(--ok);background:var(--tint)}
 .bristol-n{width:24px;height:24px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0}
 .bristol-ic{flex-shrink:0;display:inline-block;vertical-align:middle}
 .nrs-row{display:flex;gap:4px;flex-wrap:wrap}
-.nrs-opt{flex:1;min-width:30px;border:1.5px solid var(--bdr);background:var(--surf);border-radius:7px;padding:9px 0;text-align:center;font-weight:700;font-size:13px;color:var(--inks)}
-.nrs-opt.sel{border-color:var(--re);background:#FCEBEB;color:var(--re)}
+.nrs-opt{flex:1;min-width:30px;border:1.5px solid var(--bdr);background:var(--paper2);border-radius:7px;padding:9px 0;text-align:center;font-weight:700;font-size:13px;color:var(--inks)}
+.nrs-opt.sel{border-color:var(--alert);background:var(--alert-p);color:var(--alert)}
 .grp-label{font-size:10px;font-weight:700;color:var(--inkt);text-transform:uppercase;letter-spacing:.06em;margin:8px 0 4px}
-.rpt-grp{font-size:12px;font-weight:800;color:#fff;background:#3A4A5A;text-transform:uppercase;letter-spacing:.04em;border-radius:8px;padding:8px 12px;margin:16px 0 6px}
+.rpt-grp{font-size:12px;font-weight:800;color:#fff;background:var(--neutral);text-transform:uppercase;letter-spacing:.04em;border-radius:8px;padding:8px 12px;margin:16px 0 6px}
 .drivers{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 @media(max-width:520px){.drivers{grid-template-columns:repeat(2,1fr)}}
-.driver{border:1px solid var(--bdr);border-radius:9px;padding:8px;background:var(--surf2);text-align:center}
+.driver{border:1px solid var(--bdr);border-radius:9px;padding:8px;background:var(--paper);text-align:center}
 .driver .dv{font-size:15px;font-weight:700}
 .driver .dl{font-size:9.5px;color:var(--inkt);margin-top:2px}
 
-.hero{display:flex;align-items:center;gap:20px;background:var(--gf);border:1px solid var(--gl);border-radius:var(--r12);padding:18px;flex-wrap:wrap}
-.hero .big{font-size:42px;font-weight:800;line-height:.95;color:var(--g)}
+.hero{display:flex;align-items:center;gap:20px;background:var(--tint);border:1px solid var(--ok);border-radius:var(--r12);padding:18px;flex-wrap:wrap}
+.hero .big{font-size:42px;font-weight:800;line-height:.95;color:var(--ok)}
 .hero .sub{font-size:11px;color:var(--inkt)}
 .bar-row{margin:7px 0}
 .bar-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px}
 .bar-track{height:8px;background:#F0EFEA;border-radius:4px;overflow:hidden}
 .bar-fill{height:100%;border-radius:4px}
 .conf-note{font-size:11.5px;color:var(--inkt);margin-top:8px;line-height:1.45}
+
+/* ── Trend card ───────────────────────────────── */
+.tr-delta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 12px}
+.tr-chart-row{display:grid;grid-template-columns:170px 1fr;gap:16px;align-items:center;margin-bottom:6px}
+.tr-chart-meta{font-size:11.5px;color:var(--inkt);line-height:1.5}
+.tr-chart-meta b{color:var(--ink);display:block;font-size:13px;margin-bottom:2px}
+.tr-vrow{display:grid;grid-template-columns:auto 88px 1fr auto;gap:10px;align-items:start;padding:7px 0;border-top:1px solid var(--bdr)}
+.tr-vrow:first-of-type{border-top:none}
+.tr-vrow .date{font-size:12.5px;font-weight:700}
+.tr-vrow .idx b{font-size:14px}
+.tr-vrow .idx .band{font-size:10.5px;color:var(--inkt);display:block}
+.tr-vrow .iv{font-size:11px;color:var(--bl)}
+.tr-clu-h{font-size:11px;font-weight:700;color:var(--inks);margin:14px 0 6px}
+.tr-cp-row{display:grid;grid-template-columns:118px 1fr;gap:10px;align-items:center;margin:5px 0}
+.tr-cp-lab{font-size:11.5px;font-weight:600;color:var(--inks)}
+.tr-cp-pair{display:flex;align-items:center;gap:7px}
+.tr-chip{font-size:11px;font-weight:700;border-radius:9px;padding:2px 9px}
+.tr-chip.first{background:var(--paper);color:var(--inkt);border:1px solid var(--bdr)}
+.tr-chip.last{background:var(--tint);color:var(--ok)}
+.tr-chip.last.worse{background:var(--ap);color:#7A5800}
+.tr-cp-arrow{color:var(--bdrm);font-size:12px}
+.tr-cp-delta{margin-left:auto;font-weight:800;font-size:12px}
+.tr-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.tr-badge{font-size:10.5px;background:var(--pp);color:var(--pu);border:1px solid #DBD5F0;border-radius:12px;padding:3px 10px;font-weight:600}
+.tr-callout{display:flex;gap:9px;align-items:flex-start;background:var(--blp);border:1px solid #C5DCEC;border-radius:9px;padding:9px 12px;margin-top:12px;font-size:12px;color:#1E4664;line-height:1.5}
 .prov-caveat{background:#FFF6E7;border:1px solid var(--am);border-radius:var(--r8);padding:8px 11px;font-size:11.5px;color:#5C4406;margin-top:8px;line-height:1.45}
 
-.rf-banner{background:var(--rp);border:1.5px solid var(--re);border-radius:var(--r12);padding:13px 15px;margin-bottom:14px;display:flex;gap:12px;align-items:flex-start}
+.rf-banner{background:var(--alert-p);border:1.5px solid var(--alert);border-radius:var(--r12);padding:13px 15px;margin-bottom:14px;display:flex;gap:12px;align-items:flex-start}
 .rf-ic{font-size:20px;flex-shrink:0;line-height:1.2}
-.rf-title{font-size:13.5px;font-weight:700;color:var(--re);margin-bottom:3px}
-.rf-body{font-size:12px;color:#5A1414;line-height:1.5}
-.rf-list{margin:6px 0 0 16px;padding:0;font-size:11.5px;color:#5A1414}
+.rf-title{font-size:13.5px;font-weight:700;color:var(--alert);margin-bottom:3px}
+.rf-body{font-size:12px;color:var(--alert-d);line-height:1.5}
+.rf-list{margin:6px 0 0 16px;padding:0;font-size:11.5px;color:var(--alert-d)}
 .rf-tier{margin-top:8px}
-.rf-tier-head{font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#7A1F1F}
+.rf-tier-head{font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--alert-d)}
 .rf-tier .rf-list{margin-top:2px}
 
 .empty-note{text-align:center;padding:40px 20px;color:var(--inkt);font-size:13px}
@@ -127,7 +225,7 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 .ov{position:fixed;inset:0;background:rgba(20,20,18,.46);z-index:10000;display:none;align-items:center;justify-content:center;padding:18px}
 .ov.show{display:flex}
-.dlg{background:var(--surf);border-radius:16px;width:100%;max-width:400px;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden}
+.dlg{background:var(--paper2);border-radius:16px;width:100%;max-width:400px;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden}
 .dlg-h{font-size:16px;font-weight:700;padding:18px 20px 4px}
 .dlg-m{font-size:13px;color:var(--inks);padding:0 20px 8px;line-height:1.5;white-space:pre-line}
 .dlg-b{padding:6px 20px}
@@ -137,41 +235,45 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 /* mode switch (tab nav) */
 .mode-switch{display:flex;background:rgba(255,255,255,.13);border-radius:20px;padding:2px;gap:2px}
 .mode-btn{border:none;background:transparent;color:rgba(255,255,255,.78);font-size:12px;font-weight:600;padding:6px 14px;border-radius:18px;transition:all .15s;white-space:nowrap;cursor:pointer}
-.mode-btn.active{background:#fff;color:var(--g)}
+.mode-btn.active{background:#fff;color:var(--brand)}
 .mode{display:none}.mode.show{display:block}
 .app-chip{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.13);border-radius:20px;padding:4px 6px 4px 12px;font-size:12px;font-weight:600;color:#fff;max-width:240px}
 .app-chip .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .app-chip .x{background:rgba(255,255,255,.2);border:none;color:#fff;width:18px;height:18px;border-radius:50%;font-size:11px;line-height:1;flex-shrink:0;cursor:pointer}
 /* patient records */
-.db-search{flex:1;min-width:180px;padding:9px 13px;border:1px solid var(--bdr);border-radius:var(--r8);font-size:14px;background:var(--surf)}
+.db-search{flex:1;min-width:180px;padding:9px 13px;border:1px solid var(--bdr);border-radius:var(--r8);font-size:14px;background:var(--paper2)}
 .db-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
 .db-empty{text-align:center;color:var(--inkt);padding:48px 16px;line-height:1.8}
-.pt-card{position:relative;background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r12);padding:14px;cursor:pointer;transition:all .15s}
-.pt-card:hover{border-color:var(--g);box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.pt-card{position:relative;background:var(--paper2);border:1px solid var(--bdr);border-radius:var(--r12);padding:14px;cursor:pointer;transition:all .15s}
+.pt-card:hover{border-color:var(--ok);box-shadow:0 2px 10px rgba(0,0,0,.06)}
 .pt-del{position:absolute;top:8px;right:8px;border:none;background:transparent;color:var(--inkt);font-size:13px;cursor:pointer;border-radius:6px;padding:2px 6px}
-.pt-del:hover{background:#FCEBEB;color:var(--re)}
+.pt-del:hover{background:var(--alert-p);color:var(--alert)}
 .pt-top{display:flex;align-items:center;gap:10px;margin-bottom:12px}
-.pt-av{width:38px;height:38px;border-radius:50%;background:var(--gp);color:var(--g);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px}
+.pt-av{width:38px;height:38px;border-radius:50%;background:var(--tint);color:var(--ok);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px}
 .pt-name{font-weight:700;font-size:14px}.pt-meta{font-size:11px;color:var(--inkt)}
 .pt-stats{display:flex;gap:8px}
-.pt-stat{flex:1;text-align:center;background:var(--gf);border-radius:8px;padding:8px 4px}
+.pt-stat{flex:1;text-align:center;background:var(--tint);border-radius:8px;padding:8px 4px}
 .pt-stat .v{font-weight:800;font-size:16px}.pt-stat .l{font-size:9.5px;color:var(--inkt);text-transform:uppercase;letter-spacing:.03em;margin-top:2px}
-.back-btn{border:none;background:transparent;color:var(--g);font-weight:600;font-size:13px;cursor:pointer;padding:6px 0}
-.visit-card{display:flex;align-items:center;gap:12px;background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r12);padding:12px 14px;margin-bottom:10px;flex-wrap:wrap}
-.visit-card.latest{border-color:var(--g);background:var(--gf)}
-.visit-num{width:26px;height:26px;border-radius:50%;background:var(--g);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}
+.back-btn{border:none;background:transparent;color:var(--ok);font-weight:600;font-size:13px;cursor:pointer;padding:6px 0}
+.visit-card{display:flex;align-items:center;gap:12px;background:var(--paper2);border:1px solid var(--bdr);border-radius:var(--r12);padding:12px 14px;margin-bottom:10px;flex-wrap:wrap}
+.visit-card.latest{border-color:var(--ok);background:var(--tint)}
+.visit-num{width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}
 .visit-info{flex:1;min-width:140px}.visit-date{font-weight:600;font-size:13px}.visit-sub{font-size:11px;color:var(--inkt);margin-top:1px}
 .visit-score{text-align:center}.visit-score .v{font-weight:800;font-size:17px}.visit-score .l{font-size:10px;color:var(--inkt)}
-.delta-down{color:#0F6E56}.delta-up{color:#A32D2D}.delta-flat{color:#999}
+.delta-down{color:var(--ok)}.delta-up{color:var(--alert)}.delta-flat{color:#999}
 
 /* ── Clinician view ──────────────────────────── */
-.clin-badge{display:inline-block;padding:2px 8px;background:#3A4A5A;color:#fff;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-left:6px;vertical-align:middle}
-.clin-detail{background:#F5F7FA;border:1px solid #C0C8D2;border-radius:var(--r12);padding:16px;margin-bottom:14px}
-.clin-detail .clin-h{font-size:11.5px;font-weight:700;color:#3A4A5A;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #D0D7DF;padding-bottom:3px;margin:12px 0 6px}
+.clin-badge{display:inline-block;padding:2px 8px;background:var(--neutral);color:#fff;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-left:6px;vertical-align:middle}
+/* Was a fixed light card (#F5F7FA + hardcoded borders) with no dark-theme
+   equivalent — its text still inherited the page's theme-adaptive --ink, so
+   in dark mode the card stayed light while its text went light-on-light and
+   nearly disappeared. Now built entirely from tokens, like every other card. */
+.clin-detail{background:var(--paper);border:1px solid var(--bdrm);border-radius:var(--r12);padding:16px;margin-bottom:14px}
+.clin-detail .clin-h{font-size:11.5px;font-weight:700;color:var(--inkt);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--bdr);padding-bottom:3px;margin:12px 0 6px}
 .clin-detail .clin-h:first-of-type{margin-top:0}
 .clin-tbl{width:100%;border-collapse:collapse;font-size:11.5px}
-.clin-tbl th{text-align:left;padding:4px 8px;background:#EAEDF0;font-weight:600;font-size:11px}
-.clin-tbl td{padding:4px 8px;border-bottom:1px solid #E8EAED;vertical-align:top}
+.clin-tbl th{text-align:left;padding:4px 8px;background:var(--bdr);font-weight:600;font-size:11px}
+.clin-tbl td{padding:4px 8px;border-bottom:1px solid var(--bdr);vertical-align:top}
 .clin-tbl tr:last-child td{border-bottom:none}
 
 /* ── Print layout ────────────────────────────── */
@@ -182,20 +284,27 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
   /* Force background colours to render in print/PDF — browsers strip them by
      default, which blanked the By-area bar fills, hero, triage and pill swatches. */
   #print-area,#print-area *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-  .pr-logo{font-size:14px;font-weight:700;color:#0F6E56}
+  .pr-logo{font-size:14px;font-weight:700;color:var(--brand)}
   .pr-title{font-size:20px;font-weight:800;margin:3px 0 2px}
   .pr-meta{font-size:10.5px;color:#555;margin-bottom:10px;line-height:1.7}
   hr.pr-divider{border:none;border-top:1.5px solid #D0D0C8;margin:10px 0}
   .pr-section{margin-bottom:8px}
-  .pr-sh{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#3A4A5A;border-bottom:1px solid #D0D0C8;padding-bottom:2px;margin-bottom:4px;page-break-after:avoid;break-after:avoid-page}
-  .pr-grp{font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#fff;background:#3A4A5A;border-radius:4px;padding:4px 10px;margin:10px 0 6px}
+  .pr-sh{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--neutral);border-bottom:1px solid #D0D0C8;padding-bottom:2px;margin-bottom:4px;page-break-after:avoid;break-after:avoid-page}
+  .pr-grp{font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#fff;background:var(--neutral);border-radius:4px;padding:4px 10px;margin:10px 0 6px}
   .pr-grp:first-of-type{margin-top:2px}
-  .pr-hero{display:flex;gap:14px;align-items:center;background:#F4FBF7;border:1px solid #5DCAA5;border-radius:8px;padding:8px 10px;margin-bottom:6px}
-  .pr-hero .big{font-size:36px;font-weight:800;color:#0F6E56;line-height:.95}
+  .pr-hero{display:flex;gap:14px;align-items:center;background:var(--tint);border:1px solid var(--ok);border-radius:8px;padding:8px 10px;margin-bottom:6px}
+  .pr-hero .big{font-size:36px;font-weight:800;color:var(--brand);line-height:.95}
   .pr-hero .sub{font-size:10px;color:#555;margin-top:2px}
   .pr-pill{display:inline-block;padding:2px 8px;border-radius:14px;font-size:10px;font-weight:700;margin-right:3px;border:1px solid rgba(0,0,0,.35)}
-  .pr-alert{background:#FCEBEB;border:1px solid #A32D2D;border-radius:6px;padding:6px 8px;margin-bottom:6px;page-break-inside:avoid;break-inside:avoid}
-  .pr-alert-t{font-weight:700;color:#A32D2D;font-size:11.5px;margin-bottom:2px}
+  /* KPI band — the four headline reads as compact stat tiles, print's mirror
+     of the on-screen headlineCard()/kpi band. */
+  .pr-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:6px}
+  .pr-kpi-tile{border:1px solid #D0D0C8;border-radius:6px;padding:5px 8px;background:#fff}
+  .pr-kpi-tile .k{font-size:8px;font-weight:700;color:#777;text-transform:uppercase;letter-spacing:.02em}
+  .pr-kpi-tile .v{font-size:16px;font-weight:800;color:var(--brand);margin:1px 0 2px}
+  .pr-kpi-meta{font-size:9.5px;color:#777;margin-bottom:6px}
+  .pr-alert{background:var(--alert-p);border:1px solid var(--alert);border-radius:6px;padding:6px 8px;margin-bottom:6px;page-break-inside:avoid;break-inside:avoid}
+  .pr-alert-t{font-weight:700;color:var(--alert);font-size:11.5px;margin-bottom:2px}
   .pr-info{background:#FFF3CD;border:1px solid #FECB1F;border-radius:6px;padding:6px 8px;margin-bottom:6px}
   /* Neutral card, colour-coded only by a left accent bar + a very light
      background wash — the tier number/label carries the meaning, colour is a
@@ -274,6 +383,15 @@ function toast(msg) {
   t.textContent = msg; t.classList.add('show');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
 }
+// Keeps --header-h in sync with the app-bar's real height (it wraps onto a
+// second line on narrow screens, and its content — the identity chip —
+// changes), so the sticky guided-steps stepper docks right below it instead
+// of at a hardcoded offset that would drift under those conditions.
+function syncHeaderHeight() {
+  const bar = $('.app-bar');
+  if (bar) document.documentElement.style.setProperty('--header-h', bar.offsetHeight + 'px');
+}
+window.addEventListener('resize', syncHeaderHeight);
 const overlay = () => $('#overlay');
 const dlgBox = () => $('#dlg');
 function openDlg(html) { dlgBox().innerHTML = html; overlay().classList.add('show'); }
@@ -355,7 +473,7 @@ function patientForm(initial = {}, { title = 'Patient details', okLabel = 'Start
     $('#dlgCancel').onclick = () => { closeDlg(); resolve(null); };
   });
 }
-__e.$ = $; __e.$$ = $$; __e.el = el; __e.esc = esc; __e.fmtDate = fmtDate; __e.toast = toast; __e.dialogConfirm = dialogConfirm; __e.dialogForm = dialogForm; __e.patientForm = patientForm;
+__e.$ = $; __e.$$ = $$; __e.el = el; __e.esc = esc; __e.fmtDate = fmtDate; __e.toast = toast; __e.dialogConfirm = dialogConfirm; __e.dialogForm = dialogForm; __e.patientForm = patientForm; __e.syncHeaderHeight = syncHeaderHeight;
 return __e;
 };
 
@@ -392,7 +510,7 @@ const { scaleFor } = __req('scales.js');
 //          cite findings by axis; the UI groups axes into headline outputs).
 const SECTIONS = [
   // Domain 1 (locked): GSRS-derived GI core. 15 items, 0–4 severity, 2-wk recall.
-  { id: 'GI',  label: 'GI',  full: 'Gut symptoms (GSRS-based)',          role: 'core',       axis: 'symptom',      color: '#0F6E56', bg: '#E1F5EE' },
+  { id: 'GI',  label: 'GI',  full: 'Gut symptoms (GSRS-based)',          role: 'core',       axis: 'symptom',      color: 'var(--section)', bg: 'var(--tint)' },
   // Connected-axis screening domains, refocused at the trim (TRIM_PLAN §3–§6).
   // Oral/ENT, Hormonal, broad-Metabolic removed (no gut-specific engine pathway);
   // Sleep relocated to drivers; Skin collapsed into IM. All STANDALONE — they no
@@ -416,7 +534,7 @@ const SECTIONS = [
   // constipation-cluster burden) — the presentation F2 (PFD-paradoxical) targets.
   { id: 'AR', label: 'AR', full: 'Bowel control & evacuation', role: 'standalone', axis: 'pelvic',    color: '#7A4A8C', bg: '#F3ECF7', conditional: true,
     revealIf: { any: [ { type: 'cluster', cluster: 'Constipation', min: 0.30 }, { type: 'item', id: 'gsrs_urgency', min: 2 }, { type: 'item', id: 'gsrs_incomplete', min: 2 }, { type: 'flag', flag: 'pelvicRisk' } ] } },
-  { id: 'UG', label: 'UG', full: 'Upper-GI / dyspepsia',       role: 'standalone', axis: 'symptom',   color: '#0F6E56', bg: '#E1F5EE', conditional: true,
+  { id: 'UG', label: 'UG', full: 'Upper-GI / dyspepsia',       role: 'standalone', axis: 'symptom',   color: 'var(--section)', bg: 'var(--tint)', conditional: true,
     revealIf: { any: [ { type: 'cluster', cluster: 'Reflux', min: 0.22 }, { type: 'cluster', cluster: 'Indigestion', min: 0.22 } ] } },
   { id: 'SY', label: 'SY', full: 'Systemic / autonomic',       role: 'standalone', axis: 'autonomic', color: '#117A8B', bg: '#E2F2F4', conditional: true,
     // Reveals on fatigue/brain-fog (original trigger) OR on pain/bloating — the
@@ -727,10 +845,10 @@ const BRISTOL_TYPES = [
   { n: 1, label: 'Separate hard lumps',     sub: 'like nuts, hard to pass',          tag: 'Constipated',          col: '#7A4A1E' },
   { n: 2, label: 'Lumpy and sausage-like',  sub: 'sausage-shaped but lumpy',         tag: 'Slightly constipated', col: '#9A6B2E' },
   { n: 3, label: 'Sausage with cracks',     sub: 'sausage with surface cracks',      tag: 'Near normal',          col: '#3B6D11' },
-  { n: 4, label: 'Smooth, soft sausage',    sub: 'like a smooth soft snake — ideal', tag: 'Normal / ideal',       col: '#0F6E56' },
+  { n: 4, label: 'Smooth, soft sausage',    sub: 'like a smooth soft snake — ideal', tag: 'Normal / ideal',       col: 'var(--ok)' },
   { n: 5, label: 'Soft blobs, clear edges', sub: 'soft blobs that pass easily',      tag: 'Lacking fibre',        col: '#BA7517' },
   { n: 6, label: 'Mushy, ragged edges',     sub: 'fluffy pieces, mushy stool',       tag: 'Mild diarrhoea',       col: '#C2622E' },
-  { n: 7, label: 'Watery, no solid pieces', sub: 'entirely liquid',                  tag: 'Diarrhoea',            col: '#A32D2D' },
+  { n: 7, label: 'Watery, no solid pieces', sub: 'entirely liquid',                  tag: 'Diarrhoea',            col: 'var(--alert)' },
 ];
 
 // NRS pain 0–10 + body region (observational; never feeds the Index).
@@ -740,8 +858,8 @@ const PAIN_REGIONS = [
 ];
 function painBand(s) {
   if (s == null) return null;
-  return s === 0 ? { l: 'None', c: '#0F6E56' } : s <= 3 ? { l: 'Mild', c: '#3B6D11' }
-    : s <= 6 ? { l: 'Moderate', c: '#BA7517' } : { l: 'Severe', c: '#A32D2D' };
+  return s === 0 ? { l: 'None', c: 'var(--ok)' } : s <= 3 ? { l: 'Mild', c: '#3B6D11' }
+    : s <= 6 ? { l: 'Moderate', c: '#BA7517' } : { l: 'Severe', c: 'var(--alert)' };
 }
 
 // Composite PSYCHOLOGICAL LOAD (co-design): folds the validated PSS-4 together
@@ -761,7 +879,7 @@ function psychLoadScore(ex) {
 }
 function loadBand(p) {
   if (p == null) return null;
-  return p < 33 ? { l: 'Low', c: '#0F6E56' } : p < 66 ? { l: 'Moderate', c: '#BA7517' } : { l: 'High', c: '#A32D2D' };
+  return p < 33 ? { l: 'Low', c: 'var(--ok)' } : p < 66 ? { l: 'Moderate', c: '#BA7517' } : { l: 'High', c: 'var(--alert)' };
 }
 
 // New modifiable drivers (co-design). All provisional, all kept OUT of the Index.
@@ -841,7 +959,7 @@ function sleepBurden(arr) {
 }
 function sleepBand(b) {
   if (b == null) return null;
-  return b < 0.34 ? { l: 'Good', c: '#0F6E56' } : b < 0.67 ? { l: 'Fair', c: '#BA7517' } : { l: 'Poor', c: '#A32D2D' };
+  return b < 0.34 ? { l: 'Good', c: 'var(--ok)' } : b < 0.67 ? { l: 'Fair', c: '#BA7517' } : { l: 'Poor', c: 'var(--alert)' };
 }
 // Diet quality: protective fibre/fermented intake vs harmful ultra-processed/
 // sugar intake (each 0–3 frequency). Burden 0–1, higher = worse.
@@ -853,7 +971,7 @@ function dietBurden(ex) {
 }
 function dietBand(b) {
   if (b == null) return null;
-  return b < 0.34 ? { l: 'Good', c: '#0F6E56' } : b < 0.67 ? { l: 'Fair', c: '#BA7517' } : { l: 'Poor', c: '#A32D2D' };
+  return b < 0.34 ? { l: 'Good', c: 'var(--ok)' } : b < 0.67 ? { l: 'Fair', c: '#BA7517' } : { l: 'Poor', c: 'var(--alert)' };
 }
 
 // ── DYS-R: dysbiosis-correlate lens (TRIM_PLAN §10) ─────────────────────────
@@ -1148,7 +1266,7 @@ function modifiableFactors(extras) {
     { icon: '⚡', label: 'Pain (NRS)', band: pn ? pn.l : '—', score: ex.nrsPain != null ? `${ex.nrsPain}/10` : null, color: pn ? pn.c : '#999' },
     { icon: '💩', bristolN: bt ? bt.n : null, label: 'Bristol stool', band: bt ? `Type ${bt.n}` : '—', score: bt ? bt.tag : null, color: bt ? bt.col : '#999' },
     { icon: '💊', label: 'Recent disruptors', band: disrupt.length ? `${disrupt.length} flagged` : (ex.meds ? 'None' : '—'),
-      score: disrupt.length ? disrupt.map(d => d.label).join(', ') : null, color: disrupt.length ? '#A32D2D' : (ex.meds ? '#0F6E56' : '#999') },
+      score: disrupt.length ? disrupt.map(d => d.label).join(', ') : null, color: disrupt.length ? 'var(--alert)' : (ex.meds ? 'var(--ok)' : '#999') },
     { icon: '🥗', label: 'Diet quality', band: db ? db.l : '—', score: null, color: db ? db.c : '#999' },
     { icon: '🏃', label: 'Lifestyle', band: act || '—',
       score: [alc != null ? `Alcohol: ${alc}` : null, smk != null ? `Smoking: ${smk}` : null].filter(Boolean).join(' · ') || null,
@@ -1338,11 +1456,14 @@ const { SECTIONS, QUESTIONS, QID, itemMax, sectionMax } = __req('schema.js');
 // TODO[recalibration, opened 2026-06]: cutoffs AND the 0.6/0.4 core/screen
 // weighting are provisional placeholders — refit against pilot distribution +
 // any lab-confirmed outcomes (breath test, GI-MAP) before treating as final.
+// bg values form a clear 4-step ramp (green/amber/orange/red) — Significant's
+// bg was #FAECE7, a pale pink nearly identical to Severe's var(--alert-p);
+// now a distinct orange matching the .sev-sig pill class.
 const BANDS = [
-  { label: 'Minimal',       maxPct: 10,        color: '#0F6E56', bg: '#E1F5EE', cls: 'sev-min' },
+  { label: 'Minimal',       maxPct: 10,        color: 'var(--ok)', bg: 'var(--tint)', cls: 'sev-min' },
   { label: 'Mild–Moderate', maxPct: 35,        color: '#BA7517', bg: '#FAEEDA', cls: 'sev-mod' },
-  { label: 'Significant',   maxPct: 65,        color: '#C2622E', bg: '#FAECE7', cls: 'sev-sig' },
-  { label: 'Severe',        maxPct: Infinity,  color: '#A32D2D', bg: '#FCEBEB', cls: 'sev-sev' },
+  { label: 'Significant',   maxPct: 65,        color: '#C2622E', bg: '#FBDCC2', cls: 'sev-sig' },
+  { label: 'Severe',        maxPct: Infinity,  color: 'var(--alert)', bg: 'var(--alert-p)', cls: 'sev-sev' },
 ];
 const SEVERITY_DESC = {
   'Minimal':       'Minimal gut-symptom burden on this screen.',
@@ -2084,7 +2205,7 @@ const PATTERNS = [
 // Ratio-based bands — comparable across patterns regardless of how many signals
 // each pattern lists. Confidence is data coverage (answered / total).
 const CONFIDENCE_BANDS = [
-  { min: 0.75, label: 'High',     color: '#0F6E56' },
+  { min: 0.75, label: 'High',     color: 'var(--ok)' },
   { min: 0.5,  label: 'Moderate', color: '#BA7517' },
   { min: 0,    label: 'Low',      color: '#999' },
 ];
@@ -2141,13 +2262,13 @@ return __e;
 __modules['triage.js'] = function(__e){
 
 const TIERS = {
-  1: { level: 1, label: 'Refer for clinical assessment', color: '#A32D2D',
+  1: { level: 1, label: 'Refer for clinical assessment', color: 'var(--alert)',
        action: 'One or more answers warrant clinician assessment before starting a gut-health program.' },
   2: { level: 2, label: 'Clinician-led management', color: '#C2622E',
        action: 'A clinician-guided plan is appropriate. Once other causes have been assessed, manual or physical therapy may be a useful adjunct (limited evidence base) for these symptoms.' },
   3: { level: 3, label: 'Microbiome-support candidate', color: '#BA7517',
        action: 'A reasonable candidate for a clinician-supervised trial of probiotic / microbiome support.' },
-  4: { level: 4, label: 'Self-management & monitoring', color: '#0F6E56',
+  4: { level: 4, label: 'Self-management & monitoring', color: 'var(--ok)',
        action: 'Lifestyle-focused self-management is reasonable. Re-screen in 4–6 weeks to track change.' },
 };
 
@@ -2667,8 +2788,8 @@ function deltaLabel(curr, prev) {
   const d = curr - prev, ad = Math.abs(d);
   if (ad < 5) return { dir: 'stable', label: 'Stable', delta: d, color: '#999' };
   const meaningful = ad >= 10;
-  if (d < 0) return { dir: 'improved', label: meaningful ? 'Improved' : 'Slightly improved', delta: d, color: '#0F6E56' };
-  return { dir: 'worsened', label: meaningful ? 'Worsened' : 'Slightly worse', delta: d, color: '#A32D2D' };
+  if (d < 0) return { dir: 'improved', label: meaningful ? 'Improved' : 'Slightly improved', delta: d, color: 'var(--ok)' };
+  return { dir: 'worsened', label: meaningful ? 'Worsened' : 'Slightly worse', delta: d, color: 'var(--alert)' };
 }
 
 function buildTrend(visits) {
@@ -2936,7 +3057,7 @@ const GI_CLUSTER_FREQ_LABELS = {
   Constipation: 'Constipation or hard stools',
 };
 const { RED_FLAGS, anyRedFlag, firedRedFlags, RED_FLAG_BANNER, RF_URGENCY_META, topUrgency, firedByUrgency } = __req('redflags.js');
-const { el, esc, toast, patientForm } = __req('util.js');
+const { el, esc, toast, patientForm, syncHeaderHeight } = __req('util.js');
 const Store = __req('storage.js');
 const { detectPatterns } = __req('patterns.js');
 const { triage } = __req('triage.js');
@@ -2982,8 +3103,9 @@ let extras = blankExtras();
 let session = { name: '', age: '', gender: '', ref: '', followup: false, pregnant: '' };
 let lastCalc = null;       // cached result from the most recent calc(); used by print functions
 let loadedVisitId = null;  // set when a saved visit is loaded; saveVisit() updates it in-place
+let currentStep = 0;       // guided-steps wizard: index of the visible step (0-based)
 
-function reset() { answers = {}; redflags = {}; extras = blankExtras(); session.followup = false; loadedVisitId = null; }
+function reset() { answers = {}; redflags = {}; extras = blankExtras(); session.followup = false; loadedVisitId = null; currentStep = 0; }
 
 // The patient's linking key: reference code if given, else name (so name-only
 // clinicians still get visit linking + trends).
@@ -3119,7 +3241,7 @@ function clearPatient() { session.name = session.ref = session.age = session.gen
 function patientBanner() {
   const lbl = (session.name || '').trim() || (session.ref || '').trim();
   const card = el('div', { class: 'sec-card' });
-  const head = el('div', { class: 'sec-head', style: 'background:#3A4A5A' });
+  const head = el('div', { class: 'sec-head', style: 'background:var(--neutral)' });
   head.appendChild(el('span', {}, lbl ? '👤 ' + esc(lbl) : 'Anonymous screen'));
   head.appendChild(el('span', { style: 'opacity:.85;font-weight:500' }, session.followup ? 'Follow-up' : 'Baseline'));
   card.appendChild(head);
@@ -3186,22 +3308,22 @@ function bandPillClass(band) {
 // Small "validated / draft / partial" provenance tag, reusing the .opt-tag class.
 function provTag(validated) {
   const label = validated === true ? 'validated' : validated === 'derived' ? 'derived' : validated === 'partial' ? 'part. validated' : 'draft';
-  const bg = validated === true ? '#E1F5EE' : validated === 'derived' ? '#E8F0F7' : validated === 'partial' ? '#FAEEDA' : '#F1F2F4';
-  const col = validated === true ? '#0F6E56' : validated === 'derived' ? '#2C5D8A' : validated === 'partial' ? '#7A5800' : '#6B7280';
+  const bg = validated === true ? 'var(--tint)' : validated === 'derived' ? '#E8F0F7' : validated === 'partial' ? '#FAEEDA' : '#F1F2F4';
+  const col = validated === true ? 'var(--ok)' : validated === 'derived' ? '#2C5D8A' : validated === 'partial' ? '#7A5800' : '#6B7280';
   return `<span class="opt-tag" style="background:${bg};color:${col}">${label}</span>`;
 }
 
 // GSHS headline — the four PRIMARY outputs (Option A). Nutrient/Malabsorption is
 // kept primary on purpose so the Tier-1-capable signal is never buried.
 function headlineCard(heads, rome) {
-  const card = el('div', { class: 'card', style: 'border-left:6px solid #0F6E56' });
+  const card = el('div', { class: 'card', style: 'border-left:6px solid var(--brand)' });
   card.appendChild(el('h2', {}, 'Gut & Systemic Health Screen — headline'));
   card.appendChild(el('div', { class: 'q-sub' }, 'Four separate reads. Burden = current symptom severity · Load = exposure / risk accumulation. The Gut Symptom Burden is the only validated number; the rest are screening reads.'));
-  const grid = el('div', { style: 'display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px' });
+  const grid = el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:10px' });
   heads.primaryList.forEach(o => {
     const isPct = o.key === 'gut_symptom_burden' || o.key === 'nutrient_malabsorption_risk';
     const val = o.value == null ? '—' : (isPct ? o.value + '%' : o.value);
-    grid.appendChild(el('div', { style: 'border:1px solid var(--bdr);border-radius:10px;padding:11px 12px;background:var(--surf2)' },
+    grid.appendChild(el('div', { style: 'border:1px solid var(--bdr);border-radius:10px;padding:11px 12px;background:var(--paper)' },
       `<div style="font-size:11.5px;font-weight:700;color:var(--inks)">${esc(o.label)} ${provTag(o.validated)}</div>
        <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px">
          <div style="font-size:24px;font-weight:800;color:var(--ink)">${esc(String(val))}</div>
@@ -3234,9 +3356,9 @@ function axisProfileCard(profile, heads) {
   rows.forEach(a => {
     const isCount = a.max != null;
     const val = a.value == null ? '—' : (isCount ? `${a.value}/${a.max}` : a.value + '%');
-    card.appendChild(el('div', { class: 'row', style: 'justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--surf2)' },
-      `<span style="font-weight:600">${esc(a.label)} ${provTag(a.validated)}</span>
-       <span class="row" style="gap:8px;align-items:center"><span class="muted">${esc(String(val))}</span>${a.band ? `<span class="pill ${bandPillClass(a.band)}">${esc(a.band)}</span>` : ''}</span>`));
+    card.appendChild(el('div', { style: 'display:flex;flex-wrap:nowrap;justify-content:space-between;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--paper)' },
+      `<span style="font-weight:600;min-width:0;flex:1 1 auto">${esc(a.label)} ${provTag(a.validated)}</span>
+       <span class="row" style="gap:8px;align-items:center;flex:none;white-space:nowrap"><span class="muted">${esc(String(val))}</span>${a.band ? `<span class="pill ${bandPillClass(a.band)}">${esc(a.band)}</span>` : ''}</span>`));
   });
   return card;
 }
@@ -3253,7 +3375,7 @@ const SEVFREQ_QUAD = {
   priority:              { t: 'Priority — severe & frequent', c: '#A9463F', bg: '#FBF2F1' },
   'severe-intermittent': { t: 'Severe but intermittent',      c: '#B4713C', bg: '#FBF6EF' },
   'frequent-mild':       { t: 'Frequent but milder',          c: '#9A8339', bg: '#FAF8EE' },
-  low:                   { t: 'Low burden',                   c: '#3C7F6D', bg: '#F1F7F5' },
+  low:                   { t: 'Low burden',                   c: 'var(--ok)', bg: 'var(--tint)' },
 };
 // Shared renderer for both the on-screen card and the print section — returns
 // an HTML string so both call sites (el(...).innerHTML and the print string
@@ -3281,7 +3403,8 @@ function sevFreqBodyHtml(cells) {
       return `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:11.5px">
         <span style="width:78px;flex:none;font-weight:600;color:#333">${esc(c.cluster)}</span>
         <span style="flex:1;height:8px;background:#EDEDE8;border-radius:4px;overflow:hidden"><span style="display:block;height:100%;width:${pct}%;background:${barColor};border-radius:4px"></span></span>
-        <span style="width:70px;flex:none;text-align:right;font-variant-numeric:tabular-nums">${pct}%${c.sevHi ? ' <b style="color:#A9463F">▲</b>' : ''}</span></div>`;
+        <span style="width:34px;flex:none;text-align:right;font-variant-numeric:tabular-nums">${pct}%</span>
+        <span style="width:14px;flex:none;text-align:left">${c.sevHi ? '<b style="color:#A9463F">▲</b>' : ''}</span></div>`;
     }).join('');
     return `${domLine}<div style="font-size:10.5px;font-weight:700;color:#777;margin-bottom:5px">Frequency: Not recorded this visit — severity only</div>
       <div>${rows || '<div style="font-size:11px;color:#555">No severity data recorded.</div>'}</div>`;
@@ -3424,81 +3547,182 @@ function interventionCard() {
 // Longitudinal trend card — burden + cluster trajectory across this patient's
 // visits, with visit-to-visit delta and pattern persistence. `markLastUnsaved`
 // labels the final point as the current in-progress (preview) visit.
+// Inline SVG line chart of the Index trajectory, on a fixed 0–100% scale
+// (top = 0/best, bottom = 100/worst, so an improving line visually rises).
+// Marks any visit with a recorded intervention with an "Rx" flag, so a bend
+// in the line reads against what was actually tried, not in isolation.
+function trendChartSvg(points, sortedVisits) {
+  const W = 160, H = 84, top = 12, bot = 62, left = 10, right = 150;
+  const n = points.length;
+  const x = i => n <= 1 ? (left + right) / 2 : left + (right - left) * i / (n - 1);
+  const y = v => v == null ? (top + bot) / 2 : top + (bot - top) * (v / 100);
+  const coords = points.map((p, i) => ({ x: x(i), y: y(p.index), p, iv: !!interventionSummary(sortedVisits[i] && sortedVisits[i].extras) }));
+  const known = coords.filter(c => c.p.index != null);
+  const line = known.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
+  const dots = coords.map((c, i) => {
+    if (c.p.index == null) return '';
+    const isLast = i === coords.length - 1;
+    const fill = isLast ? 'var(--ok)' : 'var(--bdrm)';
+    const r = isLast ? 5 : 4;
+    let s = `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${r}" fill="${fill}"${isLast ? ' stroke="#fff" stroke-width="1.5"' : ''}/>`;
+    s += `<text x="${c.x.toFixed(1)}" y="${(bot + 12).toFixed(1)}" font-size="8.5" fill="var(--inkt)" text-anchor="middle">${c.p.index}%</text>`;
+    if (c.iv) {
+      s += `<rect x="${(c.x - 7).toFixed(1)}" y="${(c.y - 20).toFixed(1)}" width="14" height="12" rx="3" fill="var(--bl)"/>`;
+      s += `<text x="${c.x.toFixed(1)}" y="${(c.y - 11).toFixed(1)}" font-size="8" fill="#fff" text-anchor="middle" font-weight="700">Rx</text>`;
+    }
+    return s;
+  }).join('');
+  return `<svg width="${W}" height="${H + 6}" viewBox="0 0 ${W} ${H + 6}" role="img" aria-label="Gut Symptom Burden trend">
+    <line x1="${left}" y1="${top}" x2="${right}" y2="${top}" stroke="var(--bdr)" stroke-width="1"/>
+    <line x1="${left}" y1="${bot}" x2="${right}" y2="${bot}" stroke="var(--bdr)" stroke-width="1"/>
+    <polyline points="${line}" fill="none" stroke="var(--ok)" stroke-width="2.5"/>
+    ${dots}
+  </svg>`;
+}
+
 function trendCard(visits, markLastUnsaved) {
   const { points, persistent, latest, leadingSignal } = buildTrend(visits);
-  const card = el('div', { class: 'card', id: 'trend-card', style: 'border-left:6px solid #185FA5' });
+  const card = el('div', { class: 'card', id: 'trend-card', style: 'border-left:6px solid var(--bl)' });
   card.appendChild(el('h2', {}, 'Progress over time'));
   card.appendChild(el('div', { class: 'q-sub' },
-    `${points.length} visit${points.length > 1 ? 's' : ''}${session.ref ? ' · ' + esc((session.ref || '').trim()) : ''}. Lower GI Symptom Burden = improvement.`));
+    `${points.length} visit${points.length > 1 ? 's' : ''}${session.ref ? ' · ' + esc((session.ref || '').trim()) : ''}. Lower Gut Symptom Burden = improvement.`));
 
   // Headline delta vs previous visit.
   if (latest && latest.delta) {
     const d = latest.delta;
-    card.appendChild(el('div', { class: 'row', style: 'align-items:center;gap:10px;margin:8px 0;flex-wrap:wrap' },
+    card.appendChild(el('div', { class: 'tr-delta' },
       `<span class="pill" style="background:${d.color};color:#fff">${esc(d.label)}</span>
-       <span style="font-size:13px;color:var(--inks)">Burden ${d.delta > 0 ? '+' : ''}${d.delta} pts vs previous visit (${points[points.length - 2].index}% → ${latest.index}%)</span>`));
+       <span style="font-size:12.5px;color:var(--inks)">Burden ${d.delta > 0 ? '+' : ''}${d.delta} pts vs previous visit (${points[points.length - 2].index}% → ${latest.index}%)</span>`));
   }
 
-  // Per-visit rows: date, index + band, delta. Tranche G — each row also carries
-  // the interventions recorded at that visit (overlay), so burden change reads
-  // against what was tried. Sort the source visits the same way buildTrend does
-  // so the intervention summary aligns to the right point.
+  // Chart + intervention overlay. Sort the source visits the same way
+  // buildTrend does so the intervention summary aligns to the right point.
   const sortedVisits = (visits || []).slice().sort((a, b) => (a.date || 0) - (b.date || 0));
-  const tbl = el('div', { style: 'margin-top:8px' });
+  card.appendChild(el('div', { class: 'tr-chart-row' },
+    `<div>${trendChartSvg(points, sortedVisits)}</div>
+     <div class="tr-chart-meta"><b>Gut Symptom Burden</b>Lower = improvement. The <b style="display:inline;color:var(--bl)">Rx</b> flag marks a visit with a recorded intervention, so a bend in the line reads against what was actually tried.</div>`));
+
+  // Per-visit rows: date, index + band, delta, intervention overlay.
+  const tbl = el('div', {});
   points.forEach((p, i) => {
     const isLast = i === points.length - 1;
     const dateStr = p.date ? new Date(p.date).toISOString().slice(0, 10) : '—';
     const tag = (isLast && markLastUnsaved) ? ' <span class="opt-tag">current · unsaved</span>'
       : (p.followup ? ' <span class="opt-tag">follow-up</span>' : ' <span class="opt-tag">baseline</span>');
-    const deltaTxt = p.delta ? `<span style="color:${p.delta.color};font-weight:600">${esc(p.delta.label)}</span>` : '<span class="muted">—</span>';
+    const deltaTxt = p.delta ? `<span class="pill" style="background:${p.delta.color};color:#fff;padding:1px 8px;font-size:9.5px">${esc(p.delta.label)}</span>` : '<span class="muted">—</span>';
     const indexTxt = p.index != null ? `${p.index}%` : '—';
     const bandTxt = p.band != null ? esc(p.band) : 'Not completed';
     const freqTxt = p.freqDelta ? ` · freq: <span style="color:${p.freqDelta.color};font-weight:600">${esc(p.freqDelta.label)}</span>` : '';
-    tbl.appendChild(el('div', { class: 'bar-row', style: 'display:flex;justify-content:space-between;gap:10px;padding:4px 0' },
-      `<span>${esc(dateStr)}${tag}</span><span><b>${indexTxt}</b> <span class="muted">${bandTxt}</span> · ${deltaTxt}${freqTxt}</span>`));
     const iv = interventionSummary(sortedVisits[i] && sortedVisits[i].extras);
-    if (iv) tbl.appendChild(el('div', { class: 'q-sub', style: 'padding:0 0 4px 6px;color:#185FA5' }, '↳ interventions: ' + esc(iv)));
+    tbl.appendChild(el('div', { class: 'tr-vrow' },
+      `<div class="date">${esc(dateStr)}${tag}</div>
+       <div class="idx"><b>${indexTxt}</b><span class="band">${bandTxt}</span></div>
+       <div class="iv">${iv ? '↳ interventions: ' + esc(iv) + freqTxt : (freqTxt ? freqTxt.replace(/^ · /, '') : '')}</div>
+       <div>${deltaTxt}</div>`));
   });
   card.appendChild(tbl);
 
-  // Cluster trajectory (first → latest), so symptom shape change is visible.
+  // Cluster trajectory (first → latest) — Option D: before → after chip pairs.
+  // Compact and unambiguous (exact values, not a track/axis to read).
   if (points.length >= 2) {
     const first = points[0].clusterNorm || {}, last = latest.clusterNorm || {};
     const order = ['Reflux', 'Pain', 'Indigestion', 'Diarrhoea', 'Constipation'];
-    const rows = order.filter(k => first[k] != null || last[k] != null).map(k => {
-      const f = first[k] == null ? '—' : Math.round(first[k] * 100) + '%';
-      const l = last[k] == null ? '—' : Math.round(last[k] * 100) + '%';
-      return `<div class="bar-row" style="display:flex;justify-content:space-between;padding:2px 0"><span class="muted">↳ ${esc(k)}</span><span class="muted">${f} → ${l}</span></div>`;
-    }).join('');
-    if (rows) {
-      card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-weight:600' }, 'GI clusters (first → latest)'));
-      card.appendChild(el('div', {}, rows));
+    const rows = order.filter(k => first[k] != null && last[k] != null).map(k => {
+      const f = Math.round(first[k] * 100), l = Math.round(last[k] * 100);
+      const d = l - f, worse = d > 0;
+      const deltaTxt = d === 0 ? '±0%' : `${d > 0 ? '+' : ''}${d}%`;
+      return el('div', { class: 'tr-cp-row' },
+        `<span class="tr-cp-lab">${esc(k)}</span>
+         <div class="tr-cp-pair"><span class="tr-chip first">${f}%</span><span class="tr-cp-arrow">→</span><span class="tr-chip last${worse ? ' worse' : ''}">${l}%</span>
+         <span class="tr-cp-delta" style="color:${d === 0 ? 'var(--inkt)' : worse ? 'var(--am)' : 'var(--ok)'}">${deltaTxt}</span></div>`);
+    });
+    if (rows.length) {
+      card.appendChild(el('div', { class: 'tr-clu-h' }, 'GI clusters — first → latest visit'));
+      const wrap = el('div', {});
+      rows.forEach(r => wrap.appendChild(r));
+      card.appendChild(wrap);
     }
   }
 
   // Pattern persistence — fired on the latest AND the prior visit.
   if (persistent.length) {
-    card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px' },
-      `Persistent patterns (2+ consecutive visits): <b>${persistent.map(id => esc(id.replace(/_/g, ' '))).join(', ')}</b>`));
+    card.appendChild(el('div', { class: 'tr-clu-h' }, 'Persistent patterns (2+ consecutive visits)'));
+    const badges = el('div', { class: 'tr-badges' });
+    persistent.forEach(id => badges.appendChild(el('span', { class: 'tr-badge' }, esc(id.replace(/_/g, ' ')))));
+    card.appendChild(badges);
   }
   // Leading-indicator read — frequency often eases before severity does.
   if (leadingSignal) {
-    card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;color:#185FA5' }, '💡 ' + esc(leadingSignal)));
+    card.appendChild(el('div', { class: 'tr-callout' }, `<span>💡</span><span><b>Leading indicator:</b> ${esc(leadingSignal)}</span>`));
   }
   return card;
+}
+
+// The guided-steps flow. Each entry owns one wizard step; build(container)
+// appends the same cards, in the same clinical order, that the old single-page
+// scroll produced — so the reveal engine, answer state, and the de-blend
+// scoring invariant are all untouched (this is a presentation change only:
+// the cards, ids, and reveal holders are identical, just partitioned into
+// step containers that show one at a time). `showIf` lets a step drop out
+// entirely when it can never hold content (e.g. no red flags in the schema);
+// steps are numbered over the SURVIVING list so hidden steps don't leave gaps.
+function buildSteps() {
+  const steps = [
+    { id: 'about', label: 'About & history', sub: 'Anthropometrics, conditions & family/surgical history',
+      build(c) {
+        c.appendChild(el('div', { class: 'grp-label', style: 'margin:2px 2px 2px' }, 'Anthropometrics'));
+        c.appendChild(anthropometricsCard());
+        c.appendChild(el('div', { class: 'grp-label', style: 'margin:12px 2px 2px' }, 'History'));
+        c.appendChild(conditionsCard());
+        c.appendChild(labsCard());
+        c.appendChild(familyHistoryCard());
+        // Obstetric/birth history is shown only for patients recorded as Female.
+        if (session.gender === 'Female') c.appendChild(obstetricCard());
+        c.appendChild(surgicalCard());
+      } },
+    { id: 'meds', label: 'Medications', sub: 'Current medications & symptom-cause confounders',
+      build(c) {
+        c.appendChild(medsCard());
+        c.appendChild(medConfoundersCard());
+      } },
+    { id: 'safety', label: 'Safety', sub: 'Alarm / red-flag features', showIf: () => RED_FLAGS.length > 0,
+      build(c) { c.appendChild(redFlagCard()); } },
+    { id: 'gut', label: 'Gut symptoms', sub: 'Core GI symptoms, stool form & pain',
+      build(c) {
+        const giSec = SECTIONS.find(s => s.id === 'GI');
+        if (giSec) c.appendChild(sectionCard(giSec));
+        c.appendChild(bristolCard());
+        c.appendChild(clusterFreqCard());
+        // Pain + Rome IV are gated on reported abdominal pain (refreshReveals).
+        c.appendChild(wrapHidden('reveal-card-pain', painCard()));
+        c.appendChild(wrapHidden('reveal-card-rome', romeCard()));
+      } },
+    { id: 'lifestyle', label: 'Lifestyle', sub: 'Diet, sleep & microbiome drivers',
+      build(c) { c.appendChild(lifestyleCard()); c.appendChild(sleepCard()); c.appendChild(dysCard()); } },
+    { id: 'systemic', label: 'Systemic', sub: 'Whole-body features & targeted follow-up',
+      build(c) {
+        SECTIONS.filter(s => ['IM', 'BG', 'NU', 'IMP'].includes(s.id)).forEach(sec => c.appendChild(sectionCard(sec)));
+        c.appendChild(pss4Card());
+        // Adaptive deep dive: targeted sections (AR / UG / SY), revealed by refreshReveals().
+        c.appendChild(targetedSymptomsArea());
+      } },
+    { id: 'treatments', label: 'Treatments', sub: 'What has already been tried',
+      build(c) { c.appendChild(treatmentsTriedCard()); } },
+  ];
+  return steps.filter(s => !s.showIf || s.showIf());
 }
 
 function render() {
   const root = document.getElementById('mode-patient');
   root.innerHTML = '';
-  root.appendChild(el('div', { class: 'intro' },
-    `<b>Enterro360 — Gut &amp; Systemic Health Screen.</b> A multi-axis screening instrument for chronic gut and related systemic symptoms. ` +
-    `This is a screening aid to support clinical assessment — not a diagnosis.`));
+
+  // Persistent top matter (above the wizard): live progress meta and the
+  // patient-identity banner. Shown on every step so identity/progress context
+  // never scrolls out of reach. (No standalone intro paragraph — the app-bar
+  // title already states what this is; a repeated explanation just pushed
+  // the first question further down.)
 
   // How long this takes — the headline count/time is the mandatory questions only.
-  // The optional estimate (shown as an "add" figure) covers the optional QUESTIONS
-  // (targeted symptom follow-ups) plus ~1 min for the history/lifestyle chip cards,
-  // which aren't QUESTIONS; all of it only appears when relevant.
   const minutes = (n) => [Math.max(1, Math.round(n * 8 / 60)), Math.max(1, Math.round(n * 12 / 60))];
   const mainQ = QUESTIONS.filter(q => !q.optional).length;
   const optQ = QUESTIONS.filter(q => q.optional).length;
@@ -3511,96 +3735,161 @@ function render() {
 
   root.appendChild(patientBanner());
 
-  // Privacy warning for shared-device use
-  root.appendChild(el('div', { class: 'intro', style: 'background:#FFF3CD;border-color:#FFD699;color:#664d03' },
-    `🔒 <b>Shared device notice:</b> Patient data is stored locally in this browser's storage. If this is a shared or clinic computer, ` +
-    `always clear browser data (cookies, site data) after each patient to protect confidentiality. Do not leave this browser logged into patient records.`));
-
-  // Check storage quota and warn if nearly full
+  // Privacy + storage notices — first step only (consent-at-start), so later
+  // steps stay clean. Quiet one-liners, dismissible, shown once per browser
+  // session (sessionStorage) rather than on every render.
+  const notices = el('div', { id: 'gstep-notices' });
+  if (!sessionStorage.getItem('gshs-notice-dismissed')) {
+    const line = el('div', { class: 'notice-line' },
+      `<span>🔒 Shared device — clear browser data after each patient.</span>`);
+    const x = el('button', { class: 'x', type: 'button', title: 'Dismiss' }, '✕');
+    x.onclick = () => { sessionStorage.setItem('gshs-notice-dismissed', '1'); line.remove(); };
+    line.appendChild(x);
+    notices.appendChild(line);
+  }
   Store.checkStorageQuota().then(quota => {
     if (quota && quota.isWarning) {
-      root.appendChild(el('div', { class: 'intro', style: 'background:#FFE6E6;border-color:#FF9999;color:#8B0000' },
-        `⚠️ <b>Storage nearly full (${quota.percentUsed}% used).</b> Download visits as CSV or clear browser data to free space before more data is added.`));
+      const line = el('div', { class: 'notice-line warn' },
+        `<span>⚠️ Storage nearly full (${quota.percentUsed}% used) — download visits as CSV or clear browser data.</span>`);
+      const x = el('button', { class: 'x', type: 'button', title: 'Dismiss' }, '✕');
+      x.onclick = () => line.remove();
+      line.appendChild(x);
+      notices.appendChild(line);
     }
   });
-
-  // Clinical intake flow:
-  //   Anthropometrics → History → Safety screen → Gut symptoms →
-  //   Lifestyle & modifiable drivers → Systemic features → Adaptive deep dive →
-  //   Treatments already tried.
-
-  // 1 — Anthropometrics (optional; BMI / WHtR — context, not scored).
-  root.appendChild(el('div', { class: 'grp-label', style: 'margin:6px 2px 2px' }, 'Anthropometrics'));
-  root.appendChild(anthropometricsCard());
-
-  // 2 — History: diagnosed/suspected conditions, family & birth history,
-  // surgical history, current medications.
-  root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'History'));
-  root.appendChild(conditionsCard());
-  root.appendChild(labsCard());
-  root.appendChild(familyHistoryCard());
-  // Obstetric/birth history is shown only for patients recorded as Female (the
-  // gender selection in the patient-details form drives this gate).
-  if (session.gender === 'Female') root.appendChild(obstetricCard());
-  root.appendChild(surgicalCard());
-  root.appendChild(medsCard());
-  root.appendChild(medConfoundersCard());
-
-  // 3 — Safety screen: alarm / red-flag features (history then informs which matter).
-  if (RED_FLAGS.length) {
-    root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Safety screen'));
-    root.appendChild(redFlagCard());
-  }
+  root.appendChild(notices);
 
   if (!SECTIONS.length || !QUESTIONS.length) {
     root.appendChild(el('div', { class: 'card' },
       '<div class="empty-note">🌱<br>No domains locked yet.<br>' +
       '<span class="muted">Domains and items appear here as they are co-designed and added to the schema.</span></div>'));
+    updateIdentityChip();
     return;
   }
 
-  // 4 — Gut symptoms: the validated GI core + symptom-characterising cards
-  // (stool form, pain & Rome IV — the last two gated on reported pain).
-  root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Gut symptoms'));
-  const giSec = SECTIONS.find(s => s.id === 'GI');
-  if (giSec) root.appendChild(sectionCard(giSec));
-  root.appendChild(bristolCard());
-  root.appendChild(clusterFreqCard());
-  // Pain + Rome IV are gated on reported abdominal pain (gsrs_pain ≥ 1) — Rome IV
-  // requires recurrent pain, so this spares pain-free patients the burden.
-  root.appendChild(wrapHidden('reveal-card-pain', painCard()));
-  root.appendChild(wrapHidden('reveal-card-rome', romeCard()));
+  // ── Guided-steps wizard ──────────────────────────────────────────────
+  const steps = buildSteps();
+  currentStep = Math.max(0, Math.min(currentStep, steps.length - 1));
 
-  // 5 — Lifestyle & modifiable drivers (not part of the Index; feed patterns).
-  root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Lifestyle & modifiable drivers'));
-  root.appendChild(lifestyleCard());
-  root.appendChild(sleepCard());
-  root.appendChild(dysCard());
+  const stepperWrap = el('div', { class: 'stepper-wrap' });
+  stepperWrap.appendChild(el('div', { class: 'stepper', id: 'gstepper' }));   // filled by paintWizard()
+  root.appendChild(stepperWrap);
+  root.appendChild(el('p', { class: 'stepsub', id: 'gstepsub' }));
 
-  // 6 — Systemic features: the standalone systemic axes (immune/inflammatory,
-  // brain-gut & mood, nutrient, functional impact) + the PSS-4 stress scale
-  // (which feeds the Psychosocial axis, so it sits with the brain-gut items).
-  root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Systemic features'));
-  SECTIONS.filter(s => ['IM', 'BG', 'NU', 'IMP'].includes(s.id)).forEach(sec => root.appendChild(sectionCard(sec)));
-  root.appendChild(pss4Card());
+  // Build every step container up-front and keep them all in the DOM (only the
+  // active one is displayed). This is what preserves the reveal engine + answers.
+  const body = el('div', { id: 'gstep-body' });
+  steps.forEach((step, i) => {
+    const sec = el('section', { class: 'gstep', 'data-step': i, id: 'gstep-' + step.id });
+    sec.appendChild(el('div', { class: 'gstep-head' },
+      `<div class="t">${esc(step.label)}</div><div class="s">${esc(step.sub || '')}</div>`));
+    step.build(sec);
+    // Defensive empty-state note (no step is structurally empty in the current
+    // schema, but a conditional-only step could be — handle it gracefully).
+    sec.appendChild(el('div', { class: 'gstep-empty' },
+      'No questions in this section apply based on your answers so far — continue to the next step.'));
+    body.appendChild(sec);
+  });
+  root.appendChild(body);
 
-  // 7 — Adaptive deep dive: targeted symptom sections (AR / UG / SY), hidden
-  // until the GI core warrants them (revealIf) or the manual toggle is used.
-  root.appendChild(targetedSymptomsArea());
-
-  // 8 — Treatments already tried: kept last so it reads as "what have you tried
-  // so far" after the full symptom picture is on the table, rather than
-  // colouring how the patient answers the symptom questions that follow it.
-  root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Treatments already tried'));
-  root.appendChild(treatmentsTriedCard());
-
-  const actions = el('div', { class: 'card row', style: 'justify-content:flex-end' });
-  actions.appendChild(el('button', { class: 'btn btn-g', onclick: calc }, 'See results →'));
-  root.appendChild(actions);
+  root.appendChild(el('div', { class: 'actionbar', id: 'gnav' }));     // filled by paintWizard()
   root.appendChild(el('div', { id: 'patient-results' }));
+
   updateIdentityChip();
   updateProgress();
   refreshReveals();
+  paintWizard(steps);
+  syncHeaderHeight();
+}
+
+// Show step `i`, repaint the stepper + contextual nav bar, and toggle the
+// per-step empty-state note. `steps` is the surviving-step list from buildSteps().
+function paintWizard(steps) {
+  const n = steps.length;
+  currentStep = Math.max(0, Math.min(currentStep, n - 1));
+
+  // Step containers: only the active one is displayed.
+  document.querySelectorAll('#gstep-body .gstep').forEach(sec => {
+    sec.classList.toggle('active', Number(sec.dataset.step) === currentStep);
+  });
+  // Privacy/storage notices ride on the first step only.
+  const notices = document.getElementById('gstep-notices');
+  if (notices) notices.style.display = currentStep === 0 ? '' : 'none';
+
+  // Stepper: done (before current) → ✓, current → ringed number, upcoming → grey.
+  const stepper = document.getElementById('gstepper');
+  if (stepper) {
+    stepper.innerHTML = '';
+    steps.forEach((step, i) => {
+      const cls = i < currentStep ? 'done' : i === currentStep ? 'now' : '';
+      const btn = el('button', { class: 'step ' + cls, type: 'button', 'data-goto': i,
+        'aria-current': i === currentStep ? 'step' : null });
+      btn.appendChild(el('span', { class: 'b' }, i < currentStep ? '✓' : String(i + 1)));
+      btn.appendChild(el('span', { class: 'lb' }, esc(step.label)));
+      if (i < n - 1) btn.appendChild(el('span', { class: 'ln' }));
+      // Allow jumping back to any completed step, or forward one at a time.
+      btn.disabled = i > currentStep;
+      btn.onclick = () => { if (i <= currentStep) goToStep(i, steps); };
+      stepper.appendChild(btn);
+    });
+  }
+  // Sub-line: names the immediate neighbours.
+  const sub = document.getElementById('gstepsub');
+  if (sub) {
+    const prev = currentStep > 0 ? steps[currentStep - 1].label : null;
+    const next = currentStep < n - 1 ? steps[currentStep + 1].label : null;
+    sub.innerHTML = [prev ? `Previous: <b>${esc(prev)}</b>` : null,
+      next ? `Next up: <b>${esc(next)}</b>` : 'Final step'].filter(Boolean).join(' · ');
+  }
+
+  // Contextual action bar.
+  const nav = document.getElementById('gnav');
+  if (nav) {
+    nav.innerHTML = '';
+    const first = currentStep === 0, last = currentStep === n - 1;
+    const back = el('button', { class: 'navbtn back', type: 'button', disabled: first ? '' : null },
+      `<span class="k"><span class="ar">←</span> Back to</span><span class="nm">${first ? '—' : esc(steps[currentStep - 1].label)}</span>`);
+    back.onclick = () => { if (!first) goToStep(currentStep - 1, steps); };
+    nav.appendChild(back);
+
+    const pct = Math.round((currentStep + 1) / n * 100);
+    nav.appendChild(el('div', { class: 'centerprog' },
+      `<span class="c">Step ${currentStep + 1} of ${n}</span><div class="bar"><i style="width:${pct}%"></i></div>`));
+
+    const next = el('button', { class: 'navbtn next', type: 'button' },
+      last
+        ? `<span class="k">Done →</span><span class="nm">View results</span>`
+        : `<span class="k">Next →</span><span class="nm">${esc(steps[currentStep + 1].label)}</span>`);
+    next.onclick = () => { last ? calc() : goToStep(currentStep + 1, steps); };
+    nav.appendChild(next);
+  }
+
+  // Empty-state note per step (defensive — depends on post-reveal visibility).
+  document.querySelectorAll('#gstep-body .gstep').forEach(sec => {
+    const note = sec.querySelector('.gstep-empty');
+    if (!note) return;
+    const cards = Array.from(sec.children).filter(ch =>
+      ch !== note && !ch.classList.contains('gstep-head'));
+    const anyVisible = cards.some(ch => {
+      if (ch.offsetParent !== null) return true;              // rendered (only true for the active step)
+      return ch.querySelector && ch.querySelector('.sec-card, .card, .sec-body, .chips');
+    });
+    note.style.display = anyVisible ? 'none' : '';
+  });
+}
+
+// Move to step `i` and scroll the stepper to just below the sticky header (a
+// plain scrollIntoView would tuck it under the header on mobile).
+function goToStep(i, steps) {
+  currentStep = i;
+  paintWizard(steps || buildSteps());
+  const stepper = document.getElementById('gstepper');
+  if (stepper) {
+    const bar = document.querySelector('.app-bar');
+    const off = (bar ? bar.offsetHeight : 0) + 8;
+    const y = stepper.getBoundingClientRect().top + window.scrollY - off;
+    window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+  }
 }
 
 // Wrap a node in a hidden, id-tagged holder that refreshReveals() toggles.
@@ -3618,7 +3907,7 @@ function sectionCard(sec) {
   // Count only items shown up-front (reveal-on-positive follow-ups are hidden until
   // their parent is positive, so they shouldn't inflate the header count).
   const baseCount = items.filter(q => !q.revealIf).length;
-  card.appendChild(el('div', { class: 'sec-head', style: `background:${sec.color || '#0F6E56'}` },
+  card.appendChild(el('div', { class: 'sec-head', style: `background:${sec.color || 'var(--section)'}` },
     `${esc(sec.full || sec.label)} <span style="opacity:.8;font-weight:500">${baseCount} items</span>`));
   const body = el('div', { class: 'sec-body' });
   if (!sec.noRecall) body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' }, esc(recallNote())));
@@ -4152,7 +4441,7 @@ function obstetricCard() {
 // Notes-only: feeds clinician interpretation, never the Index or the triage Tier.
 function anthropometricsCard() {
   const card = el('div', { class: 'sec-card' });
-  card.appendChild(el('div', { class: 'sec-head', style: 'background:#3A4A5A' }, 'Anthropometrics'));
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:var(--neutral)' }, 'Anthropometrics'));
   const body = el('div', { class: 'sec-body' });
   body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' },
     'Optional. Used for BMI and waist-to-height ratio — context for interpretation, not part of the score.'));
@@ -4182,7 +4471,7 @@ function anthropometricsCard() {
     out.innerHTML = '';
     if (a.bmi == null && a.whtr == null) return;
     const grid = el('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' });
-    const tile = (label, val, band) => el('div', { style: 'flex:1;min-width:120px;border:1px solid var(--bdr);border-radius:10px;padding:9px 12px;background:var(--surf2)' },
+    const tile = (label, val, band) => el('div', { style: 'flex:1;min-width:120px;border:1px solid var(--bdr);border-radius:10px;padding:9px 12px;background:var(--paper)' },
       `<div style="font-size:11px;font-weight:700;color:var(--inks)">${esc(label)}</div>
        <div style="display:flex;align-items:baseline;gap:8px;margin-top:3px">
          <div style="font-size:20px;font-weight:800;color:var(--ink)">${val == null ? '—' : esc(String(val))}</div>
@@ -4380,7 +4669,7 @@ function surgicalCard() {
 
 function redFlagCard() {
   const card = el('div', { class: 'sec-card red-flag-alert' });
-  card.appendChild(el('div', { class: 'sec-head', style: 'background:#A32D2D' },
+  card.appendChild(el('div', { class: 'sec-head', style: 'background:var(--alert)' },
     `Important safety questions <span style="opacity:.8;font-weight:500">${RED_FLAGS.length} items</span>`));
   const body = el('div', { class: 'sec-body' });
   body.appendChild(el('div', { class: 'q-sub', style: 'padding-top:8px' },
@@ -4569,7 +4858,7 @@ function domainBarsCard(score, withClusters) {
     const detail = withClusters ? `${sc}/${max} · ${p}%` : p + '%';
     card.appendChild(el('div', { class: 'bar-row' },
       `<div class="bar-label"><span>${esc(s.full || s.label)}</span><span class="muted">${detail}</span></div>
-       <div class="bar-track"><div class="bar-fill" style="width:${p}%;background:${s.color || '#0F6E56'}"></div></div>`));
+       <div class="bar-track"><div class="bar-fill" style="width:${p}%;background:${s.color || 'var(--brand)'}"></div></div>`));
     if (!withClusters || s.id !== 'GI') return;
     // Bristol/frequency no longer nudge gut-core (decoupled — Bristol now
     // feeds Rome IV subtyping only, frequency feeds only the read-only
@@ -4764,40 +5053,35 @@ function triageCard(tri, rome, showInvestigations, includeInvestigationsList) {
   tcard.appendChild(el('div', { style: 'font-size:13px;color:var(--inks);line-height:1.5;margin-top:6px' }, esc(tri.action)));
   if (tri.reasons.length) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px' },
     'Why: ' + tri.reasons.map(r => esc(r.text)).join(' · ')));
-  if (tri.conditionNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    'ℹ️ ' + esc(tri.conditionNote)));
-  if (tri.labNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🧪 ' + esc(tri.labNote)));
-  if (tri.medNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '💊 ' + esc(tri.medNote)));
-  if (tri.autonomicNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🫀 ' + esc(tri.autonomicNote)));
-  (tri.conditionGuidance || []).forEach(n => tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    'ℹ️ ' + esc(n))));
-  (tri.familyNotes || []).forEach(n => tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🧬 ' + esc(n))));
-  if (tri.gynNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '⚕️ ' + esc(tri.gynNote)));
-  if (tri.pelvicNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🧷 ' + esc(tri.pelvicNote)));
-  if (tri.anthroNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '📏 ' + esc(tri.anthroNote)));
-  if (tri.durationNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '⏱️ ' + esc(tri.durationNote)));
-  if (tri.bowelFreqNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🚽 ' + esc(tri.bowelFreqNote)));
-  if (tri.smokingNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🚬 ' + esc(tri.smokingNote)));
-  if (tri.treatmentsTriedNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '💉 ' + esc(tri.treatmentsTriedNote)));
-  if (tri.coeliacTimingNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🌾 ' + esc(tri.coeliacTimingNote)));
-  if (tri.restrictionNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🥗 ' + esc(tri.restrictionNote)));
-  if (tri.referredPainNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🦴 ' + esc(tri.referredPainNote)));
-  if (tri.restrictionScreenNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '⚠️ ' + esc(tri.restrictionScreenNote)));
+  // Clinical considerations — every management-changing note (condition/lab/
+  // med caveats, family/gyn/pelvic/anthro/duration/lifestyle flags, coeliac
+  // timing, restriction screening, referred pain) consolidated into ONE
+  // bulleted list instead of up to 17 separately-styled one-line paragraphs,
+  // which was the actual clutter in this card — same information, one block.
+  const considerations = [];
+  const note = (icon, text) => { if (text) considerations.push(`${icon} ${esc(text)}`); };
+  note('ℹ️', tri.conditionNote);
+  note('🧪', tri.labNote);
+  note('💊', tri.medNote);
+  note('🫀', tri.autonomicNote);
+  (tri.conditionGuidance || []).forEach(n => note('ℹ️', n));
+  (tri.familyNotes || []).forEach(n => note('🧬', n));
+  note('⚕️', tri.gynNote);
+  note('🧷', tri.pelvicNote);
+  note('📏', tri.anthroNote);
+  note('⏱️', tri.durationNote);
+  note('🚽', tri.bowelFreqNote);
+  note('🚬', tri.smokingNote);
+  note('💉', tri.treatmentsTriedNote);
+  note('🌾', tri.coeliacTimingNote);
+  note('🥗', tri.restrictionNote);
+  note('🦴', tri.referredPainNote);
+  note('⚠️', tri.restrictionScreenNote);
+  if (considerations.length) {
+    tcard.appendChild(el('div', { style: 'font-size:10.5px;font-weight:700;color:var(--am);text-transform:uppercase;letter-spacing:.03em;margin-top:9px' }, 'Clinical considerations'));
+    tcard.appendChild(el('ul', { style: 'font-size:12px;color:var(--inks);margin:3px 0 0 16px;line-height:1.6' },
+      considerations.map(c => `<li>${c}</li>`).join('')));
+  }
   // Patient view (showInvestigations=false) suppresses "Also worth noting" at
   // Tier 1 — a refer instruction should not sit beside "self-management" or
   // "probiotic trial" framing. Clinician view keeps the full tier landscape.
@@ -4819,8 +5103,8 @@ function triageCard(tri, rome, showInvestigations, includeInvestigationsList) {
       `Meets Rome IV-informed criteria for ${esc(rome.subtype)}${esc(basisNote)} — single-visit estimate, not the prospective diary Rome IV was validated against. A pattern to discuss, not a diagnosis.`));
   }
   if (includeInvestigationsList && tri.investigations && tri.investigations.length) {
-    tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-weight:600;color:#3A4A5A' }, 'Suggested investigations / management:'));
-    tcard.appendChild(el('ul', { class: 'rf-list', style: 'color:#3A4A5A;margin-top:2px' },
+    tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-weight:600;color:var(--inks)' }, 'Suggested investigations / management:'));
+    tcard.appendChild(el('ul', { class: 'rf-list', style: 'color:var(--inks);margin-top:2px' },
       dedupeList(tri.investigations).map(i => `<li>${esc(i)}</li>`).join('')));
     tcard.appendChild(el('div', { class: 'q-sub', style: 'color:#888;font-style:italic;margin-top:3px' }, 'Pattern-matched — apply clinical judgement. Not a protocol.'));
   }
@@ -4852,7 +5136,7 @@ function clinicianDetailCard(c) {
     <tr><td>Overall completeness</td><td>${score.completeness}%</td></tr>
     <tr><td>Sections with data</td><td>${esc(String(secWithData))}</td></tr>
     <tr><td>Confidence level</td><td>${esc(conf.level)}</td></tr>
-    <tr><td>GI core answered</td><td>${score.coreUnknown ? '<b style="color:#A32D2D">No — result provisional</b>' : 'Yes'}</td></tr>`));
+    <tr><td>GI core answered</td><td>${score.coreUnknown ? '<b style="color:var(--alert)">No — result provisional</b>' : 'Yes'}</td></tr>`));
 
   // Item-level responses per scored section
   card.appendChild(chead('Item-level responses'));
@@ -4862,7 +5146,7 @@ function clinicianDetailCard(c) {
     const sc = score.secScores[sec.id] || 0;
     const mx = score.secApplicableMax[sec.id] || 0;
     const pct = mx ? Math.round(sc / mx * 100) : 0;
-    card.appendChild(el('div', { style: 'font-size:11px;font-weight:600;color:#3A4A5A;margin:8px 0 3px;padding:2px 0;border-bottom:1px solid #D8DDE3' },
+    card.appendChild(el('div', { style: 'font-size:11px;font-weight:600;color:var(--inks);margin:8px 0 3px;padding:2px 0;border-bottom:1px solid var(--bdr)' },
       `${esc(sec.full || sec.label)} — ${sc}/${mx} (${pct}%)`));
     const rows = qs.map(q => {
       const val = answers[q.id];
@@ -4948,10 +5232,18 @@ function appendixToggleEl() {
 }
 
 // Band → background colour (print). Covers both the 0–100 bands
-// (Minimal/Mild–Moderate/Significant/Severe) and the count-load bands (Low/Some/Elevated).
+// (Minimal/Mild–Moderate/Significant/Severe) and the count-load bands
+// (Low/Some/Elevated/High/Moderate — the latter two are the E3 weighted
+// Dys-R tier vocabulary used by Dysbiosis Correlate Load, previously MISSING
+// from this map entirely, so they silently fell through to the Minimal/Low
+// green — a "Moderate" dysbiosis load rendered identically to "Minimal").
+// A clear 4-step ramp (green → amber → orange → red), matching the on-screen
+// .sev-min/.sev-mod/.sev-sig/.sev-sev classes — Significant/Elevated/High
+// previously shared an undefined-token pink fallback nearly identical to
+// Severe's red; now a distinct orange.
 function bandBg(band) {
-  return { Severe: '#FCEBEB', Significant: '#FAECE7', Elevated: '#FAECE7',
-    'Mild–Moderate': '#FAEEDA', Some: '#FAEEDA' }[band] || '#E1F5EE';
+  return { Severe: 'var(--alert-p)', Significant: '#FBDCC2', Elevated: '#FBDCC2', High: '#FBDCC2',
+    'Mild–Moderate': '#FAEEDA', Some: '#FAEEDA', Moderate: '#FAEEDA' }[band] || 'var(--tint)';
 }
 
 
@@ -5022,6 +5314,30 @@ function physioCandidacy(tri) {
     .filter(r => { if (seen.has(r.text)) return false; seen.add(r.text); return true; });
 }
 
+// On-screen patterns table — full rationale per row, ranked by clinical
+// priority (see rankPatternsByPriority), not by data-confidence. The
+// Impression above already leads with the single top pattern; this is the
+// full ranked list behind it. Capped to keep the main view scannable — the
+// Appendix carries the complete signal-level breakdown for every pattern.
+function patternsMechanismsCard(patterns) {
+  if (!patterns || !patterns.length) return null;
+  const ranked = rankPatternsByPriority(patterns);
+  const cap = capList(ranked, 8);
+  const card = el('div', { class: 'card', style: 'border-left:6px solid var(--section)' });
+  card.appendChild(el('h2', {}, sectionTitle('patterns')));
+  card.appendChild(el('div', { class: 'q-sub' },
+    'Ranked by clinical intensity this visit — how strongly the fired signals were present, not by how much data was available.'));
+  const rows = cap.shown.map(p => {
+    const m = patternPriorityMeta(p.strength || 0);
+    return `<tr><td><span class="pill ${m.cls}" style="font-size:9.5px;white-space:nowrap">${esc(m.label)}</span></td><td><b>${esc(p.label)}</b></td><td>${esc(p.desc)}</td></tr>`;
+  }).join('');
+  card.appendChild(el('div', { style: 'overflow-x:auto;margin-top:8px' },
+    `<table class="clin-tbl"><thead><tr><th style="width:12%">Priority</th><th style="width:26%">Pattern</th><th>Rationale &amp; management hint</th></tr></thead><tbody>${rows}</tbody></table>`));
+  if (cap.extra) card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px' },
+    `+${cap.extra} further lower-priority pattern${cap.extra > 1 ? 's' : ''}: ${esc(ranked.slice(8).map(p => p.label).join(', '))}.`));
+  return card;
+}
+
 // Single source of truth for the report's SECTION titles, shared by the print
 // (buildClinicianPrint) and on-screen (renderClinician) surfaces so a rename
 // can't drift between them. Descriptive names, no running item numbers — the
@@ -5033,6 +5349,7 @@ const REPORT_SECTIONS = {
   impression: 'Clinical impression',
   burden:     'Symptom burden — severity × frequency',
   plan:       'Assessment & plan',
+  patterns:   'Patterns & mechanisms',
   interp:     'Interpretation',
   context:    'Context & drivers',
   trend:      'Longitudinal trend',
@@ -5040,6 +5357,23 @@ const REPORT_SECTIONS = {
   appendix:   'Full item-level responses',
 };
 function sectionTitle(key) { return REPORT_SECTIONS[key] || key; }
+
+// Display-only re-ranking for the Patterns & mechanisms table: sorted by
+// `strength` (hits/total signals — how strongly the fired criteria were met,
+// a severity/intensity-adjacent measure), NOT `confidence` (coverage —
+// answered/total, i.e. how much data we had). Returns a NEW array; never
+// mutates the source, so clinicalImpression()'s "leading pattern" pick
+// (patterns[0], engine-ordered by confidence) and trend persistence
+// (pattern-id membership, order-independent) are both unaffected.
+function rankPatternsByPriority(patterns) {
+  return (patterns || []).slice().sort((a, b) => (b.strength || 0) - (a.strength || 0));
+}
+// Priority label/pill for a pattern's strength — High ≥0.75, Moderate ≥0.4, else Low.
+function patternPriorityMeta(strength) {
+  if (strength >= 0.75) return { label: 'High', cls: 'sev-sev' };
+  if (strength >= 0.4) return { label: 'Moderate', cls: 'sev-mod' };
+  return { label: 'Low', cls: 'sev-min' };
+}
 
 // Case-insensitive de-dup preserving first-seen order — used to collapse the
 // repeated triage reasons / investigation suggestions that several fired patterns
@@ -5086,7 +5420,7 @@ function peakAlertBoxHtml(score) {
   if (!score || !score.peakAlerts || !score.peakAlerts.length) return '';
   const items = score.peakAlerts.map(p => `${p.label} (${p.level === 'ceiling' ? 'very severe' : 'severe'})`).join(', ');
   return `<div class="pr-alert" style="margin-top:8px"><div class="pr-alert-t">▲ Peak-symptom alert</div>
-    <div style="font-size:10.5px;color:#7A1F1F;margin-top:2px">${esc(items)}${score.peakEscalated ? ' — displayed band raised; raw index unchanged' : ''}</div></div>`;
+    <div style="font-size:10.5px;color:var(--alert-d);margin-top:2px">${esc(items)}${score.peakEscalated ? ' — displayed band raised; raw index unchanged' : ''}</div></div>`;
 }
 
 // Suggested Actions — 2 columns (Investigations & Diagnostics, Management &
@@ -5156,7 +5490,6 @@ function buildClinicianPrint(c, opts) {
 
   const div = document.createElement('div');
   let h = `<div class="pr-logo">Enterro360 · Gut & Systemic Health Screen</div>
-    <div class="pr-title">Clinical Summary</div>
     <div class="pr-meta">
       Patient: <b>${esc(patName)}</b>${session.ref ? ` · Ref: ${esc(session.ref)}` : ''}<br>
       Age: ${esc(session.age || '—')} · Gender: ${esc(session.gender || '—')}${isPregnant ? ' · <b>Pregnant</b>' : ''}${isMinor ? ' · <b>Under 18</b>' : ''}<br>
@@ -5176,15 +5509,20 @@ function buildClinicianPrint(c, opts) {
   // The full plan text (reasons detail, investigations/management) lives on
   // page 2 — page 1 carries only the verdict + the caveats that change it.
   // ============================================================
-  h += `<div class="pr-grp">Page 1 · At a glance</div>`;
-
   // Headline score — big number + band + confidence, unmissable and stated ONCE
   // (the impression below leads with the pattern, not a restatement of these).
-  h += `<div class="pr-hero">
-    <div><div class="big">${sv.index == null ? '—' : sv.index + '%'}</div><div class="sub">Gut Symptom Burden</div></div>
-    <div style="flex:1;min-width:160px">${sv.label ? `<span class="pr-pill" style="background:${bandBg(sv.label)};font-size:12px;padding:3px 10px">${esc(sv.label)}${sv.peakEscalated ? ' ↑' : ''}</span>` : ''}
-      <div style="font-size:9.5px;color:#777;margin-top:6px">Confidence: ${esc(conf.level)} · ${score.completeness}% complete</div></div>
-  </div>`;
+  // KPI band — the four headline reads as compact tiles, mirroring the
+  // on-screen headlineCard()/kpi band (report restructure: promoted from
+  // page 2's Interpretation section to lead the whole report).
+  {
+    const isPct = (o) => o.key === 'gut_symptom_burden' || o.key === 'nutrient_malabsorption_risk';
+    const tileHtml = (o) => {
+      const val = o.value == null ? '—' : (isPct(o) ? o.value + '%' : o.value);
+      return `<div class="pr-kpi-tile"><div class="k">${esc(o.label)}</div><div class="v">${esc(String(val))}</div>${o.band ? prBandPill(o.band) : ''}</div>`;
+    };
+    h += `<div class="pr-kpi">${heads.primaryList.map(tileHtml).join('')}</div>
+      <div class="pr-kpi-meta">Confidence: ${esc(conf.level)} · ${score.completeness}% complete${sv.peakEscalated ? ' · displayed band raised by a peak-symptom alert (below)' : ''}</div>`;
+  }
 
   // ── Section 1 — Triage tier + care-track badges, then Red flags. ──────────
   const tierCls = ['', 't1', 't2', 't3', 't4'][tri.level] || 't4';
@@ -5205,14 +5543,14 @@ function buildClinicianPrint(c, opts) {
     const topMeta = top ? RF_URGENCY_META[top] : null;
     const groups = firedByUrgency(redflags);
     h += `<div class="pr-alert"><div class="pr-alert-t">⚠ ${fired.length} item${fired.length > 1 ? 's' : ''} answered Yes${topMeta ? ` · highest: ${esc(topMeta.label)}` : ''}</div>`;
-    if (topMeta) h += `<div style="font-size:10px;color:#7A1F1F;margin:2px 0 4px">${esc(topMeta.headline)}</div>`;
+    if (topMeta) h += `<div style="font-size:10px;color:var(--alert-d);margin:2px 0 4px">${esc(topMeta.headline)}</div>`;
     h += groups.map(g =>
-      `<div style="margin-top:4px"><div style="font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#7A1F1F">${esc(g.meta.label)}</div>` +
+      `<div style="margin-top:4px"><div style="font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--alert-d)">${esc(g.meta.label)}</div>` +
       `<ul style="margin:2px 0 0 14px;font-size:10.5px">${g.flags.map(f => `<li>${esc(f.clinLabel || f.label)}</li>`).join('')}</ul></div>`
     ).join('');
     h += `</div>`;
   } else {
-    h += `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#2C7A63"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#E3F1EC;color:#2C7A63;font-size:9.5px;font-weight:800;line-height:14px;text-align:center">✓</span>No red flags identified this visit.</div>`;
+    h += `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ok)"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--tint);color:var(--ok);font-size:9.5px;font-weight:800;line-height:14px;text-align:center">✓</span>No red flags identified this visit.</div>`;
   }
   h += `</div>`;
 
@@ -5256,6 +5594,24 @@ function buildClinicianPrint(c, opts) {
   }
   h += `</div>`;
 
+  // ── Section 4 — Patterns & mechanisms, ranked by clinical priority (not
+  // data-confidence) — closes out page 1: verdict, safety, evidence. A
+  // display-only re-sort of `patterns` (rankPatternsByPriority never mutates
+  // the source array), so the Impression's leading-pattern pick above
+  // (patterns[0], engine-ordered by confidence) is unaffected. ─────────────
+  if (patterns.length) {
+    const ranked = rankPatternsByPriority(patterns);
+    const patCap = capList(ranked, 8);
+    h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('patterns')}</div>
+      <div style="page-break-inside:avoid;break-inside:avoid">
+      <table class="pr-tbl"><colgroup><col style="width:12%"><col style="width:22%"><col style="width:66%"></colgroup><thead><tr><th>Priority</th><th>Pattern</th><th>Rationale &amp; management hint</th></tr></thead><tbody>
+        ${patCap.shown.map(p => { const m = patternPriorityMeta(p.strength || 0); return `<tr><td><span class="pr-pill" style="background:${bandBg(m.label === 'High' ? 'Severe' : m.label === 'Moderate' ? 'Mild–Moderate' : '')};font-size:9px">${esc(m.label)}</span></td><td><b>${esc(p.label)}</b></td><td>${esc(p.desc)}</td></tr>`; }).join('')}
+      </tbody></table>
+      ${patCap.extra ? `<div style="font-size:9px;color:#888;margin-top:2px">+${patCap.extra} further lower-priority pattern${patCap.extra > 1 ? 's' : ''}: ${esc(ranked.slice(8).map(p => p.label).join(', '))}.</div>` : ''}
+      ${(tri.patternOverlapNotes && tri.patternOverlapNotes.length) ? `<ul style="font-size:9.5px;color:#185FA5;padding-left:16px;margin:4px 0 0">${tri.patternOverlapNotes.map(n => `<li>🔗 ${esc(n)}</li>`).join('')}</ul>` : ''}
+      </div></div>`;
+  }
+
   // ============================================================
   // PAGE 2 — Assessment & clinical detail. The Tier verdict, reasons, and
   // care-track badges already led on page 1 (Section 1) — page 2 opens
@@ -5264,28 +5620,16 @@ function buildClinicianPrint(c, opts) {
   // Suggested Actions (investigations & management), since a clinician reads
   // the evidence before the action list.
   // ============================================================
-  h += `<div class="pr-grp pr-page-break">Page 2 · Assessment &amp; clinical detail</div>`;
+  h += `<div class="pr-page-break"></div>`;
   const physio = physioCandidacy(tri);
 
-  // Interpretation — the reads behind the verdict: symptom patterns, the Rome IV
-  // bowel-pain estimate, the axis profile (each microbiome load's signals folded
-  // in beneath its own row), and the GSRS domain breakdown at section level (the
-  // per-cluster severity lives once, in the burden matrix on page 1).
+  // Interpretation — the reads behind the verdict: the Rome IV bowel-pain
+  // estimate, the axis profile (each microbiome load's signals folded in
+  // beneath its own row), and the GSRS domain breakdown at section level.
+  // Symptom patterns now lead page 1 (Patterns & mechanisms, ranked by
+  // priority) instead of repeating here; per-cluster severity lives once, in
+  // the burden matrix, also on page 1.
   h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('interp')}</div>`;
-
-  // Patterns — engine-ordered by priority then confidence, so the most actionable
-  // reads lead. Cap the printed table to the top 6 prominent patterns; any
-  // remainder is noted as a count rather than a full row (keeps the table scannable
-  // for complex patients where 8–10 patterns fire).
-  if (patterns.length) {
-    const patCap = capList(patterns, 6);
-    h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Prominent patterns${patCap.extra ? ` (top 6 of ${patterns.length})` : ''}</div>
-      <table class="pr-tbl"><colgroup><col style="width:26%"><col style="width:74%"></colgroup><thead><tr><th>Pattern</th><th>Rationale</th></tr></thead><tbody>
-        ${patCap.shown.map(p => `<tr><td><b>${esc(p.label)}</b></td><td>${esc(p.desc)}</td></tr>`).join('')}
-      </tbody></table>
-      ${patCap.extra ? `<div style="font-size:9px;color:#888;margin-top:2px">+${patCap.extra} further lower-priority pattern${patCap.extra > 1 ? 's' : ''}: ${esc(patterns.slice(6).map(p => p.label).join(', '))}.</div>` : ''}
-      ${(tri.patternOverlapNotes && tri.patternOverlapNotes.length) ? `<ul style="font-size:9.5px;color:#185FA5;padding-left:16px;margin:4px 0 0">${tri.patternOverlapNotes.map(n => `<li>🔗 ${esc(n)}</li>`).join('')}</ul>` : ''}</div>`;
-  }
 
   // Rome IV — full criteria table only when answered; otherwise a single line, so
   // an unanswered Rome IV doesn't print five empty rows.
@@ -5303,7 +5647,7 @@ function buildClinicianPrint(c, opts) {
     const onsetMetNow = typeof onsetIdx === 'number' && onsetIdx < ROME_ONSET.length && onsetIdx >= ROME_ONSET_MET;
     const assocMetNow = (rome.assocCount || 0) >= 2;
     const checkTag = met => met
-      ? '<span style="color:#2C7A63;font-weight:700">✓</span>'
+      ? '<span style="color:var(--ok);font-weight:700">✓</span>'
       : '<span style="color:#A9463F;font-weight:700">✗</span>';
     const failReason = !freqMetNow ? 'pain frequency below the required ≥1 day/week'
       : !onsetMetNow ? 'onset under 6 months'
@@ -5379,7 +5723,7 @@ function buildClinicianPrint(c, opts) {
       ${domainRow(byId('IMP'))}
       ${targetedIds.length ? groupRow('TARGETED') : ''}
       ${targetedIds.map(id => domainRow(byId(id))).join('')}
-      ${score.coreUnknown ? '<tr><td colspan="4" style="color:#A32D2D;font-weight:600">⚠ Core GI section not answered — Gut Symptom Burden provisional</td></tr>' : ''}
+      ${score.coreUnknown ? '<tr><td colspan="4" style="color:var(--alert);font-weight:600">⚠ Core GI section not answered — Gut Symptom Burden provisional</td></tr>' : ''}
     </tbody></table>
     ${disruptSig.length ? `<div style="font-size:9.5px;margin-top:3px"><b>Disruption Load</b> (exposures): ${esc(disruptSig.join(', '))}</div>` : ''}
     ${correlateSig.length ? `<div style="font-size:9.5px;margin-top:2px"><b>Dysbiosis Correlate Load</b> (inferred): ${esc(correlateSig.join(', '))}</div>` : ''}</div>`;
@@ -5447,37 +5791,73 @@ function buildClinicianPrint(c, opts) {
   }
   h += `</div>`;
 
+  // Suggested Actions — comes BEFORE the trend: a clinician reads the verdict
+  // (page 1) and the evidence (Interpretation / Context & drivers) and wants
+  // the action list next; the longitudinal trend is a look-back. Two columns:
+  // Investigations & Diagnostics (tests) and Management & Therapeutics
+  // (referrals, trials, therapies — physio candidacy folded in here).
+  h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('actions')}</div>${actionColumnsHtml(tri, physio)}</div>`;
+
   // Longitudinal trend — only rendered when there is a prior visit to compare
   // against (a single baseline visit has nothing to trend, so the section is
-  // omitted rather than printed empty). Interventions per visit are overlaid so
-  // burden change reads against what was tried.
+  // omitted rather than printed empty). Mirrors the on-screen trendCard():
+  // delta pill, the SVG chart (trendChartSvg — pure string-building, reused
+  // as-is) with its Rx intervention marker, per-visit rows, cluster
+  // trajectory as before→after chip pairs, persistent patterns, and the
+  // leading-indicator callout. Previously print kept its own older plain
+  // 8-column table here instead of matching the redesigned on-screen card —
+  // now both surfaces render the same document.
   if (trend && trend.points.length >= 2) {
     h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('trend')}</div>`;
     const sortedTrendVisits = trendVisits.slice().sort((a, b) => (a.date || 0) - (b.date || 0));
-    h += `<div><div style="font-weight:600;font-size:11px;margin-bottom:2px">Longitudinal progression (${trend.points.length} visits)</div>
-      <table class="pr-tbl"><thead><tr><th>#</th><th>Date</th><th>Type</th><th>Index</th><th>Band</th><th>Δ</th><th>Freq Δ</th><th>Interventions</th></tr></thead><tbody>
+    const latest = trend.points[trend.points.length - 1];
+
+    if (latest && latest.delta) {
+      const d = latest.delta;
+      h += `<div style="margin-bottom:6px"><span class="pr-pill" style="background:${d.color};color:#fff;font-size:9.5px">${esc(d.label)}</span>
+        <span style="font-size:10px;color:#555;margin-left:6px">Burden ${d.delta > 0 ? '+' : ''}${d.delta} pts vs previous visit (${trend.points[trend.points.length - 2].index}% → ${latest.index}%)</span></div>`;
+    }
+
+    h += `<div style="display:flex;gap:14px;align-items:center;margin-bottom:8px;page-break-inside:avoid;break-inside:avoid">
+      <div>${trendChartSvg(trend.points, sortedTrendVisits)}</div>
+      <div style="font-size:9.5px;color:#777;max-width:220px"><b style="display:block;color:#222;font-size:10.5px;margin-bottom:2px">Gut Symptom Burden</b>Lower = improvement. The <b style="color:var(--bl)">Rx</b> flag marks a visit with a recorded intervention.</div>
+    </div>`;
+
+    h += `<table class="pr-tbl" style="margin-bottom:6px"><thead><tr><th>Date</th><th>Type</th><th>Index</th><th>Band</th><th>Δ</th><th>Interventions</th></tr></thead><tbody>
         ${trend.points.map((p, i) => {
           const d = p.date ? new Date(p.date).toISOString().slice(0, 10) : '—';
-          const dTxt = p.delta ? `${p.delta.delta > 0 ? '+' : ''}${p.delta.delta} (${esc(p.delta.label)})` : '—';
-          const freqTxt = p.freqDelta ? `${p.freqDelta.delta > 0 ? '+' : ''}${p.freqDelta.delta} (${esc(p.freqDelta.label)})` : (p.freqPct == null ? 'No data' : '—');
+          const dPill = p.delta ? `<span class="pr-pill" style="background:${p.delta.color};color:#fff;font-size:8.5px">${esc(p.delta.label)}</span>` : '—';
           const idxTxt = p.index != null ? `${p.index}%` : '—';
           const bandTxt = p.band != null ? esc(p.band) : 'Not completed';
           const iv = interventionSummary(sortedTrendVisits[i] && sortedTrendVisits[i].extras);
-          return `<tr><td>${i + 1}</td><td>${esc(d)}</td><td>${p.followup ? 'Follow-up' : 'Baseline'}</td><td>${idxTxt}</td><td>${bandTxt}</td><td>${dTxt}</td><td>${freqTxt}</td><td>${iv ? esc(iv) : '—'}</td></tr>`;
+          return `<tr><td>${esc(d)}</td><td>${p.followup ? 'Follow-up' : 'Baseline'}</td><td><b>${idxTxt}</b></td><td>${bandTxt}</td><td>${dPill}</td><td>${iv ? esc(iv) : '—'}</td></tr>`;
         }).join('')}
-      </tbody></table>
-      ${trend.persistent.length ? `<div style="font-size:10.5px;margin-top:4px">Persistent patterns: <b>${trend.persistent.map(id => esc(id.replace(/_/g, ' '))).join(', ')}</b></div>` : ''}
-      ${trend.leadingSignal ? `<div style="font-size:10.5px;margin-top:4px;color:#185FA5">💡 ${esc(trend.leadingSignal)}</div>` : ''}
-    </div>`;
+      </tbody></table>`;
+
+    // Cluster trajectory — before → after chip pairs (Option D), same as on-screen.
+    if (trend.points.length >= 2 && latest) {
+      const first = trend.points[0].clusterNorm || {}, last = latest.clusterNorm || {};
+      const order = ['Reflux', 'Pain', 'Indigestion', 'Diarrhoea', 'Constipation'];
+      const cluRows = order.filter(k => first[k] != null && last[k] != null).map(k => {
+        const f = Math.round(first[k] * 100), l = Math.round(last[k] * 100);
+        const d = l - f, worse = d > 0;
+        const deltaTxt = d === 0 ? '±0%' : `${d > 0 ? '+' : ''}${d}%`;
+        const lastBg = worse ? '#FAEEDA' : 'var(--tint)', lastFg = worse ? '#7A5800' : 'var(--ok)';
+        return `<div style="display:flex;align-items:center;gap:6px;font-size:10px;margin:3px 0">
+          <span style="width:90px;font-weight:600;color:#333">${esc(k)}</span>
+          <span style="background:#F0F2F2;color:#555;border-radius:8px;padding:1px 7px;font-weight:700">${f}%</span>
+          <span style="color:#AAA">→</span>
+          <span style="background:${lastBg};color:${lastFg};border-radius:8px;padding:1px 7px;font-weight:700">${l}%</span>
+          <span style="margin-left:auto;font-weight:700;color:${d === 0 ? '#777' : worse ? '#8A4B0F' : 'var(--ok)'}">${deltaTxt}</span>
+        </div>`;
+      });
+      if (cluRows.length) h += `<div style="font-weight:600;font-size:10.5px;margin:6px 0 2px">GI clusters — first → latest visit</div>${cluRows.join('')}`;
+    }
+
+    h += `${trend.persistent.length ? `<div style="font-size:10.5px;margin-top:6px">Persistent patterns: <b>${trend.persistent.map(id => esc(id.replace(/_/g, ' '))).join(', ')}</b></div>` : ''}
+      ${trend.leadingSignal ? `<div style="font-size:10.5px;margin-top:4px;color:#185FA5">💡 ${esc(trend.leadingSignal)}</div>` : ''}`;
     h += `</div>`;
   }
-
-  // Suggested Actions — deliberately LAST on page 2: a clinician reads the
-  // verdict (page 1) and the evidence (Interpretation / Context & drivers)
-  // before the action list. Two columns: Investigations & Diagnostics (tests)
-  // and Management & Therapeutics (referrals, trials, therapies — physio
-  // candidacy folded in here, see actionColumnsHtml).
-  h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('actions')}</div>${actionColumnsHtml(tri, physio)}</div>`;
 
   // ============================================================
   // PAGE 3+ — appendix: full item-level questionnaire responses. Optional —
@@ -5486,7 +5866,7 @@ function buildClinicianPrint(c, opts) {
   // default 2-page print never carries it.
   // ============================================================
   if (includeAppendix) {
-    h += `<div class="pr-grp pr-page-break">Page 3+ · Appendix</div>`;
+    h += `<div class="pr-page-break"></div>`;
     h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('appendix')}</div>
       <div style="font-size:9.5px;color:#888;font-style:italic;margin-bottom:6px">Reference — every item, exactly as answered.</div>
       <div style="column-count:2;column-gap:16px">`;
@@ -5495,7 +5875,7 @@ function buildClinicianPrint(c, opts) {
       if (!qs.length) return;
       const sc = score.secScores[s.id] || 0, mx = score.secApplicableMax[s.id] || 0;
       h += `<div style="break-inside:avoid;-webkit-column-break-inside:avoid;margin-bottom:6px">
-        <div style="font-weight:600;font-size:10.5px;margin:0 0 2px;color:#3A4A5A">${esc(s.full || s.label)} — ${sc}/${mx} (${mx ? Math.round(sc / mx * 100) + '%' : 'n/a'})</div>
+        <div style="font-weight:600;font-size:10.5px;margin:0 0 2px;color:var(--neutral)">${esc(s.full || s.label)} — ${sc}/${mx} (${mx ? Math.round(sc / mx * 100) + '%' : 'n/a'})</div>
         <table class="pr-tbl"><tbody>${qs.map(q => {
           const val = answers[q.id];
           const labels = scaleFor(q.scale);
@@ -5509,7 +5889,7 @@ function buildClinicianPrint(c, opts) {
     h += `</div></div>`;
   }
 
-  h += `<div class="pr-footer">Clinical summary — Enterro360 · Gut & Systemic Health Screen · ${esc(dateStr)}<br>Screening tool only — not a diagnosis or prescription. Apply clinical judgement.</div>`;
+  h += `<div class="pr-footer">Screening tool only — not a diagnosis or prescription. Apply clinical judgement.</div>`;
   div.innerHTML = h;
   return div;
 }
@@ -5557,6 +5937,7 @@ function loadVisit(identity, visit, showResults) {
   session.pregnant = v.pregnant || '';
   session.followup = !!v.followup;
   loadedVisitId = v.id || null;  // save → update this record in-place
+  currentStep = 0;               // open a loaded visit at the first step
   render();
   // Populate lastCalc so the Clinician tab renders the summary on demand. We do
   // NOT call calc() here — that would append results under the editable form
@@ -5571,14 +5952,13 @@ function renderClinician() {
   const root = document.getElementById('mode-clinician');
   if (!root) return;
   root.innerHTML = '';
-  root.appendChild(el('div', { class: 'intro' },
-    '<b>Clinician &amp; physiotherapist workspace.</b> Gut and systemic axes side-by-side, with a manual-therapy candidacy read (prior abdominal/pelvic surgery → visceral / fascial Tier-2) for whole-person screening. ' +
-    'Run a questionnaire, or open a saved visit from Patient records (“View results”), to populate this view.'));
-
+  // No standalone intro banner — the how-to-populate instruction lives only
+  // in the empty state below, where it's actually needed.
   if (!lastCalc) {
     root.appendChild(el('div', { class: 'card' },
-      '<div class="empty-note">🩺<br>No screen loaded yet.<br>' +
-      '<span class="muted">Complete a questionnaire or open a saved visit to see the clinician view and plan.</span></div>'));
+      '<div class="empty-note">🩺<br><b>Clinician workspace</b><br>' +
+      '<span class="muted">Gut &amp; systemic axes side-by-side, with a manual-therapy candidacy read for whole-person screening.<br>' +
+      'Run a questionnaire, or open a saved visit from Patient records (“View results”), to populate this view.</span></div>'));
     return;
   }
   const c = lastCalc;
@@ -5606,26 +5986,20 @@ function renderClinician() {
 
   // ============================================================
   // PAGE 1 — Safety & acute presentation (mirrors the print hybrid layout):
-  // headline score, Triage tier + care-track badges, Red flags, then Clinical
-  // impression + Peak-symptom alert, then the burden matrix.
-  // The full investigations/management list lives in Suggested Actions on
-  // page 2 — page 1 carries only the verdict + the caveats that change it.
+  // KPI band, Triage tier + care-track badges, Red flags, then Clinical
+  // impression + Peak-symptom alert, the burden matrix, and the ranked
+  // patterns table. The full investigations/management list lives in
+  // Suggested Actions — page 1 carries only the verdict + what changes it.
   // ============================================================
-  root.appendChild(el('div', { class: 'rpt-grp' }, 'Page 1 · At a glance'));
-
-  // Headline score — big number + band + confidence, stated ONCE (the impression
-  // below leads with the pattern, not a restatement of these).
-  const hero = el('div', { class: 'card' });
-  hero.appendChild(el('div', { class: 'hero' },
-    `<div><div class="big">${sv.index == null ? '—' : sv.index + '%'}</div><div class="sub">Gut Symptom Burden</div></div>
-     <div style="flex:1;min-width:160px">${sv.label ? `<span class="pill ${sv.cls || bandPillClass(sv.label)}">${esc(sv.label)}${sv.peakEscalated ? ' ↑' : ''}</span>` : ''}
-     <div class="conf-note">Confidence: <b>${esc(conf.level)}</b> · ${score.completeness}% complete</div></div>`));
-  // Only shown when the screen is genuinely incomplete — explains why the
-  // cards below may read as empty/dashed rather than looking like a broken
-  // report. Mirrors calc()'s equivalent caveat on the patient-facing screen.
-  if (score.completeness < 80) hero.appendChild(el('div', { class: 'prov-caveat' },
+  // KPI band — the four headline reads as a compact tile row (headlineCard's
+  // grid auto-fits into a band on wide screens), stated ONCE up top so the
+  // whole picture is visible before anything else. Confidence/completeness
+  // and the provisional caveat ride on the same card, just below the tiles.
+  const kpi = headlineCard(heads, rome);
+  kpi.appendChild(el('div', { class: 'conf-note' }, `Confidence: <b>${esc(conf.level)}</b> · ${score.completeness}% complete`));
+  if (score.completeness < 80) kpi.appendChild(el('div', { class: 'prov-caveat' },
     `Provisional result — ${score.completeness}% of scored items answered.`));
-  root.appendChild(hero);
+  root.appendChild(kpi);
 
   // Assessment & plan — triage verdict + care-track badges, leads page 1 (the
   // investigations/management list moved to Suggested Actions, at the end).
@@ -5634,26 +6008,26 @@ function renderClinician() {
 
   // Red flags (safety net) — same-day features must never be buried.
   root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('flags')));
-  const rfCard = el('div', { class: 'card', style: `border-left:6px solid ${fired.length ? '#A32D2D' : '#2C7A63'}` });
+  const rfCard = el('div', { class: 'card', style: `border-left:6px solid ${fired.length ? 'var(--alert)' : 'var(--ok)'}` });
   rfCard.appendChild(el('h2', {}, sectionTitle('flags')));
   if (fired.length) {
     // E2 — group by urgency tier off the fired flag objects (each carries `urgency`).
     const rank = { emergency: 3, urgent: 2, routine: 1 };
     const top = fired.reduce((t, f) => (rank[f.urgency || 'routine'] > rank[t] ? (f.urgency || 'routine') : t), 'routine');
     const topMeta = RF_URGENCY_META[top];
-    rfCard.appendChild(el('div', { style: 'font-weight:700;color:#A32D2D;font-size:13px' },
+    rfCard.appendChild(el('div', { style: 'font-weight:700;color:var(--alert);font-size:13px' },
       `⚠ ${fired.length} item${fired.length > 1 ? 's' : ''} answered Yes · highest: ${esc(topMeta.label)}`));
-    rfCard.appendChild(el('div', { style: 'font-size:11px;color:#7A1F1F;margin:2px 0 4px' }, esc(topMeta.headline)));
+    rfCard.appendChild(el('div', { style: 'font-size:11px;color:var(--alert-d);margin:2px 0 4px' }, esc(topMeta.headline)));
     ['emergency', 'urgent', 'routine'].forEach(tier => {
       const grp = fired.filter(f => (f.urgency || 'routine') === tier);
       if (!grp.length) return;
-      rfCard.appendChild(el('div', { style: 'font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#7A1F1F;margin-top:6px' }, esc(RF_URGENCY_META[tier].label)));
-      rfCard.appendChild(el('ul', { style: 'font-size:12.5px;padding-left:18px;color:#A32D2D;margin:2px 0 0' },
+      rfCard.appendChild(el('div', { style: 'font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--alert-d);margin-top:6px' }, esc(RF_URGENCY_META[tier].label)));
+      rfCard.appendChild(el('ul', { style: 'font-size:12.5px;padding-left:18px;color:var(--alert);margin:2px 0 0' },
         grp.map(f => `<li>${esc(f.clinLabel || f.label)}</li>`).join('')));
     });
   } else {
-    rfCard.appendChild(el('div', { style: 'display:flex;align-items:center;gap:6px;font-size:12.5px;color:#2C7A63' },
-      `<span style="display:inline-block;width:15px;height:15px;border-radius:50%;background:#E3F1EC;color:#2C7A63;font-size:10px;font-weight:800;line-height:15px;text-align:center">✓</span>No red flags identified this visit.`));
+    rfCard.appendChild(el('div', { style: 'display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ok)' },
+      `<span style="display:inline-block;width:15px;height:15px;border-radius:50%;background:var(--tint);color:var(--ok);font-size:10px;font-weight:800;line-height:15px;text-align:center">✓</span>No red flags identified this visit.`));
   }
   root.appendChild(rfCard);
 
@@ -5675,22 +6049,26 @@ function renderClinician() {
   root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('burden')));
   root.appendChild(severityFrequencyCard(score, extras));
 
+  // Patterns & mechanisms — the full ranked list behind the Impression's
+  // single leading pattern above, ranked by clinical intensity (not
+  // data-confidence). Closes out page 1: verdict, safety, evidence.
+  const patCard = patternsMechanismsCard(c.patterns);
+  if (patCard) {
+    root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('patterns')));
+    root.appendChild(patCard);
+  }
+
   // ============================================================
   // PAGE 2 — Assessment & clinical detail. The tier verdict already led on
   // page 1 — page 2 opens straight into the evidence behind it (Interpretation:
   // patterns, Rome IV, axis profile, domain breakdown), then Context & drivers,
   // the longitudinal trend, and — last — Suggested Actions.
   // ============================================================
-  root.appendChild(el('div', { class: 'rpt-grp' }, 'Page 2 · Assessment & clinical detail'));
-
-  // Interpretation — the reads behind the verdict: headline axis reads, axis
-  // profile, and GSRS domain/cluster breakdown. The Symptom x Dysbiosis-
-  // correlate quadrant card was removed — the Dysbiosis Correlate Load
-  // number in the headline card above now carries the same weighted E3 tier
-  // (High/Moderate/Low) as its pill colour, so an elevated correlate load is
-  // already highlighted there without a second card repeating it.
+  // Interpretation — the reads behind the verdict: axis profile and GSRS
+  // domain/cluster breakdown. The four-way headline now leads the report as
+  // the KPI band (page 1) instead of repeating here — the Dysbiosis Correlate
+  // Load number there already carries the weighted E3 tier as its pill colour.
   root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('interp')));
-  root.appendChild(headlineCard(heads, rome));
   root.appendChild(axisProfileCard(profile, heads));
   root.appendChild(domainBarsCard(score, true));   // full domain breakdown incl. GSRS cluster shape
 
@@ -5699,6 +6077,18 @@ function renderClinician() {
   // them into a two-column block).
   root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('context')));
   root.appendChild(modifiableDriversCard(driverExtras));
+
+  // Suggested Actions — comes BEFORE the trend: a clinician reads the verdict
+  // (page 1) and the evidence (Interpretation / Context & drivers) and wants
+  // the action list next; the longitudinal trend is a look-back, not part of
+  // deciding what to do this visit. Two columns: Investigations & Diagnostics,
+  // Management & Therapeutics (physiotherapy candidacy folded in).
+  root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('actions')));
+  const physio = physioCandidacy(tri);
+  const actionsCard = el('div', { class: 'card', style: 'border-left:6px solid #7A4A8C' });
+  actionsCard.appendChild(el('h2', {}, sectionTitle('actions')));
+  actionsCard.appendChild(el('div', {}, actionColumnsHtml(tri, physio)));
+  root.appendChild(actionsCard);
 
   // Longitudinal trend — editable interventions for this visit (post-intake),
   // overlaid on the trend below so symptom change reads against what was tried.
@@ -5713,23 +6103,11 @@ function renderClinician() {
     if (prior.length >= 1) root.appendChild(trendCard(prior.concat([currentVisit()]), true));
   }
 
-  // Suggested Actions — deliberately LAST: a clinician reads the verdict
-  // (page 1) and the evidence (Interpretation / Context & drivers) before the
-  // action list. Two columns: Investigations & Diagnostics, Management &
-  // Therapeutics (physiotherapy candidacy folded in — a therapeutic referral).
-  root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('actions')));
-  const physio = physioCandidacy(tri);
-  const actionsCard = el('div', { class: 'card', style: 'border-left:6px solid #7A4A8C' });
-  actionsCard.appendChild(el('h2', {}, sectionTitle('actions')));
-  actionsCard.appendChild(el('div', {}, actionColumnsHtml(tri, physio)));
-  root.appendChild(actionsCard);
-
   // ============================================================
   // PAGE 3+ — Appendix: item-level responses, history & context, Rome IV
   // criteria, patterns, microbiome signals. Optional reference material —
   // everything actionable is already on pages 1–2.
   // ============================================================
-  root.appendChild(el('div', { class: 'rpt-grp' }, 'Page 3+ · Appendix'));
   root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('appendix')));
   root.appendChild(clinicianDetailCard(c));
 
@@ -5902,7 +6280,7 @@ function renderDetail(root, db) {
       onclick: () => ctx.openVisit(identity, vrec, true) }, '📊 View results'));
     acts.appendChild(el('button', { class: 'btn btn-gh', type: 'button', title: 'Load answers into the questionnaire to review or edit',
       onclick: () => ctx.openVisit(identity, vrec, false) }, '📋 Load'));
-    acts.appendChild(el('button', { class: 'btn btn-gh', type: 'button', style: 'color:var(--re)', onclick: () => deleteVisit(p, vrec) }, 'Delete'));
+    acts.appendChild(el('button', { class: 'btn btn-gh', type: 'button', style: 'color:var(--alert)', onclick: () => deleteVisit(p, vrec) }, 'Delete'));
     card.appendChild(acts);
     root.appendChild(card);
   });
@@ -5919,7 +6297,7 @@ function progressionCard(visits) {
     const first = pts[0].index, last = pts[pts.length - 1].index, d = last - first;
     const dir = d < 0 ? 'improved' : d > 0 ? 'worsened' : 'stable';
     card.appendChild(el('div', { class: 'row', style: 'gap:10px;margin:6px 0' },
-      `<span class="pill" style="background:${d < 0 ? '#0F6E56' : d > 0 ? '#A32D2D' : '#999'};color:#fff">${dir === 'stable' ? 'No net change' : (d < 0 ? '▼' : '▲') + ' ' + Math.abs(d) + ' pts'}</span>
+      `<span class="pill" style="background:${d < 0 ? 'var(--ok)' : d > 0 ? 'var(--alert)' : '#999'};color:#fff">${dir === 'stable' ? 'No net change' : (d < 0 ? '▼' : '▲') + ' ' + Math.abs(d) + ' pts'}</span>
        <span style="font-size:13px;color:var(--inks)">${first}% → ${last}% across ${pts.length} visits</span>`));
   }
   // SVG sparkline
@@ -5927,11 +6305,11 @@ function progressionCard(visits) {
   const x = (i) => pad + (n === 1 ? (W - 2 * pad) / 2 : i * (W - 2 * pad) / (n - 1));
   const y = (v) => H - pad - (v / 100) * (H - 2 * pad);
   const line = pts.map((p, i) => `${x(i).toFixed(1)},${y(p.index).toFixed(1)}`).join(' ');
-  const dots = pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.index).toFixed(1)}" r="3.5" fill="#0F6E56"/><text x="${x(i).toFixed(1)}" y="${(y(p.index) - 8).toFixed(1)}" font-size="10" fill="#444" text-anchor="middle">${p.index}</text>`).join('');
+  const dots = pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.index).toFixed(1)}" r="3.5" fill="var(--brand)"/><text x="${x(i).toFixed(1)}" y="${(y(p.index) - 8).toFixed(1)}" font-size="10" fill="#444" text-anchor="middle">${p.index}</text>`).join('');
   card.appendChild(el('div', { style: 'overflow-x:auto' },
     `<svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:320px;height:auto">
        <line x1="${pad}" y1="${H - pad}" x2="${W - pad}" y2="${H - pad}" stroke="#E1E5EB"/>
-       ${n >= 2 ? `<polyline points="${line}" fill="none" stroke="#0F6E56" stroke-width="2"/>` : ''}
+       ${n >= 2 ? `<polyline points="${line}" fill="none" stroke="var(--brand)" stroke-width="2"/>` : ''}
        ${dots}
      </svg>`));
   return card;
