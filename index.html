@@ -48,6 +48,42 @@ small{font-size:.82em}
 .app-spacer{flex:1}
 .app-tag{font-size:10.5px;color:rgba(255,255,255,.7);background:rgba(255,255,255,.13);border-radius:20px;padding:4px 10px}
 
+/* ── Guided-steps wizard ─────────────────────────
+   One section per step. All step containers stay in the DOM (so the reveal
+   engine and answer state are untouched); only the active one is displayed. */
+.stepper{display:flex;align-items:center;margin:2px 0 6px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.step{display:flex;align-items:center;flex:none;border:none;background:transparent;padding:0;cursor:pointer;font-family:inherit}
+.step[disabled]{cursor:default}
+.step .b{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800;background:var(--paper2);border:2px solid var(--bdrm);color:var(--inkt);transition:all .15s}
+.step.done .b{background:var(--brand);border-color:var(--brand);color:#fff}
+.step.now .b{background:var(--paper2);border-color:var(--brand);color:var(--brand);box-shadow:0 0 0 4px var(--tint)}
+.step .lb{font-size:10.5px;font-weight:600;color:var(--inkt);margin:0 8px 0 6px;white-space:nowrap}
+.step.now .lb{color:var(--ok);font-weight:800}
+.step.done .lb{color:var(--inks)}
+.step .ln{width:20px;height:2px;background:var(--bdr);margin-right:6px;flex:none}
+.step.done .ln{background:var(--brand)}
+.stepsub{font-size:11.5px;color:var(--inkt);margin:0 0 12px}
+.gstep{display:none}
+.gstep.active{display:block}
+.gstep-head{margin:2px 0 12px}
+.gstep-head .t{font-size:18px;font-weight:800;letter-spacing:-.01em}
+.gstep-head .s{font-size:12px;color:var(--inkt);margin-top:2px}
+.gstep-empty{display:none;text-align:center;color:var(--inkt);font-size:12.5px;padding:26px 16px;background:var(--paper2);border:1px dashed var(--bdrm);border-radius:var(--r12)}
+/* contextual action bar — names the neighbouring steps */
+.actionbar{display:flex;justify-content:space-between;align-items:stretch;gap:10px;margin:16px 0 4px}
+.navbtn{display:flex;flex-direction:column;justify-content:center;border:1.5px solid var(--bdr);border-radius:11px;padding:8px 15px;background:var(--paper2);min-width:0;max-width:42%;cursor:pointer;font-family:inherit;text-align:left}
+.navbtn:disabled{opacity:.4;cursor:not-allowed}
+.navbtn .k{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--inkt)}
+.navbtn .nm{font-size:13px;font-weight:700;color:var(--inks);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.navbtn.next{background:var(--brand);border-color:var(--brand);align-items:flex-end;text-align:right}
+.navbtn.next .k{color:rgba(255,255,255,.75)}
+.navbtn.next .nm{color:#fff}
+.navbtn.back .k .ar{color:var(--brand)}
+.centerprog{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;flex:1;min-width:0}
+.centerprog .c{font-size:10.5px;font-weight:700;color:var(--inkt)}
+.centerprog .bar{width:100%;max-width:130px;height:5px;border-radius:3px;background:var(--bdr);overflow:hidden}
+.centerprog .bar i{display:block;height:100%;background:var(--brand);transition:width .2s ease}
+
 .wrap{max-width:880px;margin:0 auto;padding:16px}
 .btn{border:none;border-radius:var(--r8);font-size:13px;font-weight:600;padding:9px 15px;transition:all .15s;white-space:nowrap}
 .btn-g{background:var(--brand);color:#fff}.btn-g:hover{background:var(--brand-d)}
@@ -2993,8 +3029,9 @@ let extras = blankExtras();
 let session = { name: '', age: '', gender: '', ref: '', followup: false, pregnant: '' };
 let lastCalc = null;       // cached result from the most recent calc(); used by print functions
 let loadedVisitId = null;  // set when a saved visit is loaded; saveVisit() updates it in-place
+let currentStep = 0;       // guided-steps wizard: index of the visible step (0-based)
 
-function reset() { answers = {}; redflags = {}; extras = blankExtras(); session.followup = false; loadedVisitId = null; }
+function reset() { answers = {}; redflags = {}; extras = blankExtras(); session.followup = false; loadedVisitId = null; currentStep = 0; }
 
 // The patient's linking key: reference code if given, else name (so name-only
 // clinicians still get visit linking + trends).
@@ -3499,17 +3536,69 @@ function trendCard(visits, markLastUnsaved) {
   return card;
 }
 
+// The guided-steps flow. Each entry owns one wizard step; build(container)
+// appends the same cards, in the same clinical order, that the old single-page
+// scroll produced — so the reveal engine, answer state, and the de-blend
+// scoring invariant are all untouched (this is a presentation change only:
+// the cards, ids, and reveal holders are identical, just partitioned into
+// step containers that show one at a time). `showIf` lets a step drop out
+// entirely when it can never hold content (e.g. no red flags in the schema);
+// steps are numbered over the SURVIVING list so hidden steps don't leave gaps.
+function buildSteps() {
+  const steps = [
+    { id: 'history', label: 'History', sub: 'Background, conditions & medications',
+      build(c) {
+        c.appendChild(el('div', { class: 'grp-label', style: 'margin:2px 2px 2px' }, 'Anthropometrics'));
+        c.appendChild(anthropometricsCard());
+        c.appendChild(el('div', { class: 'grp-label', style: 'margin:12px 2px 2px' }, 'History'));
+        c.appendChild(conditionsCard());
+        c.appendChild(labsCard());
+        c.appendChild(familyHistoryCard());
+        // Obstetric/birth history is shown only for patients recorded as Female.
+        if (session.gender === 'Female') c.appendChild(obstetricCard());
+        c.appendChild(surgicalCard());
+        c.appendChild(medsCard());
+        c.appendChild(medConfoundersCard());
+      } },
+    { id: 'safety', label: 'Safety', sub: 'Alarm / red-flag features', showIf: () => RED_FLAGS.length > 0,
+      build(c) { c.appendChild(redFlagCard()); } },
+    { id: 'gut', label: 'Gut symptoms', sub: 'Core GI symptoms, stool form & pain',
+      build(c) {
+        const giSec = SECTIONS.find(s => s.id === 'GI');
+        if (giSec) c.appendChild(sectionCard(giSec));
+        c.appendChild(bristolCard());
+        c.appendChild(clusterFreqCard());
+        // Pain + Rome IV are gated on reported abdominal pain (refreshReveals).
+        c.appendChild(wrapHidden('reveal-card-pain', painCard()));
+        c.appendChild(wrapHidden('reveal-card-rome', romeCard()));
+      } },
+    { id: 'lifestyle', label: 'Lifestyle', sub: 'Diet, sleep & microbiome drivers',
+      build(c) { c.appendChild(lifestyleCard()); c.appendChild(sleepCard()); c.appendChild(dysCard()); } },
+    { id: 'systemic', label: 'Systemic', sub: 'Whole-body features & targeted follow-up',
+      build(c) {
+        SECTIONS.filter(s => ['IM', 'BG', 'NU', 'IMP'].includes(s.id)).forEach(sec => c.appendChild(sectionCard(sec)));
+        c.appendChild(pss4Card());
+        // Adaptive deep dive: targeted sections (AR / UG / SY), revealed by refreshReveals().
+        c.appendChild(targetedSymptomsArea());
+      } },
+    { id: 'treatments', label: 'Treatments', sub: 'What has already been tried',
+      build(c) { c.appendChild(treatmentsTriedCard()); } },
+  ];
+  return steps.filter(s => !s.showIf || s.showIf());
+}
+
 function render() {
   const root = document.getElementById('mode-patient');
   root.innerHTML = '';
+
+  // Persistent top matter (above the wizard): intro, live progress meta, and the
+  // patient-identity banner. Shown on every step so identity/progress context
+  // never scrolls out of reach.
   root.appendChild(el('div', { class: 'intro' },
     `<b>Enterro360 — Gut &amp; Systemic Health Screen.</b> A multi-axis screening instrument for chronic gut and related systemic symptoms. ` +
     `This is a screening aid to support clinical assessment — not a diagnosis.`));
 
   // How long this takes — the headline count/time is the mandatory questions only.
-  // The optional estimate (shown as an "add" figure) covers the optional QUESTIONS
-  // (targeted symptom follow-ups) plus ~1 min for the history/lifestyle chip cards,
-  // which aren't QUESTIONS; all of it only appears when relevant.
   const minutes = (n) => [Math.max(1, Math.round(n * 8 / 60)), Math.max(1, Math.round(n * 12 / 60))];
   const mainQ = QUESTIONS.filter(q => !q.optional).length;
   const optQ = QUESTIONS.filter(q => q.optional).length;
@@ -3522,96 +3611,148 @@ function render() {
 
   root.appendChild(patientBanner());
 
-  // Privacy warning for shared-device use
-  root.appendChild(el('div', { class: 'intro', style: 'background:#FFF3CD;border-color:#FFD699;color:#664d03' },
+  // Privacy + storage notices — first step only (consent-at-start), so later
+  // steps stay clean.
+  const notices = el('div', { id: 'gstep-notices' });
+  notices.appendChild(el('div', { class: 'intro', style: 'background:#FFF3CD;border-color:#FFD699;color:#664d03' },
     `🔒 <b>Shared device notice:</b> Patient data is stored locally in this browser's storage. If this is a shared or clinic computer, ` +
     `always clear browser data (cookies, site data) after each patient to protect confidentiality. Do not leave this browser logged into patient records.`));
-
-  // Check storage quota and warn if nearly full
   Store.checkStorageQuota().then(quota => {
     if (quota && quota.isWarning) {
-      root.appendChild(el('div', { class: 'intro', style: 'background:#FFE6E6;border-color:#FF9999;color:#8B0000' },
+      notices.appendChild(el('div', { class: 'intro', style: 'background:#FFE6E6;border-color:#FF9999;color:#8B0000' },
         `⚠️ <b>Storage nearly full (${quota.percentUsed}% used).</b> Download visits as CSV or clear browser data to free space before more data is added.`));
     }
   });
-
-  // Clinical intake flow:
-  //   Anthropometrics → History → Safety screen → Gut symptoms →
-  //   Lifestyle & modifiable drivers → Systemic features → Adaptive deep dive →
-  //   Treatments already tried.
-
-  // 1 — Anthropometrics (optional; BMI / WHtR — context, not scored).
-  root.appendChild(el('div', { class: 'grp-label', style: 'margin:6px 2px 2px' }, 'Anthropometrics'));
-  root.appendChild(anthropometricsCard());
-
-  // 2 — History: diagnosed/suspected conditions, family & birth history,
-  // surgical history, current medications.
-  root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'History'));
-  root.appendChild(conditionsCard());
-  root.appendChild(labsCard());
-  root.appendChild(familyHistoryCard());
-  // Obstetric/birth history is shown only for patients recorded as Female (the
-  // gender selection in the patient-details form drives this gate).
-  if (session.gender === 'Female') root.appendChild(obstetricCard());
-  root.appendChild(surgicalCard());
-  root.appendChild(medsCard());
-  root.appendChild(medConfoundersCard());
-
-  // 3 — Safety screen: alarm / red-flag features (history then informs which matter).
-  if (RED_FLAGS.length) {
-    root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Safety screen'));
-    root.appendChild(redFlagCard());
-  }
+  root.appendChild(notices);
 
   if (!SECTIONS.length || !QUESTIONS.length) {
     root.appendChild(el('div', { class: 'card' },
       '<div class="empty-note">🌱<br>No domains locked yet.<br>' +
       '<span class="muted">Domains and items appear here as they are co-designed and added to the schema.</span></div>'));
+    updateIdentityChip();
     return;
   }
 
-  // 4 — Gut symptoms: the validated GI core + symptom-characterising cards
-  // (stool form, pain & Rome IV — the last two gated on reported pain).
-  root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Gut symptoms'));
-  const giSec = SECTIONS.find(s => s.id === 'GI');
-  if (giSec) root.appendChild(sectionCard(giSec));
-  root.appendChild(bristolCard());
-  root.appendChild(clusterFreqCard());
-  // Pain + Rome IV are gated on reported abdominal pain (gsrs_pain ≥ 1) — Rome IV
-  // requires recurrent pain, so this spares pain-free patients the burden.
-  root.appendChild(wrapHidden('reveal-card-pain', painCard()));
-  root.appendChild(wrapHidden('reveal-card-rome', romeCard()));
+  // ── Guided-steps wizard ──────────────────────────────────────────────
+  const steps = buildSteps();
+  currentStep = Math.max(0, Math.min(currentStep, steps.length - 1));
 
-  // 5 — Lifestyle & modifiable drivers (not part of the Index; feed patterns).
-  root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Lifestyle & modifiable drivers'));
-  root.appendChild(lifestyleCard());
-  root.appendChild(sleepCard());
-  root.appendChild(dysCard());
+  root.appendChild(el('div', { class: 'stepper', id: 'gstepper' }));   // filled by paintWizard()
+  root.appendChild(el('p', { class: 'stepsub', id: 'gstepsub' }));
 
-  // 6 — Systemic features: the standalone systemic axes (immune/inflammatory,
-  // brain-gut & mood, nutrient, functional impact) + the PSS-4 stress scale
-  // (which feeds the Psychosocial axis, so it sits with the brain-gut items).
-  root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Systemic features'));
-  SECTIONS.filter(s => ['IM', 'BG', 'NU', 'IMP'].includes(s.id)).forEach(sec => root.appendChild(sectionCard(sec)));
-  root.appendChild(pss4Card());
+  // Build every step container up-front and keep them all in the DOM (only the
+  // active one is displayed). This is what preserves the reveal engine + answers.
+  const body = el('div', { id: 'gstep-body' });
+  steps.forEach((step, i) => {
+    const sec = el('section', { class: 'gstep', 'data-step': i, id: 'gstep-' + step.id });
+    sec.appendChild(el('div', { class: 'gstep-head' },
+      `<div class="t">${esc(step.label)}</div><div class="s">${esc(step.sub || '')}</div>`));
+    step.build(sec);
+    // Defensive empty-state note (no step is structurally empty in the current
+    // schema, but a conditional-only step could be — handle it gracefully).
+    sec.appendChild(el('div', { class: 'gstep-empty' },
+      'No questions in this section apply based on your answers so far — continue to the next step.'));
+    body.appendChild(sec);
+  });
+  root.appendChild(body);
 
-  // 7 — Adaptive deep dive: targeted symptom sections (AR / UG / SY), hidden
-  // until the GI core warrants them (revealIf) or the manual toggle is used.
-  root.appendChild(targetedSymptomsArea());
-
-  // 8 — Treatments already tried: kept last so it reads as "what have you tried
-  // so far" after the full symptom picture is on the table, rather than
-  // colouring how the patient answers the symptom questions that follow it.
-  root.appendChild(el('div', { class: 'grp-label', style: 'margin:10px 2px 2px' }, 'Treatments already tried'));
-  root.appendChild(treatmentsTriedCard());
-
-  const actions = el('div', { class: 'card row', style: 'justify-content:flex-end' });
-  actions.appendChild(el('button', { class: 'btn btn-g', onclick: calc }, 'See results →'));
-  root.appendChild(actions);
+  root.appendChild(el('div', { class: 'actionbar', id: 'gnav' }));     // filled by paintWizard()
   root.appendChild(el('div', { id: 'patient-results' }));
+
   updateIdentityChip();
   updateProgress();
   refreshReveals();
+  paintWizard(steps);
+}
+
+// Show step `i`, repaint the stepper + contextual nav bar, and toggle the
+// per-step empty-state note. `steps` is the surviving-step list from buildSteps().
+function paintWizard(steps) {
+  const n = steps.length;
+  currentStep = Math.max(0, Math.min(currentStep, n - 1));
+
+  // Step containers: only the active one is displayed.
+  document.querySelectorAll('#gstep-body .gstep').forEach(sec => {
+    sec.classList.toggle('active', Number(sec.dataset.step) === currentStep);
+  });
+  // Privacy/storage notices ride on the first step only.
+  const notices = document.getElementById('gstep-notices');
+  if (notices) notices.style.display = currentStep === 0 ? '' : 'none';
+
+  // Stepper: done (before current) → ✓, current → ringed number, upcoming → grey.
+  const stepper = document.getElementById('gstepper');
+  if (stepper) {
+    stepper.innerHTML = '';
+    steps.forEach((step, i) => {
+      const cls = i < currentStep ? 'done' : i === currentStep ? 'now' : '';
+      const btn = el('button', { class: 'step ' + cls, type: 'button', 'data-goto': i,
+        'aria-current': i === currentStep ? 'step' : null });
+      btn.appendChild(el('span', { class: 'b' }, i < currentStep ? '✓' : String(i + 1)));
+      btn.appendChild(el('span', { class: 'lb' }, esc(step.label)));
+      if (i < n - 1) btn.appendChild(el('span', { class: 'ln' }));
+      // Allow jumping back to any completed step, or forward one at a time.
+      btn.disabled = i > currentStep;
+      btn.onclick = () => { if (i <= currentStep) goToStep(i, steps); };
+      stepper.appendChild(btn);
+    });
+  }
+  // Sub-line: names the immediate neighbours.
+  const sub = document.getElementById('gstepsub');
+  if (sub) {
+    const prev = currentStep > 0 ? steps[currentStep - 1].label : null;
+    const next = currentStep < n - 1 ? steps[currentStep + 1].label : null;
+    sub.innerHTML = [prev ? `Previous: <b>${esc(prev)}</b>` : null,
+      next ? `Next up: <b>${esc(next)}</b>` : 'Final step'].filter(Boolean).join(' · ');
+  }
+
+  // Contextual action bar.
+  const nav = document.getElementById('gnav');
+  if (nav) {
+    nav.innerHTML = '';
+    const first = currentStep === 0, last = currentStep === n - 1;
+    const back = el('button', { class: 'navbtn back', type: 'button', disabled: first ? '' : null },
+      `<span class="k"><span class="ar">←</span> Back to</span><span class="nm">${first ? '—' : esc(steps[currentStep - 1].label)}</span>`);
+    back.onclick = () => { if (!first) goToStep(currentStep - 1, steps); };
+    nav.appendChild(back);
+
+    const pct = Math.round((currentStep + 1) / n * 100);
+    nav.appendChild(el('div', { class: 'centerprog' },
+      `<span class="c">Step ${currentStep + 1} of ${n}</span><div class="bar"><i style="width:${pct}%"></i></div>`));
+
+    const next = el('button', { class: 'navbtn next', type: 'button' },
+      last
+        ? `<span class="k">Done →</span><span class="nm">View results</span>`
+        : `<span class="k">Next →</span><span class="nm">${esc(steps[currentStep + 1].label)}</span>`);
+    next.onclick = () => { last ? calc() : goToStep(currentStep + 1, steps); };
+    nav.appendChild(next);
+  }
+
+  // Empty-state note per step (defensive — depends on post-reveal visibility).
+  document.querySelectorAll('#gstep-body .gstep').forEach(sec => {
+    const note = sec.querySelector('.gstep-empty');
+    if (!note) return;
+    const cards = Array.from(sec.children).filter(ch =>
+      ch !== note && !ch.classList.contains('gstep-head'));
+    const anyVisible = cards.some(ch => {
+      if (ch.offsetParent !== null) return true;              // rendered (only true for the active step)
+      return ch.querySelector && ch.querySelector('.sec-card, .card, .sec-body, .chips');
+    });
+    note.style.display = anyVisible ? 'none' : '';
+  });
+}
+
+// Move to step `i` and scroll the stepper to just below the sticky header (a
+// plain scrollIntoView would tuck it under the header on mobile).
+function goToStep(i, steps) {
+  currentStep = i;
+  paintWizard(steps || buildSteps());
+  const stepper = document.getElementById('gstepper');
+  if (stepper) {
+    const bar = document.querySelector('.app-bar');
+    const off = (bar ? bar.offsetHeight : 0) + 8;
+    const y = stepper.getBoundingClientRect().top + window.scrollY - off;
+    window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+  }
 }
 
 // Wrap a node in a hidden, id-tagged holder that refreshReveals() toggles.
@@ -5568,6 +5709,7 @@ function loadVisit(identity, visit, showResults) {
   session.pregnant = v.pregnant || '';
   session.followup = !!v.followup;
   loadedVisitId = v.id || null;  // save → update this record in-place
+  currentStep = 0;               // open a loaded visit at the first step
   render();
   // Populate lastCalc so the Clinician tab renders the summary on demand. We do
   // NOT call calc() here — that would append results under the editable form

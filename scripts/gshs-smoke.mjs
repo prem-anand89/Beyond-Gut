@@ -1500,13 +1500,13 @@ ok(/These are symptom-frequency questions/.test(html), 'clusterFreqCard clarifie
 ok(/Constipation: shown only if bowelFreq < 2[\s\S]{0,300}Diarrhoea: shown only if bowelFreq >= 2/.test(html),
   'clusterFreqCard comment documents hierarchical reveal logic');
 
-// ── Treatments already tried moved to the end of intake ──
-// It used to sit in the History group (before red flags); it should now be its
-// own group after the Adaptive deep dive, right before the "See results" action.
-ok(/'Treatments already tried'[\s\S]{0,60}treatmentsTriedCard\(\)/.test(html),
-  'treatmentsTriedCard() renders under its own "Treatments already tried" group');
-ok(/targetedSymptomsArea\(\)\);[\s\S]{0,400}treatmentsTriedCard\(\)[\s\S]{0,300}justify-content:flex-end/.test(html),
-  'treatmentsTriedCard() now renders after the adaptive deep dive, just before the See-results action row');
+// ── Treatments already tried is the last content step of the guided flow ──
+// It used to sit in the History group (before red flags); in the guided-steps
+// wizard it is its own final step, after the Systemic step's adaptive deep dive.
+ok(/id: 'treatments', label: 'Treatments'[\s\S]{0,220}treatmentsTriedCard\(\)/.test(html),
+  'treatmentsTriedCard() renders in its own "Treatments" step');
+ok(/targetedSymptomsArea\(\)\);[\s\S]{0,600}id: 'treatments'[\s\S]{0,220}treatmentsTriedCard\(\)/.test(html),
+  'treatmentsTriedCard() (Treatments step) comes after the adaptive deep dive (Systemic step) — last content step');
 ok(!/medConfoundersCard\(\)\);\s*root\.appendChild\(treatmentsTriedCard\(\)\);/.test(html),
   'treatmentsTriedCard() no longer sits directly after medConfoundersCard() in the History group');
 
@@ -1787,6 +1787,70 @@ ok(!/if \(!cells\.length\) return null;/.test(html.match(/function severityFrequ
 const calcFn2 = html.match(/function calc\(\)\s*\{[\s\S]*?\n(?=function )/);
 ok(!!calcFn2 && /severityFrequencyCard\(score, extras\)/.test(calcFn2[0]),
   'calc() (patient-facing screen) now renders the symptom severity × frequency card, per direction');
+
+// ── Guided-steps wizard (questionnaire-flow refactor) ────────────────────
+// The single-page scroll became a step-at-a-time wizard. These are source-level
+// checks; the end-to-end navigation/reveal behaviour is covered by the Playwright
+// browser-verification run.
+const buildStepsFn = html.match(/function buildSteps\(\)\s*\{[\s\S]*?\n\}\n/);
+ok(!!buildStepsFn, 'buildSteps() defined — the guided-steps flow spec');
+const bs = buildStepsFn ? buildStepsFn[0] : '';
+// The six clinical steps, in order.
+const STEP_IDS = ['history', 'safety', 'gut', 'lifestyle', 'systemic', 'treatments'];
+STEP_IDS.forEach(id => ok(new RegExp(`id: '${id}'`).test(bs), `buildSteps() declares the '${id}' step`));
+ok(/id: 'safety'[\s\S]{0,120}showIf: \(\) => RED_FLAGS\.length > 0/.test(bs),
+  "Safety step drops out (showIf) when the schema carries no red flags — numbering stays gap-free");
+ok(/return steps\.filter\(s => !s\.showIf \|\| s\.showIf\(\)\)/.test(bs),
+  'buildSteps() renumbers over surviving steps (hidden steps do not leave a gap)');
+
+// Each step keeps the SAME cards/holders the old scroll produced — the reveal
+// engine + de-blend invariant depend on these ids being present untouched.
+ok(/id: 'gut'[\s\S]{0,400}wrapHidden\('reveal-card-pain'[\s\S]{0,120}wrapHidden\('reveal-card-rome'/.test(bs),
+  'Gut step still emits the pain/Rome reveal holders (gated by refreshReveals, unchanged)');
+ok(/id: 'systemic'[\s\S]{0,600}targetedSymptomsArea\(\)/.test(bs),
+  'Systemic step still emits the adaptive deep-dive area (AR/UG/SY reveal holders)');
+
+// Wizard machinery: paint + navigate.
+ok(/function paintWizard\(steps\)\s*\{/.test(html), 'paintWizard() defined');
+ok(/function goToStep\(i, steps\)\s*\{/.test(html), 'goToStep() defined');
+const pw = html.match(/function paintWizard\(steps\)\s*\{[\s\S]*?\n\}\n/)[0];
+// Stepper state: done → ✓, current → ringed number, upcoming → grey.
+ok(/i < currentStep \? 'done' : i === currentStep \? 'now' : ''/.test(pw),
+  'stepper marks completed steps done, the current step now, the rest upcoming');
+ok(/i < currentStep \? '✓' : String\(i \+ 1\)/.test(pw),
+  'completed steps show a tick, others show their number');
+ok(/btn\.disabled = i > currentStep/.test(pw),
+  'stepper only lets you jump to the current step or a completed one (no skipping ahead)');
+// Contextual nav bar: Back names the previous step + is disabled on step 1;
+// Next names the next step, or becomes "View results" on the last step.
+ok(/const first = currentStep === 0, last = currentStep === n - 1/.test(pw),
+  'nav bar knows first/last step');
+ok(/navbtn back[\s\S]{0,120}disabled: first \? '' : null/.test(pw),
+  'Back button is disabled on the first step');
+ok(/first \? '—' : esc\(steps\[currentStep - 1\]\.label\)/.test(pw),
+  'Back button names the previous step');
+ok(/last[\s\S]{0,80}View results[\s\S]{0,120}esc\(steps\[currentStep \+ 1\]\.label\)/.test(pw),
+  'Next button reads "View results" on the last step, otherwise names the next step');
+ok(/next\.onclick = \(\) => \{ last \? calc\(\) : goToStep\(currentStep \+ 1, steps\); \}/.test(pw),
+  'the last step\'s Next button runs calc() (View results); earlier steps advance');
+// Defensive empty-step handling.
+ok(/\.gstep-empty/.test(pw) && /No questions in this section apply/.test(html),
+  'a step with no visible cards shows a graceful empty-state note (defensive)');
+
+// State: currentStep is module-level, reset on a fresh questionnaire / loaded visit.
+ok(/let currentStep = 0;/.test(html), 'currentStep is module-level wizard state');
+ok(/function reset\(\) \{[\s\S]{0,200}currentStep = 0;/.test(html), 'reset() returns the wizard to step 1');
+ok(/loadedVisitId = v\.id \|\| null;[\s\S]{0,120}currentStep = 0;/.test(html),
+  'loadVisit() opens a loaded visit at the first step');
+
+// The de-blend invariant is presentation-agnostic, but re-confirm the wizard did
+// not smuggle any driver/frequency answer into the scored index. computeScores'
+// 2nd arg is the driver/extras bag — loading it must not move .index.
+const giAns = { gsrs_reflux: 2, gsrs_heartburn: 2, gsrs_pain: 2 };
+const idxNoDrivers = scoring.computeScores(giAns, {}).index;
+const idxWithDrivers = scoring.computeScores(giAns, { bristol: 7, bowelFreq: 3, clusterFreq: { Pain: 3, Diarrhoea: 3 } }).index;
+ok(idxNoDrivers === idxWithDrivers,
+  'guided-steps refactor is presentation-only — frequency/Bristol drivers still do not move the Gut Symptom Index');
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);
