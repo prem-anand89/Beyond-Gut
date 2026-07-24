@@ -1879,5 +1879,28 @@ const idxWithDrivers = scoring.computeScores(giAns, { bristol: 7, bowelFreq: 3, 
 ok(idxNoDrivers === idxWithDrivers,
   'guided-steps refactor is presentation-only — frequency/Bristol drivers still do not move the Gut Symptom Index');
 
+// ── Band-colour distinguishability regression guard ──────────────────────
+// sev-sig previously fell back to an undefined --cop token, landing on a
+// pale pink nearly identical to sev-sev's red (Significant ≈ Severe); and
+// bandBg() (print) had no entries at all for High/Moderate (Dysbiosis
+// Correlate Load's tier vocabulary), so they silently fell through to the
+// same green as Minimal/Low. Guard all three fixed sources.
+ok(!/var\(--cop,#FAECE7\)/.test(html), 'sev-sig no longer falls back through an undefined --cop token');
+ok(/\.sev-sig\{background:#FBDCC2/.test(html), 'sev-sig has its own distinct orange background (not a near-duplicate of sev-sev)');
+const bandBgFn = html.match(/function bandBg\(band\)\s*\{[\s\S]*?\n\}/);
+ok(!!bandBgFn && /High: '#FBDCC2'/.test(bandBgFn[0]) && /Moderate: '#FAEEDA'/.test(bandBgFn[0]),
+  "print bandBg() now maps the Dys-R tier vocabulary (High/Moderate) instead of falling through to Minimal's green");
+ok(/bg: '#FBDCC2', cls: 'sev-sig'/.test(html), 'BANDS.Significant uses the distinct orange, not the old pink near-duplicate of Severe');
+
+// ── Print trend section parity with the on-screen redesign ───────────────
+// Print previously kept its own older plain 8-column table here instead of
+// the redesigned trendCard() (delta pill, SVG chart with Rx marker,
+// before→after cluster chips) — both surfaces must render the same document.
+const trendPrintBlock = clSrc.slice(clSrc.indexOf(`sectionTitle('trend')`));
+ok(/trendChartSvg\(trend\.points, sortedTrendVisits\)/.test(trendPrintBlock), 'print trend section renders the SVG chart (with Rx marker), same as on-screen');
+ok(/latest\.delta[\s\S]{0,120}pr-pill/.test(trendPrintBlock), 'print trend section shows the headline delta pill, same as on-screen');
+ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span>/.test(trendPrintBlock),
+  'print trend section shows cluster trajectory as before→after chips (Option D), same as on-screen');
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

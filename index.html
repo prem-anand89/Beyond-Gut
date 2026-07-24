@@ -109,8 +109,12 @@ small{font-size:.82em}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 .pill{display:inline-block;padding:3px 11px;border-radius:20px;font-size:12px;font-weight:700}
+/* A clear 4-step severity ramp (green → amber → orange → red) — sev-sig
+   previously fell back to an undefined --cop token, landing on a pale pink
+   almost identical to sev-sev's red, so "Significant" and "Severe" were
+   indistinguishable at a glance. Each step now has its own distinct hue. */
 .sev-min{background:var(--tint);color:var(--ok)}.sev-mod{background:var(--ap);color:#7A5800}
-.sev-sig{background:var(--cop,#FAECE7);color:#7A3410}.sev-sev{background:var(--alert-p);color:var(--alert-d)}
+.sev-sig{background:#FBDCC2;color:#8A4B0F}.sev-sev{background:var(--alert-p);color:var(--alert-d)}
 .sev-unknown{background:#E5E5E5;color:#555}
 
 .intro{background:var(--tint);border:1px solid var(--ok);border-radius:var(--r12);padding:14px 16px;margin-bottom:14px;font-size:13px;color:var(--inks)}
@@ -1452,10 +1456,13 @@ const { SECTIONS, QUESTIONS, QID, itemMax, sectionMax } = __req('schema.js');
 // TODO[recalibration, opened 2026-06]: cutoffs AND the 0.6/0.4 core/screen
 // weighting are provisional placeholders — refit against pilot distribution +
 // any lab-confirmed outcomes (breath test, GI-MAP) before treating as final.
+// bg values form a clear 4-step ramp (green/amber/orange/red) — Significant's
+// bg was #FAECE7, a pale pink nearly identical to Severe's var(--alert-p);
+// now a distinct orange matching the .sev-sig pill class.
 const BANDS = [
   { label: 'Minimal',       maxPct: 10,        color: 'var(--ok)', bg: 'var(--tint)', cls: 'sev-min' },
   { label: 'Mild–Moderate', maxPct: 35,        color: '#BA7517', bg: '#FAEEDA', cls: 'sev-mod' },
-  { label: 'Significant',   maxPct: 65,        color: '#C2622E', bg: '#FAECE7', cls: 'sev-sig' },
+  { label: 'Significant',   maxPct: 65,        color: '#C2622E', bg: '#FBDCC2', cls: 'sev-sig' },
   { label: 'Severe',        maxPct: Infinity,  color: 'var(--alert)', bg: 'var(--alert-p)', cls: 'sev-sev' },
 ];
 const SEVERITY_DESC = {
@@ -5224,10 +5231,18 @@ function appendixToggleEl() {
 }
 
 // Band → background colour (print). Covers both the 0–100 bands
-// (Minimal/Mild–Moderate/Significant/Severe) and the count-load bands (Low/Some/Elevated).
+// (Minimal/Mild–Moderate/Significant/Severe) and the count-load bands
+// (Low/Some/Elevated/High/Moderate — the latter two are the E3 weighted
+// Dys-R tier vocabulary used by Dysbiosis Correlate Load, previously MISSING
+// from this map entirely, so they silently fell through to the Minimal/Low
+// green — a "Moderate" dysbiosis load rendered identically to "Minimal").
+// A clear 4-step ramp (green → amber → orange → red), matching the on-screen
+// .sev-min/.sev-mod/.sev-sig/.sev-sev classes — Significant/Elevated/High
+// previously shared an undefined-token pink fallback nearly identical to
+// Severe's red; now a distinct orange.
 function bandBg(band) {
-  return { Severe: 'var(--alert-p)', Significant: '#FAECE7', Elevated: '#FAECE7',
-    'Mild–Moderate': '#FAEEDA', Some: '#FAEEDA' }[band] || 'var(--tint)';
+  return { Severe: 'var(--alert-p)', Significant: '#FBDCC2', Elevated: '#FBDCC2', High: '#FBDCC2',
+    'Mild–Moderate': '#FAEEDA', Some: '#FAEEDA', Moderate: '#FAEEDA' }[band] || 'var(--tint)';
 }
 
 
@@ -5787,26 +5802,62 @@ function buildClinicianPrint(c, opts) {
 
   // Longitudinal trend — only rendered when there is a prior visit to compare
   // against (a single baseline visit has nothing to trend, so the section is
-  // omitted rather than printed empty). Interventions per visit are overlaid so
-  // burden change reads against what was tried.
+  // omitted rather than printed empty). Mirrors the on-screen trendCard():
+  // delta pill, the SVG chart (trendChartSvg — pure string-building, reused
+  // as-is) with its Rx intervention marker, per-visit rows, cluster
+  // trajectory as before→after chip pairs, persistent patterns, and the
+  // leading-indicator callout. Previously print kept its own older plain
+  // 8-column table here instead of matching the redesigned on-screen card —
+  // now both surfaces render the same document.
   if (trend && trend.points.length >= 2) {
     h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('trend')}</div>`;
     const sortedTrendVisits = trendVisits.slice().sort((a, b) => (a.date || 0) - (b.date || 0));
-    h += `<div><div style="font-weight:600;font-size:11px;margin-bottom:2px">Longitudinal progression (${trend.points.length} visits)</div>
-      <table class="pr-tbl"><thead><tr><th>#</th><th>Date</th><th>Type</th><th>Index</th><th>Band</th><th>Δ</th><th>Freq Δ</th><th>Interventions</th></tr></thead><tbody>
+    const latest = trend.points[trend.points.length - 1];
+
+    if (latest && latest.delta) {
+      const d = latest.delta;
+      h += `<div style="margin-bottom:6px"><span class="pr-pill" style="background:${d.color};color:#fff;font-size:9.5px">${esc(d.label)}</span>
+        <span style="font-size:10px;color:#555;margin-left:6px">Burden ${d.delta > 0 ? '+' : ''}${d.delta} pts vs previous visit (${trend.points[trend.points.length - 2].index}% → ${latest.index}%)</span></div>`;
+    }
+
+    h += `<div style="display:flex;gap:14px;align-items:center;margin-bottom:8px;page-break-inside:avoid;break-inside:avoid">
+      <div>${trendChartSvg(trend.points, sortedTrendVisits)}</div>
+      <div style="font-size:9.5px;color:#777;max-width:220px"><b style="display:block;color:#222;font-size:10.5px;margin-bottom:2px">Gut Symptom Burden</b>Lower = improvement. The <b style="color:var(--bl)">Rx</b> flag marks a visit with a recorded intervention.</div>
+    </div>`;
+
+    h += `<table class="pr-tbl" style="margin-bottom:6px"><thead><tr><th>Date</th><th>Type</th><th>Index</th><th>Band</th><th>Δ</th><th>Interventions</th></tr></thead><tbody>
         ${trend.points.map((p, i) => {
           const d = p.date ? new Date(p.date).toISOString().slice(0, 10) : '—';
-          const dTxt = p.delta ? `${p.delta.delta > 0 ? '+' : ''}${p.delta.delta} (${esc(p.delta.label)})` : '—';
-          const freqTxt = p.freqDelta ? `${p.freqDelta.delta > 0 ? '+' : ''}${p.freqDelta.delta} (${esc(p.freqDelta.label)})` : (p.freqPct == null ? 'No data' : '—');
+          const dPill = p.delta ? `<span class="pr-pill" style="background:${p.delta.color};color:#fff;font-size:8.5px">${esc(p.delta.label)}</span>` : '—';
           const idxTxt = p.index != null ? `${p.index}%` : '—';
           const bandTxt = p.band != null ? esc(p.band) : 'Not completed';
           const iv = interventionSummary(sortedTrendVisits[i] && sortedTrendVisits[i].extras);
-          return `<tr><td>${i + 1}</td><td>${esc(d)}</td><td>${p.followup ? 'Follow-up' : 'Baseline'}</td><td>${idxTxt}</td><td>${bandTxt}</td><td>${dTxt}</td><td>${freqTxt}</td><td>${iv ? esc(iv) : '—'}</td></tr>`;
+          return `<tr><td>${esc(d)}</td><td>${p.followup ? 'Follow-up' : 'Baseline'}</td><td><b>${idxTxt}</b></td><td>${bandTxt}</td><td>${dPill}</td><td>${iv ? esc(iv) : '—'}</td></tr>`;
         }).join('')}
-      </tbody></table>
-      ${trend.persistent.length ? `<div style="font-size:10.5px;margin-top:4px">Persistent patterns: <b>${trend.persistent.map(id => esc(id.replace(/_/g, ' '))).join(', ')}</b></div>` : ''}
-      ${trend.leadingSignal ? `<div style="font-size:10.5px;margin-top:4px;color:#185FA5">💡 ${esc(trend.leadingSignal)}</div>` : ''}
-    </div>`;
+      </tbody></table>`;
+
+    // Cluster trajectory — before → after chip pairs (Option D), same as on-screen.
+    if (trend.points.length >= 2 && latest) {
+      const first = trend.points[0].clusterNorm || {}, last = latest.clusterNorm || {};
+      const order = ['Reflux', 'Pain', 'Indigestion', 'Diarrhoea', 'Constipation'];
+      const cluRows = order.filter(k => first[k] != null && last[k] != null).map(k => {
+        const f = Math.round(first[k] * 100), l = Math.round(last[k] * 100);
+        const d = l - f, worse = d > 0;
+        const deltaTxt = d === 0 ? '±0%' : `${d > 0 ? '+' : ''}${d}%`;
+        const lastBg = worse ? '#FAEEDA' : 'var(--tint)', lastFg = worse ? '#7A5800' : 'var(--ok)';
+        return `<div style="display:flex;align-items:center;gap:6px;font-size:10px;margin:3px 0">
+          <span style="width:90px;font-weight:600;color:#333">${esc(k)}</span>
+          <span style="background:#F0F2F2;color:#555;border-radius:8px;padding:1px 7px;font-weight:700">${f}%</span>
+          <span style="color:#AAA">→</span>
+          <span style="background:${lastBg};color:${lastFg};border-radius:8px;padding:1px 7px;font-weight:700">${l}%</span>
+          <span style="margin-left:auto;font-weight:700;color:${d === 0 ? '#777' : worse ? '#8A4B0F' : 'var(--ok)'}">${deltaTxt}</span>
+        </div>`;
+      });
+      if (cluRows.length) h += `<div style="font-weight:600;font-size:10.5px;margin:6px 0 2px">GI clusters — first → latest visit</div>${cluRows.join('')}`;
+    }
+
+    h += `${trend.persistent.length ? `<div style="font-size:10.5px;margin-top:6px">Persistent patterns: <b>${trend.persistent.map(id => esc(id.replace(/_/g, ' '))).join(', ')}</b></div>` : ''}
+      ${trend.leadingSignal ? `<div style="font-size:10.5px;margin-top:4px;color:#185FA5">💡 ${esc(trend.leadingSignal)}</div>` : ''}`;
     h += `</div>`;
   }
 
