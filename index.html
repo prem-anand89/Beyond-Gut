@@ -260,12 +260,16 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
 
 /* ── Clinician view ──────────────────────────── */
 .clin-badge{display:inline-block;padding:2px 8px;background:var(--neutral);color:#fff;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-left:6px;vertical-align:middle}
-.clin-detail{background:#F5F7FA;border:1px solid #C0C8D2;border-radius:var(--r12);padding:16px;margin-bottom:14px}
-.clin-detail .clin-h{font-size:11.5px;font-weight:700;color:var(--neutral);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #D0D7DF;padding-bottom:3px;margin:12px 0 6px}
+/* Was a fixed light card (#F5F7FA + hardcoded borders) with no dark-theme
+   equivalent — its text still inherited the page's theme-adaptive --ink, so
+   in dark mode the card stayed light while its text went light-on-light and
+   nearly disappeared. Now built entirely from tokens, like every other card. */
+.clin-detail{background:var(--paper);border:1px solid var(--bdrm);border-radius:var(--r12);padding:16px;margin-bottom:14px}
+.clin-detail .clin-h{font-size:11.5px;font-weight:700;color:var(--inkt);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--bdr);padding-bottom:3px;margin:12px 0 6px}
 .clin-detail .clin-h:first-of-type{margin-top:0}
 .clin-tbl{width:100%;border-collapse:collapse;font-size:11.5px}
-.clin-tbl th{text-align:left;padding:4px 8px;background:#EAEDF0;font-weight:600;font-size:11px}
-.clin-tbl td{padding:4px 8px;border-bottom:1px solid #E8EAED;vertical-align:top}
+.clin-tbl th{text-align:left;padding:4px 8px;background:var(--bdr);font-weight:600;font-size:11px}
+.clin-tbl td{padding:4px 8px;border-bottom:1px solid var(--bdr);vertical-align:top}
 .clin-tbl tr:last-child td{border-bottom:none}
 
 /* ── Print layout ────────────────────────────── */
@@ -5067,7 +5071,7 @@ function triageCard(tri, rome, showInvestigations, includeInvestigationsList) {
   note('⚠️', tri.restrictionScreenNote);
   if (considerations.length) {
     tcard.appendChild(el('div', { style: 'font-size:10.5px;font-weight:700;color:var(--am);text-transform:uppercase;letter-spacing:.03em;margin-top:9px' }, 'Clinical considerations'));
-    tcard.appendChild(el('ul', { style: 'font-size:12px;color:#7A5800;margin:3px 0 0 16px;line-height:1.6' },
+    tcard.appendChild(el('ul', { style: 'font-size:12px;color:var(--inks);margin:3px 0 0 16px;line-height:1.6' },
       considerations.map(c => `<li>${c}</li>`).join('')));
   }
   // Patient view (showInvestigations=false) suppresses "Also worth noting" at
@@ -5091,8 +5095,8 @@ function triageCard(tri, rome, showInvestigations, includeInvestigationsList) {
       `Meets Rome IV-informed criteria for ${esc(rome.subtype)}${esc(basisNote)} — single-visit estimate, not the prospective diary Rome IV was validated against. A pattern to discuss, not a diagnosis.`));
   }
   if (includeInvestigationsList && tri.investigations && tri.investigations.length) {
-    tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-weight:600;color:var(--neutral)' }, 'Suggested investigations / management:'));
-    tcard.appendChild(el('ul', { class: 'rf-list', style: 'color:var(--neutral);margin-top:2px' },
+    tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:10px;font-weight:600;color:var(--inks)' }, 'Suggested investigations / management:'));
+    tcard.appendChild(el('ul', { class: 'rf-list', style: 'color:var(--inks);margin-top:2px' },
       dedupeList(tri.investigations).map(i => `<li>${esc(i)}</li>`).join('')));
     tcard.appendChild(el('div', { class: 'q-sub', style: 'color:#888;font-style:italic;margin-top:3px' }, 'Pattern-matched — apply clinical judgement. Not a protocol.'));
   }
@@ -5134,7 +5138,7 @@ function clinicianDetailCard(c) {
     const sc = score.secScores[sec.id] || 0;
     const mx = score.secApplicableMax[sec.id] || 0;
     const pct = mx ? Math.round(sc / mx * 100) : 0;
-    card.appendChild(el('div', { style: 'font-size:11px;font-weight:600;color:var(--neutral);margin:8px 0 3px;padding:2px 0;border-bottom:1px solid #D8DDE3' },
+    card.appendChild(el('div', { style: 'font-size:11px;font-weight:600;color:var(--inks);margin:8px 0 3px;padding:2px 0;border-bottom:1px solid var(--bdr)' },
       `${esc(sec.full || sec.label)} — ${sc}/${mx} (${pct}%)`));
     const rows = qs.map(q => {
       const val = answers[q.id];
