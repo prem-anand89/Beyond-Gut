@@ -288,6 +288,13 @@ h1{font-size:22px}h2{font-size:17px;margin-bottom:8px}h3{font-size:14px}
   .pr-hero .big{font-size:36px;font-weight:800;color:var(--brand);line-height:.95}
   .pr-hero .sub{font-size:10px;color:#555;margin-top:2px}
   .pr-pill{display:inline-block;padding:2px 8px;border-radius:14px;font-size:10px;font-weight:700;margin-right:3px;border:1px solid rgba(0,0,0,.35)}
+  /* KPI band — the four headline reads as compact stat tiles, print's mirror
+     of the on-screen headlineCard()/kpi band. */
+  .pr-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:6px}
+  .pr-kpi-tile{border:1px solid #D0D0C8;border-radius:6px;padding:5px 8px;background:#fff}
+  .pr-kpi-tile .k{font-size:8px;font-weight:700;color:#777;text-transform:uppercase;letter-spacing:.02em}
+  .pr-kpi-tile .v{font-size:16px;font-weight:800;color:var(--brand);margin:1px 0 2px}
+  .pr-kpi-meta{font-size:9.5px;color:#777;margin-bottom:6px}
   .pr-alert{background:var(--alert-p);border:1px solid var(--alert);border-radius:6px;padding:6px 8px;margin-bottom:6px;page-break-inside:avoid;break-inside:avoid}
   .pr-alert-t{font-weight:700;color:var(--alert);font-size:11.5px;margin-bottom:2px}
   .pr-info{background:#FFF3CD;border:1px solid #FECB1F;border-radius:6px;padding:6px 8px;margin-bottom:6px}
@@ -3301,7 +3308,7 @@ function headlineCard(heads, rome) {
   const card = el('div', { class: 'card', style: 'border-left:6px solid var(--brand)' });
   card.appendChild(el('h2', {}, 'Gut & Systemic Health Screen — headline'));
   card.appendChild(el('div', { class: 'q-sub' }, 'Four separate reads. Burden = current symptom severity · Load = exposure / risk accumulation. The Gut Symptom Burden is the only validated number; the rest are screening reads.'));
-  const grid = el('div', { style: 'display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px' });
+  const grid = el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:10px' });
   heads.primaryList.forEach(o => {
     const isPct = o.key === 'gut_symptom_burden' || o.key === 'nutrient_malabsorption_risk';
     const val = o.value == null ? '—' : (isPct ? o.value + '%' : o.value);
@@ -5034,40 +5041,35 @@ function triageCard(tri, rome, showInvestigations, includeInvestigationsList) {
   tcard.appendChild(el('div', { style: 'font-size:13px;color:var(--inks);line-height:1.5;margin-top:6px' }, esc(tri.action)));
   if (tri.reasons.length) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:8px' },
     'Why: ' + tri.reasons.map(r => esc(r.text)).join(' · ')));
-  if (tri.conditionNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    'ℹ️ ' + esc(tri.conditionNote)));
-  if (tri.labNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🧪 ' + esc(tri.labNote)));
-  if (tri.medNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '💊 ' + esc(tri.medNote)));
-  if (tri.autonomicNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🫀 ' + esc(tri.autonomicNote)));
-  (tri.conditionGuidance || []).forEach(n => tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    'ℹ️ ' + esc(n))));
-  (tri.familyNotes || []).forEach(n => tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🧬 ' + esc(n))));
-  if (tri.gynNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '⚕️ ' + esc(tri.gynNote)));
-  if (tri.pelvicNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🧷 ' + esc(tri.pelvicNote)));
-  if (tri.anthroNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '📏 ' + esc(tri.anthroNote)));
-  if (tri.durationNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '⏱️ ' + esc(tri.durationNote)));
-  if (tri.bowelFreqNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🚽 ' + esc(tri.bowelFreqNote)));
-  if (tri.smokingNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🚬 ' + esc(tri.smokingNote)));
-  if (tri.treatmentsTriedNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '💉 ' + esc(tri.treatmentsTriedNote)));
-  if (tri.coeliacTimingNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🌾 ' + esc(tri.coeliacTimingNote)));
-  if (tri.restrictionNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🥗 ' + esc(tri.restrictionNote)));
-  if (tri.referredPainNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '🦴 ' + esc(tri.referredPainNote)));
-  if (tri.restrictionScreenNote) tcard.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px;color:#7A3410' },
-    '⚠️ ' + esc(tri.restrictionScreenNote)));
+  // Clinical considerations — every management-changing note (condition/lab/
+  // med caveats, family/gyn/pelvic/anthro/duration/lifestyle flags, coeliac
+  // timing, restriction screening, referred pain) consolidated into ONE
+  // bulleted list instead of up to 17 separately-styled one-line paragraphs,
+  // which was the actual clutter in this card — same information, one block.
+  const considerations = [];
+  const note = (icon, text) => { if (text) considerations.push(`${icon} ${esc(text)}`); };
+  note('ℹ️', tri.conditionNote);
+  note('🧪', tri.labNote);
+  note('💊', tri.medNote);
+  note('🫀', tri.autonomicNote);
+  (tri.conditionGuidance || []).forEach(n => note('ℹ️', n));
+  (tri.familyNotes || []).forEach(n => note('🧬', n));
+  note('⚕️', tri.gynNote);
+  note('🧷', tri.pelvicNote);
+  note('📏', tri.anthroNote);
+  note('⏱️', tri.durationNote);
+  note('🚽', tri.bowelFreqNote);
+  note('🚬', tri.smokingNote);
+  note('💉', tri.treatmentsTriedNote);
+  note('🌾', tri.coeliacTimingNote);
+  note('🥗', tri.restrictionNote);
+  note('🦴', tri.referredPainNote);
+  note('⚠️', tri.restrictionScreenNote);
+  if (considerations.length) {
+    tcard.appendChild(el('div', { style: 'font-size:10.5px;font-weight:700;color:var(--am);text-transform:uppercase;letter-spacing:.03em;margin-top:9px' }, 'Clinical considerations'));
+    tcard.appendChild(el('ul', { style: 'font-size:12px;color:#7A5800;margin:3px 0 0 16px;line-height:1.6' },
+      considerations.map(c => `<li>${c}</li>`).join('')));
+  }
   // Patient view (showInvestigations=false) suppresses "Also worth noting" at
   // Tier 1 — a refer instruction should not sit beside "self-management" or
   // "probiotic trial" framing. Clinician view keeps the full tier landscape.
@@ -5292,6 +5294,30 @@ function physioCandidacy(tri) {
     .filter(r => { if (seen.has(r.text)) return false; seen.add(r.text); return true; });
 }
 
+// On-screen patterns table — full rationale per row, ranked by clinical
+// priority (see rankPatternsByPriority), not by data-confidence. The
+// Impression above already leads with the single top pattern; this is the
+// full ranked list behind it. Capped to keep the main view scannable — the
+// Appendix carries the complete signal-level breakdown for every pattern.
+function patternsMechanismsCard(patterns) {
+  if (!patterns || !patterns.length) return null;
+  const ranked = rankPatternsByPriority(patterns);
+  const cap = capList(ranked, 8);
+  const card = el('div', { class: 'card', style: 'border-left:6px solid var(--section)' });
+  card.appendChild(el('h2', {}, sectionTitle('patterns')));
+  card.appendChild(el('div', { class: 'q-sub' },
+    'Ranked by clinical intensity this visit — how strongly the fired signals were present, not by how much data was available.'));
+  const rows = cap.shown.map(p => {
+    const m = patternPriorityMeta(p.strength || 0);
+    return `<tr><td><span class="pill ${m.cls}" style="font-size:9.5px;white-space:nowrap">${esc(m.label)}</span></td><td><b>${esc(p.label)}</b></td><td>${esc(p.desc)}</td></tr>`;
+  }).join('');
+  card.appendChild(el('div', { style: 'overflow-x:auto;margin-top:8px' },
+    `<table class="clin-tbl"><thead><tr><th style="width:12%">Priority</th><th style="width:26%">Pattern</th><th>Rationale &amp; management hint</th></tr></thead><tbody>${rows}</tbody></table>`));
+  if (cap.extra) card.appendChild(el('div', { class: 'q-sub', style: 'margin-top:6px' },
+    `+${cap.extra} further lower-priority pattern${cap.extra > 1 ? 's' : ''}: ${esc(ranked.slice(8).map(p => p.label).join(', '))}.`));
+  return card;
+}
+
 // Single source of truth for the report's SECTION titles, shared by the print
 // (buildClinicianPrint) and on-screen (renderClinician) surfaces so a rename
 // can't drift between them. Descriptive names, no running item numbers — the
@@ -5303,6 +5329,7 @@ const REPORT_SECTIONS = {
   impression: 'Clinical impression',
   burden:     'Symptom burden — severity × frequency',
   plan:       'Assessment & plan',
+  patterns:   'Patterns & mechanisms',
   interp:     'Interpretation',
   context:    'Context & drivers',
   trend:      'Longitudinal trend',
@@ -5310,6 +5337,23 @@ const REPORT_SECTIONS = {
   appendix:   'Full item-level responses',
 };
 function sectionTitle(key) { return REPORT_SECTIONS[key] || key; }
+
+// Display-only re-ranking for the Patterns & mechanisms table: sorted by
+// `strength` (hits/total signals — how strongly the fired criteria were met,
+// a severity/intensity-adjacent measure), NOT `confidence` (coverage —
+// answered/total, i.e. how much data we had). Returns a NEW array; never
+// mutates the source, so clinicalImpression()'s "leading pattern" pick
+// (patterns[0], engine-ordered by confidence) and trend persistence
+// (pattern-id membership, order-independent) are both unaffected.
+function rankPatternsByPriority(patterns) {
+  return (patterns || []).slice().sort((a, b) => (b.strength || 0) - (a.strength || 0));
+}
+// Priority label/pill for a pattern's strength — High ≥0.75, Moderate ≥0.4, else Low.
+function patternPriorityMeta(strength) {
+  if (strength >= 0.75) return { label: 'High', cls: 'sev-sev' };
+  if (strength >= 0.4) return { label: 'Moderate', cls: 'sev-mod' };
+  return { label: 'Low', cls: 'sev-min' };
+}
 
 // Case-insensitive de-dup preserving first-seen order — used to collapse the
 // repeated triage reasons / investigation suggestions that several fired patterns
@@ -5450,11 +5494,18 @@ function buildClinicianPrint(c, opts) {
 
   // Headline score — big number + band + confidence, unmissable and stated ONCE
   // (the impression below leads with the pattern, not a restatement of these).
-  h += `<div class="pr-hero">
-    <div><div class="big">${sv.index == null ? '—' : sv.index + '%'}</div><div class="sub">Gut Symptom Burden</div></div>
-    <div style="flex:1;min-width:160px">${sv.label ? `<span class="pr-pill" style="background:${bandBg(sv.label)};font-size:12px;padding:3px 10px">${esc(sv.label)}${sv.peakEscalated ? ' ↑' : ''}</span>` : ''}
-      <div style="font-size:9.5px;color:#777;margin-top:6px">Confidence: ${esc(conf.level)} · ${score.completeness}% complete</div></div>
-  </div>`;
+  // KPI band — the four headline reads as compact tiles, mirroring the
+  // on-screen headlineCard()/kpi band (report restructure: promoted from
+  // page 2's Interpretation section to lead the whole report).
+  {
+    const isPct = (o) => o.key === 'gut_symptom_burden' || o.key === 'nutrient_malabsorption_risk';
+    const tileHtml = (o) => {
+      const val = o.value == null ? '—' : (isPct(o) ? o.value + '%' : o.value);
+      return `<div class="pr-kpi-tile"><div class="k">${esc(o.label)}</div><div class="v">${esc(String(val))}</div>${o.band ? prBandPill(o.band) : ''}</div>`;
+    };
+    h += `<div class="pr-kpi">${heads.primaryList.map(tileHtml).join('')}</div>
+      <div class="pr-kpi-meta">Confidence: ${esc(conf.level)} · ${score.completeness}% complete${sv.peakEscalated ? ' · displayed band raised by a peak-symptom alert (below)' : ''}</div>`;
+  }
 
   // ── Section 1 — Triage tier + care-track badges, then Red flags. ──────────
   const tierCls = ['', 't1', 't2', 't3', 't4'][tri.level] || 't4';
@@ -5526,6 +5577,24 @@ function buildClinicianPrint(c, opts) {
   }
   h += `</div>`;
 
+  // ── Section 4 — Patterns & mechanisms, ranked by clinical priority (not
+  // data-confidence) — closes out page 1: verdict, safety, evidence. A
+  // display-only re-sort of `patterns` (rankPatternsByPriority never mutates
+  // the source array), so the Impression's leading-pattern pick above
+  // (patterns[0], engine-ordered by confidence) is unaffected. ─────────────
+  if (patterns.length) {
+    const ranked = rankPatternsByPriority(patterns);
+    const patCap = capList(ranked, 8);
+    h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('patterns')}</div>
+      <div style="page-break-inside:avoid;break-inside:avoid">
+      <table class="pr-tbl"><colgroup><col style="width:12%"><col style="width:22%"><col style="width:66%"></colgroup><thead><tr><th>Priority</th><th>Pattern</th><th>Rationale &amp; management hint</th></tr></thead><tbody>
+        ${patCap.shown.map(p => { const m = patternPriorityMeta(p.strength || 0); return `<tr><td><span class="pr-pill" style="background:${bandBg(m.label === 'High' ? 'Severe' : m.label === 'Moderate' ? 'Mild–Moderate' : '')};font-size:9px">${esc(m.label)}</span></td><td><b>${esc(p.label)}</b></td><td>${esc(p.desc)}</td></tr>`; }).join('')}
+      </tbody></table>
+      ${patCap.extra ? `<div style="font-size:9px;color:#888;margin-top:2px">+${patCap.extra} further lower-priority pattern${patCap.extra > 1 ? 's' : ''}: ${esc(ranked.slice(8).map(p => p.label).join(', '))}.</div>` : ''}
+      ${(tri.patternOverlapNotes && tri.patternOverlapNotes.length) ? `<ul style="font-size:9.5px;color:#185FA5;padding-left:16px;margin:4px 0 0">${tri.patternOverlapNotes.map(n => `<li>🔗 ${esc(n)}</li>`).join('')}</ul>` : ''}
+      </div></div>`;
+  }
+
   // ============================================================
   // PAGE 2 — Assessment & clinical detail. The Tier verdict, reasons, and
   // care-track badges already led on page 1 (Section 1) — page 2 opens
@@ -5537,25 +5606,13 @@ function buildClinicianPrint(c, opts) {
   h += `<div class="pr-grp pr-page-break">Page 2 · Assessment &amp; clinical detail</div>`;
   const physio = physioCandidacy(tri);
 
-  // Interpretation — the reads behind the verdict: symptom patterns, the Rome IV
-  // bowel-pain estimate, the axis profile (each microbiome load's signals folded
-  // in beneath its own row), and the GSRS domain breakdown at section level (the
-  // per-cluster severity lives once, in the burden matrix on page 1).
+  // Interpretation — the reads behind the verdict: the Rome IV bowel-pain
+  // estimate, the axis profile (each microbiome load's signals folded in
+  // beneath its own row), and the GSRS domain breakdown at section level.
+  // Symptom patterns now lead page 1 (Patterns & mechanisms, ranked by
+  // priority) instead of repeating here; per-cluster severity lives once, in
+  // the burden matrix, also on page 1.
   h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('interp')}</div>`;
-
-  // Patterns — engine-ordered by priority then confidence, so the most actionable
-  // reads lead. Cap the printed table to the top 6 prominent patterns; any
-  // remainder is noted as a count rather than a full row (keeps the table scannable
-  // for complex patients where 8–10 patterns fire).
-  if (patterns.length) {
-    const patCap = capList(patterns, 6);
-    h += `<div style="margin-bottom:6px;page-break-inside:avoid;break-inside:avoid"><div style="font-weight:600;font-size:11px;margin-bottom:2px">Prominent patterns${patCap.extra ? ` (top 6 of ${patterns.length})` : ''}</div>
-      <table class="pr-tbl"><colgroup><col style="width:26%"><col style="width:74%"></colgroup><thead><tr><th>Pattern</th><th>Rationale</th></tr></thead><tbody>
-        ${patCap.shown.map(p => `<tr><td><b>${esc(p.label)}</b></td><td>${esc(p.desc)}</td></tr>`).join('')}
-      </tbody></table>
-      ${patCap.extra ? `<div style="font-size:9px;color:#888;margin-top:2px">+${patCap.extra} further lower-priority pattern${patCap.extra > 1 ? 's' : ''}: ${esc(patterns.slice(6).map(p => p.label).join(', '))}.</div>` : ''}
-      ${(tri.patternOverlapNotes && tri.patternOverlapNotes.length) ? `<ul style="font-size:9.5px;color:#185FA5;padding-left:16px;margin:4px 0 0">${tri.patternOverlapNotes.map(n => `<li>🔗 ${esc(n)}</li>`).join('')}</ul>` : ''}</div>`;
-  }
 
   // Rome IV — full criteria table only when answered; otherwise a single line, so
   // an unanswered Rome IV doesn't print five empty rows.
@@ -5717,6 +5774,13 @@ function buildClinicianPrint(c, opts) {
   }
   h += `</div>`;
 
+  // Suggested Actions — comes BEFORE the trend: a clinician reads the verdict
+  // (page 1) and the evidence (Interpretation / Context & drivers) and wants
+  // the action list next; the longitudinal trend is a look-back. Two columns:
+  // Investigations & Diagnostics (tests) and Management & Therapeutics
+  // (referrals, trials, therapies — physio candidacy folded in here).
+  h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('actions')}</div>${actionColumnsHtml(tri, physio)}</div>`;
+
   // Longitudinal trend — only rendered when there is a prior visit to compare
   // against (a single baseline visit has nothing to trend, so the section is
   // omitted rather than printed empty). Interventions per visit are overlaid so
@@ -5741,13 +5805,6 @@ function buildClinicianPrint(c, opts) {
     </div>`;
     h += `</div>`;
   }
-
-  // Suggested Actions — deliberately LAST on page 2: a clinician reads the
-  // verdict (page 1) and the evidence (Interpretation / Context & drivers)
-  // before the action list. Two columns: Investigations & Diagnostics (tests)
-  // and Management & Therapeutics (referrals, trials, therapies — physio
-  // candidacy folded in here, see actionColumnsHtml).
-  h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('actions')}</div>${actionColumnsHtml(tri, physio)}</div>`;
 
   // ============================================================
   // PAGE 3+ — appendix: full item-level questionnaire responses. Optional —
@@ -5876,26 +5933,22 @@ function renderClinician() {
 
   // ============================================================
   // PAGE 1 — Safety & acute presentation (mirrors the print hybrid layout):
-  // headline score, Triage tier + care-track badges, Red flags, then Clinical
-  // impression + Peak-symptom alert, then the burden matrix.
-  // The full investigations/management list lives in Suggested Actions on
-  // page 2 — page 1 carries only the verdict + the caveats that change it.
+  // KPI band, Triage tier + care-track badges, Red flags, then Clinical
+  // impression + Peak-symptom alert, the burden matrix, and the ranked
+  // patterns table. The full investigations/management list lives in
+  // Suggested Actions — page 1 carries only the verdict + what changes it.
   // ============================================================
   root.appendChild(el('div', { class: 'rpt-grp' }, 'Page 1 · At a glance'));
 
-  // Headline score — big number + band + confidence, stated ONCE (the impression
-  // below leads with the pattern, not a restatement of these).
-  const hero = el('div', { class: 'card' });
-  hero.appendChild(el('div', { class: 'hero' },
-    `<div><div class="big">${sv.index == null ? '—' : sv.index + '%'}</div><div class="sub">Gut Symptom Burden</div></div>
-     <div style="flex:1;min-width:160px">${sv.label ? `<span class="pill ${sv.cls || bandPillClass(sv.label)}">${esc(sv.label)}${sv.peakEscalated ? ' ↑' : ''}</span>` : ''}
-     <div class="conf-note">Confidence: <b>${esc(conf.level)}</b> · ${score.completeness}% complete</div></div>`));
-  // Only shown when the screen is genuinely incomplete — explains why the
-  // cards below may read as empty/dashed rather than looking like a broken
-  // report. Mirrors calc()'s equivalent caveat on the patient-facing screen.
-  if (score.completeness < 80) hero.appendChild(el('div', { class: 'prov-caveat' },
+  // KPI band — the four headline reads as a compact tile row (headlineCard's
+  // grid auto-fits into a band on wide screens), stated ONCE up top so the
+  // whole picture is visible before anything else. Confidence/completeness
+  // and the provisional caveat ride on the same card, just below the tiles.
+  const kpi = headlineCard(heads, rome);
+  kpi.appendChild(el('div', { class: 'conf-note' }, `Confidence: <b>${esc(conf.level)}</b> · ${score.completeness}% complete`));
+  if (score.completeness < 80) kpi.appendChild(el('div', { class: 'prov-caveat' },
     `Provisional result — ${score.completeness}% of scored items answered.`));
-  root.appendChild(hero);
+  root.appendChild(kpi);
 
   // Assessment & plan — triage verdict + care-track badges, leads page 1 (the
   // investigations/management list moved to Suggested Actions, at the end).
@@ -5945,6 +5998,15 @@ function renderClinician() {
   root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('burden')));
   root.appendChild(severityFrequencyCard(score, extras));
 
+  // Patterns & mechanisms — the full ranked list behind the Impression's
+  // single leading pattern above, ranked by clinical intensity (not
+  // data-confidence). Closes out page 1: verdict, safety, evidence.
+  const patCard = patternsMechanismsCard(c.patterns);
+  if (patCard) {
+    root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('patterns')));
+    root.appendChild(patCard);
+  }
+
   // ============================================================
   // PAGE 2 — Assessment & clinical detail. The tier verdict already led on
   // page 1 — page 2 opens straight into the evidence behind it (Interpretation:
@@ -5953,14 +6015,11 @@ function renderClinician() {
   // ============================================================
   root.appendChild(el('div', { class: 'rpt-grp' }, 'Page 2 · Assessment & clinical detail'));
 
-  // Interpretation — the reads behind the verdict: headline axis reads, axis
-  // profile, and GSRS domain/cluster breakdown. The Symptom x Dysbiosis-
-  // correlate quadrant card was removed — the Dysbiosis Correlate Load
-  // number in the headline card above now carries the same weighted E3 tier
-  // (High/Moderate/Low) as its pill colour, so an elevated correlate load is
-  // already highlighted there without a second card repeating it.
+  // Interpretation — the reads behind the verdict: axis profile and GSRS
+  // domain/cluster breakdown. The four-way headline now leads the report as
+  // the KPI band (page 1) instead of repeating here — the Dysbiosis Correlate
+  // Load number there already carries the weighted E3 tier as its pill colour.
   root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('interp')));
-  root.appendChild(headlineCard(heads, rome));
   root.appendChild(axisProfileCard(profile, heads));
   root.appendChild(domainBarsCard(score, true));   // full domain breakdown incl. GSRS cluster shape
 
@@ -5969,6 +6028,18 @@ function renderClinician() {
   // them into a two-column block).
   root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('context')));
   root.appendChild(modifiableDriversCard(driverExtras));
+
+  // Suggested Actions — comes BEFORE the trend: a clinician reads the verdict
+  // (page 1) and the evidence (Interpretation / Context & drivers) and wants
+  // the action list next; the longitudinal trend is a look-back, not part of
+  // deciding what to do this visit. Two columns: Investigations & Diagnostics,
+  // Management & Therapeutics (physiotherapy candidacy folded in).
+  root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('actions')));
+  const physio = physioCandidacy(tri);
+  const actionsCard = el('div', { class: 'card', style: 'border-left:6px solid #7A4A8C' });
+  actionsCard.appendChild(el('h2', {}, sectionTitle('actions')));
+  actionsCard.appendChild(el('div', {}, actionColumnsHtml(tri, physio)));
+  root.appendChild(actionsCard);
 
   // Longitudinal trend — editable interventions for this visit (post-intake),
   // overlaid on the trend below so symptom change reads against what was tried.
@@ -5982,17 +6053,6 @@ function renderClinician() {
   } else {
     if (prior.length >= 1) root.appendChild(trendCard(prior.concat([currentVisit()]), true));
   }
-
-  // Suggested Actions — deliberately LAST: a clinician reads the verdict
-  // (page 1) and the evidence (Interpretation / Context & drivers) before the
-  // action list. Two columns: Investigations & Diagnostics, Management &
-  // Therapeutics (physiotherapy candidacy folded in — a therapeutic referral).
-  root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('actions')));
-  const physio = physioCandidacy(tri);
-  const actionsCard = el('div', { class: 'card', style: 'border-left:6px solid #7A4A8C' });
-  actionsCard.appendChild(el('h2', {}, sectionTitle('actions')));
-  actionsCard.appendChild(el('div', {}, actionColumnsHtml(tri, physio)));
-  root.appendChild(actionsCard);
 
   // ============================================================
   // PAGE 3+ — Appendix: item-level responses, history & context, Rome IV

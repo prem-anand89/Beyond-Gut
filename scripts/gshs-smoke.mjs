@@ -427,37 +427,41 @@ ok(!/Screening synthesis only — not a diagnosis/.test(html), 'clinician: impre
 ok((html.match(/not a diagnosis or prescription\. Apply clinical judgement/g) || []).length === 2,
   'clinician: single "not a diagnosis" disclaimer at the end of each surface (print footer + on-screen closing note)');
 
-// Page-group headers + hero.
+// Page-group headers + KPI band.
 ok(/Page 1 · At a glance/.test(clSrc), 'clinician: Page 1 group header present');
 ok(/Page 2 · Assessment &amp; clinical detail/.test(clSrc), 'clinician: Page 2 group header present');
 ok(/Page 3\+ · Appendix/.test(clSrc), 'clinician: Page 3+ group header present');
-ok(/class="pr-hero"/.test(clSrc), 'clinician: headline score hero present in print');
+// Report restructure: the single-stat pr-hero was replaced by a 4-tile KPI
+// band (pr-kpi), mirroring the on-screen headlineCard()/kpi band.
+ok(/class="pr-kpi"/.test(clSrc), 'clinician: KPI band (4-tile) present in print');
 ok(clSrc.indexOf('Page 1 ·') < clSrc.indexOf('Page 2 ·') && clSrc.indexOf('Page 2 ·') < clSrc.indexOf('Page 3+ ·'),
   'clinician: the 3 pages appear in order');
 
 // Every section header present, sourced from REPORT_SECTIONS via sectionTitle(key).
 // (History & context + Modifiable drivers are now one 'context' section; 'trend'
 // only renders when a prior visit exists, so it may sit after 'context'.)
-['flags', 'impression', 'burden', 'plan', 'interp', 'context', 'trend', 'actions', 'appendix'].forEach(k => {
+['flags', 'impression', 'burden', 'patterns', 'plan', 'interp', 'context', 'trend', 'actions', 'appendix'].forEach(k => {
   ok(clSrc.includes(`sectionTitle('${k}')`), `clinician: ${k} section header present`);
 });
-// Sections appear in the intended order across the report — hybrid page-1 reorg
-// (item 8): plan (triage box + care-track badges) then flags lead page 1, then
-// impression (+ peak alert + clinical flags), then the burden matrix; page 2
-// opens with interp → context → trend → actions (last) → appendix.
-const secIdx = ['plan', 'flags', 'impression', 'burden', 'interp', 'context', 'trend', 'actions', 'appendix'].map(k => clSrc.indexOf(`sectionTitle('${k}')`));
+// Sections appear in the intended order across the report — report restructure:
+// plan (triage box + care-track badges) then flags lead page 1, then impression
+// (+ peak alert), the burden matrix, then patterns & mechanisms (ranked by
+// priority, closes page 1); page 2 opens with interp → context → actions (now
+// BEFORE the trend) → trend → appendix.
+const secIdx = ['plan', 'flags', 'impression', 'burden', 'patterns', 'interp', 'context', 'actions', 'trend', 'appendix'].map(k => clSrc.indexOf(`sectionTitle('${k}')`));
 ok(secIdx.every((v, i) => v >= 0 && (i === 0 || v > secIdx[i - 1])), 'clinician: sections appear in the intended order (plan → … → appendix)');
-// Page 1 is: hero → triage/plan + care-track badges → red flags → impression +
-// peak alert + clinical flags → burden matrix (LAST section before page-2 break).
-ok(clSrc.indexOf('class="pr-hero"') < clSrc.indexOf(`sectionTitle('plan')`), 'clinician: hero leads, ahead of the triage/plan box');
-ok(clSrc.indexOf(`sectionTitle('burden')`) < clSrc.indexOf('Page 2 ·'), 'clinician: burden matrix is the last page-1 section');
+// Page 1 is: KPI band → triage/plan + care-track badges → red flags →
+// impression + peak alert → burden matrix → patterns (LAST page-1 section).
+ok(clSrc.indexOf('class="pr-kpi"') < clSrc.indexOf(`sectionTitle('plan')`), 'clinician: KPI band leads, ahead of the triage/plan box');
+ok(clSrc.indexOf(`sectionTitle('burden')`) < clSrc.indexOf(`sectionTitle('patterns')`), 'clinician: burden matrix precedes patterns & mechanisms');
+ok(clSrc.indexOf(`sectionTitle('patterns')`) < clSrc.indexOf('Page 2 ·'), 'clinician: patterns & mechanisms is the last page-1 section');
 
 // REPORT_SECTIONS is the single source of truth both surfaces read from.
 const reportSecMatch = html.match(/const REPORT_SECTIONS = \{[\s\S]*?\n\};/);
 const reportSecSrc = reportSecMatch ? reportSecMatch[0] : '';
 ok(!!reportSecMatch, 'REPORT_SECTIONS constant defined (single source of truth for section titles)');
 [['flags', 'Red flags'], ['impression', 'Clinical impression'], ['burden', 'Symptom burden — severity × frequency'],
- ['plan', 'Assessment & plan'], ['interp', 'Interpretation'], ['context', 'Context & drivers'],
+ ['plan', 'Assessment & plan'], ['patterns', 'Patterns & mechanisms'], ['interp', 'Interpretation'], ['context', 'Context & drivers'],
  ['trend', 'Longitudinal trend'], ['actions', 'Suggested Actions'], ['appendix', 'Full item-level responses']].forEach(([k, title]) => {
   ok(reportSecSrc.includes(`${k}:`) && reportSecSrc.includes(`'${title}'`), `REPORT_SECTIONS.${k} === '${title}'`);
 });
@@ -468,11 +472,13 @@ ok(!/reportItemHeader|REPORT_ITEMS/.test(html), 'old numbered item-header scheme
 // physiotherapy candidacy all sit inside the plan section — no cross-page pointer.
 ok(clSrc.indexOf(`sectionTitle('plan')`) < clSrc.indexOf('pr-triage'), 'clinician: triage box sits inside the plan section');
 // Suggested Actions (2-column investigations/management) now sits in its own
-// 'actions' section at the END of page 2, after Context & drivers/trend — a
-// clinician reads the verdict + evidence before the action list (item 1).
+// 'actions' section right after Context & drivers, BEFORE the trend — a
+// clinician reads the verdict + evidence, wants the action list next, and
+// treats the trend as a look-back rather than part of "what to do now".
 ok(clSrc.indexOf(`sectionTitle('context')`) < clSrc.indexOf(`sectionTitle('actions')`)
-  && clSrc.indexOf(`sectionTitle('actions')`) < clSrc.indexOf('Page 3+'),
-  'clinician: Suggested Actions sits after Context & drivers, before the appendix');
+  && clSrc.indexOf(`sectionTitle('actions')`) < clSrc.indexOf(`sectionTitle('trend')`),
+  'clinician: Suggested Actions sits after Context & drivers, before the trend');
+ok(clSrc.indexOf(`sectionTitle('trend')`) < clSrc.indexOf('Page 3+'), 'clinician: trend sits before the appendix');
 ok(clSrc.indexOf('pr-triage') < clSrc.indexOf('Page 2 ·'), 'clinician: the triage/plan is on page 1 (hybrid reorg), not page 2');
 ok(!/are in item 6|item 6 \(/.test(clSrc), 'clinician: the old cross-page "see item 6" pointer is gone');
 // Readability trims (de-wall): "also consider" is tier-names-only (no per-pattern
@@ -497,12 +503,21 @@ ok(/capList\(group\.priority\.concat\(group\.consider\), 10\)/.test(html),
 // subtype/family add-ons, physiotherapy candidacy).
 ok(/investigationsRanked/.test(html) && /r\.rank === 0 \? bucket\.priority : bucket\.consider/.test(html),
   'clinician: Suggested Actions items are tagged Priority vs Also-consider by pattern rank');
-ok(/capList\(patterns, 6\)/.test(clSrc), 'clinician: patterns table capped to the top 6 prominent patterns');
+// Patterns table capped to top 8, ranked by priority (not confidence) — a
+// display-only re-sort (rankPatternsByPriority never mutates `patterns`, so
+// the Impression's leading-pattern pick above is unaffected).
+ok(/function rankPatternsByPriority\(patterns\)/.test(html) && /\(b\.strength \|\| 0\) - \(a\.strength \|\| 0\)/.test(html),
+  'rankPatternsByPriority() re-sorts by strength (intensity), not confidence');
+ok(/const ranked = rankPatternsByPriority\(patterns\);[\s\S]{0,60}capList\(ranked, 8\)/.test(clSrc),
+  'clinician: print patterns table is ranked by priority and capped to the top 8');
 ok(/function dedupeList\(arr\)/.test(html) && /function capList\(arr, n\)/.test(html), 'dedupeList/capList helpers defined');
 
-// Interpretation: patterns → Rome IV → axis & domain profile, in order.
-ok(clSrc.indexOf(`sectionTitle('interp')`) < clSrc.indexOf('Prominent patterns'), 'clinician: Patterns sits inside the interpretation section');
-ok(clSrc.indexOf('Prominent patterns') < clSrc.indexOf('>Axis &amp; domain profile<'), 'clinician: Patterns leads the Axis & domain profile');
+// Patterns & mechanisms (page 1, ranked by priority) leads Interpretation's
+// Rome IV → axis & domain profile, which now opens straight into Rome IV
+// (patterns no longer repeat inside Interpretation at all).
+ok(clSrc.indexOf(`sectionTitle('patterns')`) < clSrc.indexOf(`sectionTitle('interp')`), 'clinician: Patterns & mechanisms precedes Interpretation (promoted to page 1)');
+ok(!/Prominent patterns/.test(clSrc.slice(clSrc.indexOf(`sectionTitle('interp')`))),
+  'clinician: patterns table is not duplicated inside Interpretation');
 ok(clSrc.indexOf('Rome IV-informed bowel-pain pattern') < clSrc.indexOf('>Axis &amp; domain profile<'), 'clinician: Rome IV leads the Axis & domain profile');
 ok((clSrc.match(/sectionTitle\('burden'\)/g) || []).length === 1, 'clinician: burden matrix section renders exactly once');
 
@@ -604,34 +619,46 @@ ok(/manual\[- \]therapy|pelvic-floor/.test(physioSrc), 'physioCandidacy regex st
 const rcFn = html.match(/function renderClinician\(\)\s*\{[\s\S]*?\n\}\n/);
 ok(!!rcFn, 'renderClinician present');
 const rcSrc = rcFn ? rcFn[0] : '';
+// A small helper so an accidental `-1` (string not found) can never make an
+// ordering assertion vacuously pass — both indices must be real matches.
+const idxBoth = (a, b) => { const ia = rcSrc.indexOf(a), ib = rcSrc.indexOf(b); return ia >= 0 && ib >= 0 && ia < ib; };
 ok(/clinicalImpression\(c\)/.test(rcSrc), 'clinician tab: clinical impression added');
-ok(rcSrc.indexOf('clinicalImpression') < rcSrc.indexOf('headlineCard(heads'), 'clinician tab: impression above the headline');
 // Physio candidacy folded into the on-screen Suggested Actions card too (no
 // separate heading), same as print — see actionColumnsHtml.
 ok(/physioCandidacy\(tri\)/.test(rcSrc) && /actionColumnsHtml\(tri, physio\)/.test(rcSrc), 'clinician tab: physio candidacy folded into Suggested Actions');
 ok(/No red flags identified this visit/.test(rcSrc), 'clinician tab: foregrounded red-flags card (with none-reassurance)');
-ok(rcSrc.indexOf(`sectionTitle('flags')`) < rcSrc.indexOf('axisProfileCard'), 'clinician tab: red flags (page 1) before axis profile (page 2)');
-// Same hybrid page-1 layout mirrored on-screen (matches the print reorg):
-// page 1 = hero → Triage/plan + care-track badges → red flags → impression +
-// peak alert → burden matrix; page 2 opens with interpretation → context →
-// trend → Suggested Actions (last); page 3 is the appendix (which on-screen
-// also carries the history & context detail card).
+ok(idxBoth(`sectionTitle('flags')`, 'axisProfileCard'), 'clinician tab: red flags (page 1) before axis profile (page 2)');
+// Report structure (report restructure — KPI band + patterns-by-priority):
+// page 1 = KPI band (the four headline reads, promoted from Interpretation) →
+// Triage/plan + care-track badges → red flags → impression + peak alert →
+// burden matrix → patterns & mechanisms (ranked by priority); page 2 opens
+// with interpretation (axis/domain) → context → Suggested Actions (now
+// BEFORE the trend) → trend; page 3 is the appendix.
 ['Page 1 · At a glance', `sectionTitle('plan')`, `sectionTitle('flags')`,
- `sectionTitle('impression')`, `sectionTitle('burden')`,
+ `sectionTitle('impression')`, `sectionTitle('burden')`, `sectionTitle('patterns')`,
  'Page 2 · Assessment & clinical detail',
- `sectionTitle('interp')`, `sectionTitle('context')`, `sectionTitle('trend')`, `sectionTitle('actions')`,
+ `sectionTitle('interp')`, `sectionTitle('context')`, `sectionTitle('actions')`, `sectionTitle('trend')`,
  'Page 3+ · Appendix', `sectionTitle('appendix')`,
 ].forEach(txt => ok(rcSrc.includes(txt), `clinician tab: on-screen section header "${txt}" present`));
-ok(rcSrc.indexOf('class="hero"') < rcSrc.indexOf('triageCard(tri'), 'clinician tab: headline score hero leads, before the triage/plan card');
-ok(rcSrc.indexOf('triageCard(tri') < rcSrc.indexOf('rfCard'), 'clinician tab: triage/plan card precedes the red-flag card');
-ok(rcSrc.indexOf('rfCard') < rcSrc.indexOf('impCard'), 'clinician tab: red-flag card precedes the impression card');
-ok(rcSrc.indexOf('impCard') < rcSrc.indexOf('severityFrequencyCard'), 'clinician tab: impression precedes the burden matrix');
-ok(rcSrc.indexOf('severityFrequencyCard') < rcSrc.indexOf('Page 2 ·'), 'clinician tab: burden matrix is the last page-1 element');
-ok(rcSrc.indexOf(`sectionTitle('plan')`) < rcSrc.indexOf('triageCard(tri'), 'clinician tab: triage card sits inside the plan section');
-ok(rcSrc.indexOf(`sectionTitle('interp')`) < rcSrc.indexOf('headlineCard(heads'), 'clinician tab: headline/axis reads sit inside the interpretation section');
-ok(rcSrc.indexOf(`sectionTitle('context')`) < rcSrc.lastIndexOf('modifiableDriversCard'), 'clinician tab: modifiable-driver card sits inside the context section');
-ok(rcSrc.indexOf(`sectionTitle('actions')`) < rcSrc.indexOf('Page 3+'), 'clinician tab: Suggested Actions sits before the appendix');
-ok(rcSrc.indexOf('clinicianDetailCard(c)') > rcSrc.lastIndexOf(`sectionTitle('actions')`), 'clinician tab: clinicianDetailCard renders after Suggested Actions, under the appendix header');
+// KPI band leads the whole report — before Impression, before Triage.
+ok(idxBoth('const kpi = headlineCard(heads, rome)', 'clinicalImpression(c)'), 'clinician tab: KPI band (headlineCard) leads, before the impression');
+ok(idxBoth('const kpi = headlineCard(heads, rome)', 'triageCard(tri'), 'clinician tab: KPI band leads, before the triage/plan card');
+ok(idxBoth('triageCard(tri', 'rfCard'), 'clinician tab: triage/plan card precedes the red-flag card');
+ok(idxBoth('rfCard', 'impCard'), 'clinician tab: red-flag card precedes the impression card');
+ok(idxBoth('impCard', 'severityFrequencyCard'), 'clinician tab: impression precedes the burden matrix');
+ok(idxBoth('severityFrequencyCard', 'patternsMechanismsCard'), 'clinician tab: burden matrix precedes patterns & mechanisms');
+ok(idxBoth('patternsMechanismsCard', 'Page 2 ·'), 'clinician tab: patterns & mechanisms is the last page-1 element');
+ok(idxBoth(`sectionTitle('plan')`, 'triageCard(tri'), 'clinician tab: triage card sits inside the plan section');
+// The headline no longer repeats inside Interpretation (it now leads as the
+// KPI band) — Interpretation opens straight into the axis profile.
+ok(!/headlineCard\(heads, rome\)/.test(rcSrc.slice(rcSrc.indexOf(`sectionTitle('interp')`))),
+  'clinician tab: headlineCard is not duplicated inside the interpretation section');
+ok(idxBoth(`sectionTitle('interp')`, 'axisProfileCard'), 'clinician tab: interpretation opens with the axis profile (headline promoted to the KPI band)');
+ok(idxBoth(`sectionTitle('context')`, 'modifiableDriversCard'), 'clinician tab: modifiable-driver card sits inside the context section');
+// Suggested Actions now comes BEFORE the trend (was last).
+ok(idxBoth(`sectionTitle('actions')`, `sectionTitle('trend')`), "clinician tab: Suggested Actions sits before the trend (moved off 'last')");
+ok(idxBoth(`sectionTitle('trend')`, 'Page 3+'), 'clinician tab: trend sits before the appendix');
+ok(idxBoth(`sectionTitle('actions')`, 'clinicianDetailCard(c)'), 'clinician tab: clinicianDetailCard (appendix) renders after Suggested Actions');
 // De-dup — the buried red-flag block is gone from clinicianDetailCard.
 const cdFn = html.match(/function clinicianDetailCard\(c\)\s*\{[\s\S]*?\n\}\n/);
 ok(cdFn && !/Red flags — \$\{fired\.length\} answered Yes/.test(cdFn[0]), 'clinician detail: buried red-flag block removed (no duplication)');
@@ -1747,8 +1774,8 @@ ok(/@media\(max-width:520px\)\{\.opts\{grid-template-columns:repeat\(2,1fr\)\}\}
 
 // ── Clinician-tab provisional caveat (was calc()-only, screen looked broken
 // when incomplete since empty cards had no explanation) ──
-ok(/score\.completeness < 80\) hero\.appendChild\(el\('div', \{ class: 'prov-caveat' \}/.test(rcSrc),
-  'renderClinician() hero now shows the same conditional provisional caveat as calc() (only when completeness < 80)');
+ok(/score\.completeness < 80\) kpi\.appendChild\(el\('div', \{ class: 'prov-caveat' \}/.test(rcSrc),
+  'renderClinician() KPI band shows the same conditional provisional caveat as calc() (only when completeness < 80)');
 
 // ── Print page-1 trim: "Also noted" pattern-names line + Rome IV one-liner
 // removed from page 1; Clinical flags moved from page 1 to Context & drivers
