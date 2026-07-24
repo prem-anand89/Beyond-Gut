@@ -5489,7 +5489,6 @@ function buildClinicianPrint(c, opts) {
 
   const div = document.createElement('div');
   let h = `<div class="pr-logo">Enterro360 · Gut & Systemic Health Screen</div>
-    <div class="pr-title">Clinical Summary</div>
     <div class="pr-meta">
       Patient: <b>${esc(patName)}</b>${session.ref ? ` · Ref: ${esc(session.ref)}` : ''}<br>
       Age: ${esc(session.age || '—')} · Gender: ${esc(session.gender || '—')}${isPregnant ? ' · <b>Pregnant</b>' : ''}${isMinor ? ' · <b>Under 18</b>' : ''}<br>
@@ -5509,8 +5508,6 @@ function buildClinicianPrint(c, opts) {
   // The full plan text (reasons detail, investigations/management) lives on
   // page 2 — page 1 carries only the verdict + the caveats that change it.
   // ============================================================
-  h += `<div class="pr-grp">Page 1 · At a glance</div>`;
-
   // Headline score — big number + band + confidence, unmissable and stated ONCE
   // (the impression below leads with the pattern, not a restatement of these).
   // KPI band — the four headline reads as compact tiles, mirroring the
@@ -5622,7 +5619,7 @@ function buildClinicianPrint(c, opts) {
   // Suggested Actions (investigations & management), since a clinician reads
   // the evidence before the action list.
   // ============================================================
-  h += `<div class="pr-grp pr-page-break">Page 2 · Assessment &amp; clinical detail</div>`;
+  h += `<div class="pr-page-break"></div>`;
   const physio = physioCandidacy(tri);
 
   // Interpretation — the reads behind the verdict: the Rome IV bowel-pain
@@ -5868,7 +5865,7 @@ function buildClinicianPrint(c, opts) {
   // default 2-page print never carries it.
   // ============================================================
   if (includeAppendix) {
-    h += `<div class="pr-grp pr-page-break">Page 3+ · Appendix</div>`;
+    h += `<div class="pr-page-break"></div>`;
     h += `<div class="pr-section"><div class="pr-sh">${sectionTitle('appendix')}</div>
       <div style="font-size:9.5px;color:#888;font-style:italic;margin-bottom:6px">Reference — every item, exactly as answered.</div>
       <div style="column-count:2;column-gap:16px">`;
@@ -5993,8 +5990,6 @@ function renderClinician() {
   // patterns table. The full investigations/management list lives in
   // Suggested Actions — page 1 carries only the verdict + what changes it.
   // ============================================================
-  root.appendChild(el('div', { class: 'rpt-grp' }, 'Page 1 · At a glance'));
-
   // KPI band — the four headline reads as a compact tile row (headlineCard's
   // grid auto-fits into a band on wide screens), stated ONCE up top so the
   // whole picture is visible before anything else. Confidence/completeness
@@ -6068,8 +6063,6 @@ function renderClinician() {
   // patterns, Rome IV, axis profile, domain breakdown), then Context & drivers,
   // the longitudinal trend, and — last — Suggested Actions.
   // ============================================================
-  root.appendChild(el('div', { class: 'rpt-grp' }, 'Page 2 · Assessment & clinical detail'));
-
   // Interpretation — the reads behind the verdict: axis profile and GSRS
   // domain/cluster breakdown. The four-way headline now leads the report as
   // the KPI band (page 1) instead of repeating here — the Dysbiosis Correlate
@@ -6114,7 +6107,6 @@ function renderClinician() {
   // criteria, patterns, microbiome signals. Optional reference material —
   // everything actionable is already on pages 1–2.
   // ============================================================
-  root.appendChild(el('div', { class: 'rpt-grp' }, 'Page 3+ · Appendix'));
   root.appendChild(el('div', { class: 'grp-label' }, sectionTitle('appendix')));
   root.appendChild(clinicianDetailCard(c));
 

@@ -427,15 +427,18 @@ ok(!/Screening synthesis only — not a diagnosis/.test(html), 'clinician: impre
 ok((html.match(/not a diagnosis or prescription\. Apply clinical judgement/g) || []).length === 2,
   'clinician: single "not a diagnosis" disclaimer at the end of each surface (print footer + on-screen closing note)');
 
-// Page-group headers + KPI band.
-ok(/Page 1 · At a glance/.test(clSrc), 'clinician: Page 1 group header present');
-ok(/Page 2 · Assessment &amp; clinical detail/.test(clSrc), 'clinician: Page 2 group header present');
-ok(/Page 3\+ · Appendix/.test(clSrc), 'clinician: Page 3+ group header present');
+// Page-group headers removed (both surfaces): "Clinical Summary" as a
+// document title and the "Page 1/2/3 · ..." divider bars were dropped as
+// redundant chrome — the KPI band + section headers already say what's what,
+// and the single-continuous-document design doesn't need page numbering.
+// pr-page-break markers (invisible — no label/background) still force the
+// print PDF to break before Interpretation and before the Appendix.
+ok(!/Clinical Summary/.test(clSrc), 'clinician: "Clinical Summary" document-title line removed from print');
+ok(!/Page 1 · At a glance|Page 2 · Assessment|Page 3\+ · Appendix/.test(clSrc), 'clinician: "Page 1/2/3" divider wording removed from print');
+ok((clSrc.match(/class="pr-page-break"/g) || []).length === 2, 'clinician: print still forces 2 page breaks (before Interpretation, before Appendix), just without a visible label');
 // Report restructure: the single-stat pr-hero was replaced by a 4-tile KPI
 // band (pr-kpi), mirroring the on-screen headlineCard()/kpi band.
 ok(/class="pr-kpi"/.test(clSrc), 'clinician: KPI band (4-tile) present in print');
-ok(clSrc.indexOf('Page 1 ·') < clSrc.indexOf('Page 2 ·') && clSrc.indexOf('Page 2 ·') < clSrc.indexOf('Page 3+ ·'),
-  'clinician: the 3 pages appear in order');
 
 // Every section header present, sourced from REPORT_SECTIONS via sectionTitle(key).
 // (History & context + Modifiable drivers are now one 'context' section; 'trend'
@@ -451,10 +454,11 @@ ok(clSrc.indexOf('Page 1 ·') < clSrc.indexOf('Page 2 ·') && clSrc.indexOf('Pag
 const secIdx = ['plan', 'flags', 'impression', 'burden', 'patterns', 'interp', 'context', 'actions', 'trend', 'appendix'].map(k => clSrc.indexOf(`sectionTitle('${k}')`));
 ok(secIdx.every((v, i) => v >= 0 && (i === 0 || v > secIdx[i - 1])), 'clinician: sections appear in the intended order (plan → … → appendix)');
 // Page 1 is: KPI band → triage/plan + care-track badges → red flags →
-// impression + peak alert → burden matrix → patterns (LAST page-1 section).
+// impression + peak alert → burden matrix → patterns (LAST page-1 section,
+// i.e. immediately before the page-break marker that opens Interpretation).
 ok(clSrc.indexOf('class="pr-kpi"') < clSrc.indexOf(`sectionTitle('plan')`), 'clinician: KPI band leads, ahead of the triage/plan box');
 ok(clSrc.indexOf(`sectionTitle('burden')`) < clSrc.indexOf(`sectionTitle('patterns')`), 'clinician: burden matrix precedes patterns & mechanisms');
-ok(clSrc.indexOf(`sectionTitle('patterns')`) < clSrc.indexOf('Page 2 ·'), 'clinician: patterns & mechanisms is the last page-1 section');
+ok(clSrc.indexOf(`sectionTitle('patterns')`) < clSrc.indexOf(`sectionTitle('interp')`), 'clinician: patterns & mechanisms is the last page-1 section (precedes Interpretation)');
 
 // REPORT_SECTIONS is the single source of truth both surfaces read from.
 const reportSecMatch = html.match(/const REPORT_SECTIONS = \{[\s\S]*?\n\};/);
@@ -478,8 +482,8 @@ ok(clSrc.indexOf(`sectionTitle('plan')`) < clSrc.indexOf('pr-triage'), 'clinicia
 ok(clSrc.indexOf(`sectionTitle('context')`) < clSrc.indexOf(`sectionTitle('actions')`)
   && clSrc.indexOf(`sectionTitle('actions')`) < clSrc.indexOf(`sectionTitle('trend')`),
   'clinician: Suggested Actions sits after Context & drivers, before the trend');
-ok(clSrc.indexOf(`sectionTitle('trend')`) < clSrc.indexOf('Page 3+'), 'clinician: trend sits before the appendix');
-ok(clSrc.indexOf('pr-triage') < clSrc.indexOf('Page 2 ·'), 'clinician: the triage/plan is on page 1 (hybrid reorg), not page 2');
+ok(clSrc.indexOf(`sectionTitle('trend')`) < clSrc.indexOf(`sectionTitle('appendix')`), 'clinician: trend sits before the appendix');
+ok(clSrc.indexOf('pr-triage') < clSrc.indexOf(`sectionTitle('interp')`), 'clinician: the triage/plan is on page 1 (hybrid reorg), not page 2');
 ok(!/are in item 6|item 6 \(/.test(clSrc), 'clinician: the old cross-page "see item 6" pointer is gone');
 // Readability trims (de-wall): "also consider" is tier-names-only (no per-pattern
 // reason dump), and the triage box carries only action-modifying "Clinical flags"
@@ -628,17 +632,19 @@ ok(/clinicalImpression\(c\)/.test(rcSrc), 'clinician tab: clinical impression ad
 ok(/physioCandidacy\(tri\)/.test(rcSrc) && /actionColumnsHtml\(tri, physio\)/.test(rcSrc), 'clinician tab: physio candidacy folded into Suggested Actions');
 ok(/No red flags identified this visit/.test(rcSrc), 'clinician tab: foregrounded red-flags card (with none-reassurance)');
 ok(idxBoth(`sectionTitle('flags')`, 'axisProfileCard'), 'clinician tab: red flags (page 1) before axis profile (page 2)');
-// Report structure (report restructure — KPI band + patterns-by-priority):
-// page 1 = KPI band (the four headline reads, promoted from Interpretation) →
+// Report structure (report restructure — KPI band + patterns-by-priority).
+// "Page 1/2/3" divider wording was dropped (redundant chrome, single
+// continuous document) — same section order remains, just without labels.
+// KPI band (the four headline reads, promoted from Interpretation) →
 // Triage/plan + care-track badges → red flags → impression + peak alert →
-// burden matrix → patterns & mechanisms (ranked by priority); page 2 opens
-// with interpretation (axis/domain) → context → Suggested Actions (now
-// BEFORE the trend) → trend; page 3 is the appendix.
-['Page 1 · At a glance', `sectionTitle('plan')`, `sectionTitle('flags')`,
+// burden matrix → patterns & mechanisms (ranked by priority) → interpretation
+// (axis/domain) → context → Suggested Actions (now BEFORE the trend) →
+// trend → appendix.
+ok(!/Page 1 · At a glance|Page 2 · Assessment|Page 3\+ · Appendix/.test(rcSrc), 'clinician tab: "Page 1/2/3" divider wording removed on-screen');
+[`sectionTitle('plan')`, `sectionTitle('flags')`,
  `sectionTitle('impression')`, `sectionTitle('burden')`, `sectionTitle('patterns')`,
- 'Page 2 · Assessment & clinical detail',
  `sectionTitle('interp')`, `sectionTitle('context')`, `sectionTitle('actions')`, `sectionTitle('trend')`,
- 'Page 3+ · Appendix', `sectionTitle('appendix')`,
+ `sectionTitle('appendix')`,
 ].forEach(txt => ok(rcSrc.includes(txt), `clinician tab: on-screen section header "${txt}" present`));
 // KPI band leads the whole report — before Impression, before Triage.
 ok(idxBoth('const kpi = headlineCard(heads, rome)', 'clinicalImpression(c)'), 'clinician tab: KPI band (headlineCard) leads, before the impression');
@@ -647,7 +653,7 @@ ok(idxBoth('triageCard(tri', 'rfCard'), 'clinician tab: triage/plan card precede
 ok(idxBoth('rfCard', 'impCard'), 'clinician tab: red-flag card precedes the impression card');
 ok(idxBoth('impCard', 'severityFrequencyCard'), 'clinician tab: impression precedes the burden matrix');
 ok(idxBoth('severityFrequencyCard', 'patternsMechanismsCard'), 'clinician tab: burden matrix precedes patterns & mechanisms');
-ok(idxBoth('patternsMechanismsCard', 'Page 2 ·'), 'clinician tab: patterns & mechanisms is the last page-1 element');
+ok(idxBoth('patternsMechanismsCard', `sectionTitle('interp')`), 'clinician tab: patterns & mechanisms is the last page-1 element (precedes Interpretation)');
 ok(idxBoth(`sectionTitle('plan')`, 'triageCard(tri'), 'clinician tab: triage card sits inside the plan section');
 // The headline no longer repeats inside Interpretation (it now leads as the
 // KPI band) — Interpretation opens straight into the axis profile.
@@ -657,7 +663,7 @@ ok(idxBoth(`sectionTitle('interp')`, 'axisProfileCard'), 'clinician tab: interpr
 ok(idxBoth(`sectionTitle('context')`, 'modifiableDriversCard'), 'clinician tab: modifiable-driver card sits inside the context section');
 // Suggested Actions now comes BEFORE the trend (was last).
 ok(idxBoth(`sectionTitle('actions')`, `sectionTitle('trend')`), "clinician tab: Suggested Actions sits before the trend (moved off 'last')");
-ok(idxBoth(`sectionTitle('trend')`, 'Page 3+'), 'clinician tab: trend sits before the appendix');
+ok(idxBoth(`sectionTitle('trend')`, `sectionTitle('appendix')`), 'clinician tab: trend sits before the appendix');
 ok(idxBoth(`sectionTitle('actions')`, 'clinicianDetailCard(c)'), 'clinician tab: clinicianDetailCard (appendix) renders after Suggested Actions');
 // De-dup — the buried red-flag block is gone from clinicianDetailCard.
 const cdFn = html.match(/function clinicianDetailCard\(c\)\s*\{[\s\S]*?\n\}\n/);
@@ -1780,7 +1786,7 @@ ok(/score\.completeness < 80\) kpi\.appendChild\(el\('div', \{ class: 'prov-cave
 // ── Print page-1 trim: "Also noted" pattern-names line + Rome IV one-liner
 // removed from page 1; Clinical flags moved from page 1 to Context & drivers
 // (page 2) rather than appearing on both. ──
-const page1Src = html.slice(html.indexOf("h += `<div class=\"pr-grp\">Page 1"), html.indexOf('PAGE 2 — Assessment'));
+const page1Src = html.slice(html.indexOf('function buildClinicianPrint'), html.indexOf('PAGE 2 — Assessment'));
 ok(!/Also noted:/.test(page1Src), 'print page 1 no longer shows the "Also noted" extra-pattern-names line');
 ok(!/Rome IV:.*criteria met \(single-visit estimate\)/.test(page1Src), 'print page 1 no longer shows the Rome IV one-liner');
 ok(!/Clinical flags:/.test(page1Src), 'print page 1 no longer shows the Clinical flags list');
