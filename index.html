@@ -3854,9 +3854,11 @@ function paintWizard(steps) {
       btn.appendChild(el('span', { class: 'b' }, i < currentStep ? '✓' : String(i + 1)));
       btn.appendChild(el('span', { class: 'lb' }, esc(step.label)));
       if (i < n - 1) btn.appendChild(el('span', { class: 'ln' }));
-      // Allow jumping back to any completed step, or forward one at a time.
-      btn.disabled = i > currentStep;
-      btn.onclick = () => { if (i <= currentStep) goToStep(i, steps); };
+      // Every step is reachable directly — answers/reveal state persist across
+      // steps regardless of visit order, so there's no reason to force strict
+      // sequential Next/Back-only navigation (previously only completed steps
+      // + the current one were clickable).
+      btn.onclick = () => { if (i !== currentStep) goToStep(i, steps); };
       stepper.appendChild(btn);
     });
   }
@@ -5967,7 +5969,12 @@ function loadVisit(identity, visit, showResults) {
   session.pregnant = v.pregnant || '';
   session.followup = !!v.followup;
   loadedVisitId = v.id || null;  // save → update this record in-place
-  currentStep = 0;               // open a loaded visit at the first step
+  // Open a loaded visit at its LAST step, not the first — every step is
+  // already answered (it's a saved visit), so step 1 has no special claim,
+  // and landing there forced repeated Next-clicks just to reach results.
+  // The stepper itself is freely clickable (see paintWizard()), so earlier
+  // steps stay one click away for review/editing.
+  currentStep = Math.max(0, buildSteps().length - 1);
   render();
   // Populate lastCalc so the Clinician tab renders the summary on demand. We do
   // NOT call calc() here — that would append results under the editable form
