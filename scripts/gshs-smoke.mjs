@@ -1883,8 +1883,10 @@ ok(/i < currentStep \? 'done' : i === currentStep \? 'now' : ''/.test(pw),
   'stepper marks completed steps done, the current step now, the rest upcoming');
 ok(/i < currentStep \? '✓' : String\(i \+ 1\)/.test(pw),
   'completed steps show a tick, others show their number');
-ok(/btn\.disabled = i > currentStep/.test(pw),
-  'stepper only lets you jump to the current step or a completed one (no skipping ahead)');
+ok(!/btn\.disabled = i > currentStep/.test(pw),
+  'stepper no longer disables not-yet-reached steps (free jump, not sequential-only)');
+ok(/btn\.onclick = \(\) => \{ if \(i !== currentStep\) goToStep\(i, steps\); \}/.test(pw),
+  'every stepper chip is clickable and jumps directly to that step');
 // Contextual nav bar: Back names the previous step + is disabled on step 1;
 // Next names the next step, or becomes "View results" on the last step.
 ok(/const first = currentStep === 0, last = currentStep === n - 1/.test(pw),
@@ -1904,8 +1906,8 @@ ok(/\.gstep-empty/.test(pw) && /No questions in this section apply/.test(html),
 // State: currentStep is module-level, reset on a fresh questionnaire / loaded visit.
 ok(/let currentStep = 0;/.test(html), 'currentStep is module-level wizard state');
 ok(/function reset\(\) \{[\s\S]{0,200}currentStep = 0;/.test(html), 'reset() returns the wizard to step 1');
-ok(/loadedVisitId = v\.id \|\| null;[\s\S]{0,120}currentStep = 0;/.test(html),
-  'loadVisit() opens a loaded visit at the first step');
+ok(/loadedVisitId = v\.id \|\| null;[\s\S]{0,400}currentStep = Math\.max\(0, buildSteps\(\)\.length - 1\);/.test(html),
+  'loadVisit() opens a loaded visit at its LAST step (every step is already answered), not the first');
 
 // The de-blend invariant is presentation-agnostic, but re-confirm the wizard did
 // not smuggle any driver/frequency answer into the scored index. computeScores'
