@@ -2902,6 +2902,38 @@ function patientByRef(db, ref) {
   const key = String(ref).trim().toLowerCase();
   return (db.patients || []).find(p => p.ref && String(p.ref).trim().toLowerCase() === key) || null;
 }
+// ── Patient-level profile (flow-phase-1) ────────────────────────────────────
+// Static history — conditions, surgeries, family history, known labs, med
+// confounders — doesn't change visit to visit, but used to live only inside
+// each visit's `extras` and get wiped by reset() on every new visit for the
+// same patient. These fields hold the stable subset on the PATIENT record
+// instead, so a returning patient's history is remembered rather than
+// re-asked. Everything else in blankExtras() (bristol, pss4, lifestyle/sleep/
+// dys drivers, treatmentsTried, rome, weight/waist) genuinely varies visit to
+// visit and stays visit-scoped.
+const PROFILE_FIELDS = ['conditions', 'surgeries', 'surgeryOther', 'familyHistory', 'obstetric',
+  'knownLabs', 'knownLabsDetail', 'medsConfounders', 'medsOther', 'meds', 'heightCm'];
+function blankProfile() {
+  return { conditions: [], surgeries: [], surgeryOther: '', familyHistory: [], obstetric: [],
+    knownLabs: [], knownLabsDetail: {}, medsConfounders: [], medsOther: '',
+    meds: { abx: false, ppi: false, nsaid: false }, heightCm: null,
+    profileUpdatedAt: null, confirmedAt: null };
+}
+// Extract the stable subset from a visit's `extras` into a profile-shaped,
+// deep-cloned object (used both for migration and for save-time sync).
+function profileFromExtras(extras) {
+  const ex = extras || {};
+  const p = blankProfile();
+  PROFILE_FIELDS.forEach(f => { if (ex[f] !== undefined) p[f] = JSON.parse(JSON.stringify(ex[f])); });
+  return p;
+}
+// Apply a saved profile's stable fields onto a fresh visit `extras` object
+// (hydration on newVisitFor). Returns the same extras object, mutated.
+function applyProfile(extras, profile) {
+  const p = profile || {};
+  PROFILE_FIELDS.forEach(f => { if (p[f] !== undefined) extras[f] = JSON.parse(JSON.stringify(p[f])); });
+  return extras;
+}
 function normalise(db) {
   if (!db || !Array.isArray(db.patients)) return blankDB();
   const meta = { ...blankDB().meta, ...(db.meta || {}), schemaVersion: SCHEMA_VERSION };
@@ -2910,6 +2942,14 @@ function normalise(db) {
   let seq = meta.patientSeq || 0;
   for (const p of db.patients) {
     if (!p.code) { seq++; p.code = prefix + '-' + String(seq).padStart(4, '0'); }
+    // Migration: patients saved before profile persistence shipped get their
+    // profile backfilled from their latest visit's extras (stable fields
+    // only), so they aren't blank on first load after this update.
+    if (!p.profile) {
+      const visits = p.visits || [];
+      const last = visits[visits.length - 1];
+      p.profile = last ? profileFromExtras(last.extras) : blankProfile();
+    }
   }
   meta.patientSeq = seq;
   return { patients: db.patients, meta };
@@ -2936,6 +2976,7 @@ function mergeImport(currentDb, importedRaw) {
   return { db: cur, added: { patients: addedPatients, visits: addedVisits } };
 }
 __e.blankDB = blankDB; __e.loadDB = loadDB; __e.saveDB = saveDB; __e.uid = uid; __e.nextPatientCode = nextPatientCode; __e.sitePrefix = sitePrefix; __e.patientByRef = patientByRef; __e.exportDB = exportDB; __e.mergeImport = mergeImport; __e.checkStorageQuota = checkStorageQuota;
+__e.blankProfile = blankProfile; __e.profileFromExtras = profileFromExtras; __e.applyProfile = applyProfile; __e.normalise = normalise;
 
 // ── PILOT / RESEARCH EXPORT ──────────────────────────────────────────────────
 // De-identified, schema-driven CSV: one row per visit, one column per item +
@@ -3070,7 +3111,7 @@ const GI_CLUSTER_FREQ_LABELS = {
   Constipation: 'Constipation or hard stools',
 };
 const { RED_FLAGS, anyRedFlag, firedRedFlags, RED_FLAG_BANNER, RF_URGENCY_META, topUrgency, firedByUrgency } = __req('redflags.js');
-const { el, esc, toast, patientForm, syncHeaderHeight } = __req('util.js');
+const { el, esc, fmtDate, toast, patientForm, syncHeaderHeight } = __req('util.js');
 const Store = __req('storage.js');
 const { detectPatterns } = __req('patterns.js');
 const { triage } = __req('triage.js');
@@ -3117,8 +3158,16 @@ let session = { name: '', age: '', gender: '', ref: '', followup: false, pregnan
 let lastCalc = null;       // cached result from the most recent calc(); used by print functions
 let loadedVisitId = null;  // set when a saved visit is loaded; saveVisit() updates it in-place
 let currentStep = 0;       // guided-steps wizard: index of the visible step (0-based)
+// Profile persistence (flow-phase-1): set by newVisitFor() when a returning
+// patient's stable history was hydrated from their patient record, so the
+// About/history step can show a "pre-filled from last visit" banner instead
+// of blank cards. profileConfirmedThisVisit is set by the banner's "No
+// changes" tap and read back by saveVisit() to update profile.confirmedAt.
+let profileHydrated = false;
+let profileConfirmedThisVisit = false;
+let hydratedProfile = null; // the Store.profile object used to hydrate, for the banner's date display
 
-function reset() { answers = {}; redflags = {}; extras = blankExtras(); session.followup = false; loadedVisitId = null; currentStep = 0; }
+function reset() { answers = {}; redflags = {}; extras = blankExtras(); session.followup = false; loadedVisitId = null; currentStep = 0; profileHydrated = false; profileConfirmedThisVisit = false; hydratedProfile = null; }
 
 // The patient's linking key: reference code if given, else name (so name-only
 // clinicians still get visit linking + trends).
@@ -3220,6 +3269,15 @@ function saveVisit() {
   patient.age = (session.age || '').trim() || patient.age || '';
   patient.gender = session.gender || patient.gender || '';
   if (ref) patient.ref = ref;
+  // Sync the stable history back onto the patient profile so next visit
+  // hydrates from THIS save (edits made this visit become the new baseline).
+  // confirmedAt only advances when the patient explicitly tapped "No
+  // changes" on the hydration banner; profileUpdatedAt advances on every save.
+  const priorConfirmedAt = (patient.profile && patient.profile.confirmedAt) || null;
+  patient.profile = Object.assign(Store.profileFromExtras(extras), {
+    profileUpdatedAt: Date.now(),
+    confirmedAt: profileConfirmedThisVisit ? Date.now() : priorConfirmedAt,
+  });
   const saved = Store.saveDB(db);
   if (!saved) throw new Error('Storage write failed — response was not saved.');
   // After a successful update the visit is no longer "dirty" — keep loadedVisitId
@@ -3693,10 +3751,33 @@ function trendCard(visits, markLastUnsaved) {
 // step containers that show one at a time). `showIf` lets a step drop out
 // entirely when it can never hold content (e.g. no red flags in the schema);
 // steps are numbered over the SURVIVING list so hidden steps don't leave gaps.
+// Shown at the top of the About/history step when newVisitFor() hydrated the
+// patient's saved profile — the chip cards below are already pre-filled, and
+// this banner makes that visible instead of looking like a silent pre-check.
+// "No changes" just records a confirmation timestamp; it does not hide the
+// cards (that collapsed-by-default treatment is Phase 2a's job once the
+// About/history step is actually split).
+function profileBanner() {
+  const date = fmtDate((hydratedProfile && (hydratedProfile.confirmedAt || hydratedProfile.profileUpdatedAt)) || null);
+  const card = el('div', { class: 'sec-card', style: 'border-left:4px solid var(--ok)' });
+  const body = el('div', { class: 'sec-body', style: 'display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap' });
+  body.appendChild(el('div', { class: 'q-sub' }, `Background pre-filled from your last visit (confirmed ${esc(date)}). Update anything below that's changed.`));
+  const btn = el('button', { class: 'btn btn-gh', type: 'button' }, '✓ No changes');
+  btn.onclick = () => {
+    confirmProfileUnchanged();
+    btn.disabled = true; btn.textContent = 'Confirmed ✓';
+  };
+  body.appendChild(btn);
+  card.appendChild(body);
+  return card;
+}
+function confirmProfileUnchanged() { profileConfirmedThisVisit = true; toast('Got it — using your saved background.'); }
+
 function buildSteps() {
   const steps = [
     { id: 'about', label: 'About & history', sub: 'Anthropometrics, conditions & family/surgical history',
       build(c) {
+        if (profileHydrated) c.appendChild(profileBanner());
         c.appendChild(el('div', { class: 'grp-label', style: 'margin:2px 2px 2px' }, 'Anthropometrics'));
         c.appendChild(anthropometricsCard());
         c.appendChild(el('div', { class: 'grp-label', style: 'margin:12px 2px 2px' }, 'History'));
@@ -5938,6 +6019,15 @@ function newVisitFor(identity, followup) {
   session.ref = id.ref || '';
   session.pregnant = id.pregnant || ''; // clear on each new patient; not stored in patient record
   session.followup = !!followup;
+  // Hydrate stable history (conditions/surgeries/labs/family/meds-confounders)
+  // from the patient's saved profile, if one exists, so a returning patient
+  // doesn't re-enter it from scratch every visit.
+  const existing = findPatient(Store.loadDB());
+  if (existing && existing.profile) {
+    extras = Store.applyProfile(extras, existing.profile);
+    profileHydrated = true;
+    hydratedProfile = existing.profile;
+  }
   render();
 }
 
@@ -5950,6 +6040,10 @@ function loadVisit(identity, visit, showResults) {
   const id = identity || {}, v = visit || {};
   answers = { ...(v.answers || {}) };
   redflags = { ...(v.redflags || {}) };
+  // This visit's own extras already hold its real recorded values — not a
+  // fresh hydration from the patient profile — so the "pre-filled" banner
+  // from newVisitFor() must not carry over into an edited/viewed visit.
+  profileHydrated = false; hydratedProfile = null; profileConfirmedThisVisit = false;
   // Re-hydrate extras onto a fresh blank so visits saved on an older schema
   // (missing newer nested keys) still render every driver.
   const saved = v.extras ? JSON.parse(JSON.stringify(v.extras)) : {};
@@ -6159,6 +6253,7 @@ function init(c) { nav = c || {}; }
 __e.init = init; __e.reset = reset; __e.render = render; __e.newVisitFor = newVisitFor;
 __e.loadVisit = loadVisit; __e.renderClinician = renderClinician;
 __e.clearPatient = clearPatient;
+__e.saveVisit = saveVisit; // exported for flow-phase-1 browser verification (scripts/verify-profile-persistence.mjs); the in-app Save button still calls it directly as before
 return __e;
 };
 
@@ -6188,6 +6283,8 @@ function patientMeta(p) {
   if (p.age) bits.push('Age ' + esc(String(p.age)));
   if (p.gender) bits.push(esc(p.gender));
   if (p.ref) bits.push('Ref: ' + esc(p.ref));
+  const updated = p.profile && p.profile.profileUpdatedAt;
+  if (updated) bits.push('Profile last updated ' + esc(fmtDate(updated)));
   return bits.join(' · ');
 }
 

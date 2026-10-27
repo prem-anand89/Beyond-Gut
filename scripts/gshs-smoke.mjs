@@ -108,6 +108,55 @@ ok(storage.nextPatientCode(dbDefault).startsWith('BMG-'), 'default patient code 
 const dbSite = storage.blankDB(); dbSite.meta.siteCode = 'clina';
 ok(storage.nextPatientCode(dbSite).startsWith('CLINA-'), 'site code prefixes patient IDs (upper-cased)');
 
+// 8b. Patient-level profile persistence (flow-phase-1): stable history
+// (conditions/surgeries/labs/family/med-confounders) survives on the patient
+// record instead of being wiped on every newVisitFor()/reset().
+{
+  const extrasWithHistory = {
+    conditions: ['autoimmune', 'ibs'], surgeries: ['appendix'], surgeryOther: 'Appendectomy 2019',
+    familyHistory: ['fh_ibd'], obstetric: [], knownLabs: ['vitamins'], knownLabsDetail: { vitamins: 'B12 low' },
+    medsConfounders: ['nsaid'], medsOther: 'Occasional ibuprofen', meds: { abx: false, ppi: true, nsaid: true },
+    heightCm: 170,
+    // visit-varying fields that must NOT leak into the profile
+    bristol: 4, pss4: [1, 2, 3, 4], treatmentsTried: ['probiotic'],
+  };
+  const prof = storage.profileFromExtras(extrasWithHistory);
+  ok(JSON.stringify(prof.conditions) === JSON.stringify(['autoimmune', 'ibs']), 'profileFromExtras() carries conditions');
+  ok(JSON.stringify(prof.surgeries) === JSON.stringify(['appendix']) && prof.surgeryOther === 'Appendectomy 2019', 'profileFromExtras() carries surgical history');
+  ok(prof.knownLabsDetail.vitamins === 'B12 low', 'profileFromExtras() carries known-lab free-text detail');
+  ok(prof.meds.ppi === true && prof.meds.nsaid === true, 'profileFromExtras() carries chronic meds flags');
+  ok(prof.heightCm === 170, 'profileFromExtras() carries height');
+  ok(prof.bristol === undefined && prof.pss4 === undefined && prof.treatmentsTried === undefined,
+    'profileFromExtras() does NOT carry visit-varying fields (bristol/pss4/treatmentsTried stay visit-scoped)');
+
+  const freshExtras = { conditions: [], surgeries: [], meds: { abx: false, ppi: false, nsaid: false }, bristol: null };
+  storage.applyProfile(freshExtras, prof);
+  ok(JSON.stringify(freshExtras.conditions) === JSON.stringify(['autoimmune', 'ibs']), 'applyProfile() hydrates conditions onto a fresh extras object');
+  ok(freshExtras.meds.ppi === true, 'applyProfile() hydrates chronic meds flags');
+  ok(freshExtras.bristol === null, 'applyProfile() leaves visit-varying fields (bristol) untouched');
+
+  // Migration: a patient saved before profile persistence shipped (no
+  // p.profile) must be backfilled from their latest visit's extras, not left
+  // blank, when normalise() runs.
+  const legacyDb = { patients: [{ id: 'p1', code: 'BMG-0001', visits: [
+    { id: 'v1', date: 1, extras: { conditions: ['ibs'] } },
+    { id: 'v2', date: 2, extras: extrasWithHistory },
+  ] }], meta: {} };
+  const migrated = storage.normalise(legacyDb);
+  const mp = migrated.patients[0].profile;
+  ok(!!mp, 'normalise() backfills a missing patient.profile');
+  ok(JSON.stringify(mp.conditions) === JSON.stringify(['autoimmune', 'ibs']), 'normalise() backfills profile from the LATEST visit, not the first');
+
+  // A patient with no visits at all still gets a well-formed blank profile.
+  const noVisitsDb = { patients: [{ id: 'p2', code: 'BMG-0002', visits: [] }], meta: {} };
+  const mp2 = storage.normalise(noVisitsDb).patients[0].profile;
+  ok(!!mp2 && Array.isArray(mp2.conditions) && mp2.conditions.length === 0, 'normalise() gives a patient with no visits a blank (not missing) profile');
+
+  // Idempotence: normalise() must not clobber a profile that's already there.
+  const hasProfileDb = { patients: [{ id: 'p3', code: 'BMG-0003', visits: [], profile: Object.assign(storage.blankProfile(), { conditions: ['celiac'] }) }], meta: {} };
+  ok(storage.normalise(hasProfileDb).patients[0].profile.conditions[0] === 'celiac', 'normalise() does not overwrite an existing patient.profile');
+}
+
 // 9. PSS-4 reverse-scoring metadata present (drives the colour fix).
 ok(Array.isArray(scales.PSS4_REVERSED) && scales.PSS4_REVERSED.length === 4 && scales.PSS4_REVERSED[1] === true && scales.PSS4_REVERSED[2] === true, 'PSS-4 reverse-scored items flagged (2 & 3)');
 
@@ -1990,6 +2039,33 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
   ok(/tri\.redFlagUrgency/.test(s), 'schedulingPriorityHtml() branches on redFlagUrgency instead of blanket-assuming a red flag');
   ok(/no safety red flag present/.test(s),
     'schedulingPriorityHtml() gives a priority-referral message (not same-day) when Tier 1 fired without any red flag');
+}
+
+// ── Profile-persistence UI wiring (flow-phase-1) ────────────────────────────
+// The engine-level behaviour is covered above via the real storage.js
+// functions; these are source checks on the UI glue that calls them, since
+// newVisitFor/saveVisit/the banner touch module-level DOM state the DOM-free
+// harness above doesn't instantiate.
+{
+  const nvfFn = html.match(/function newVisitFor\(identity, followup\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!nvfFn, 'sanity: newVisitFor() function body captured');
+  ok(/Store\.applyProfile\(extras, existing\.profile\)/.test(nvfFn[0]), 'newVisitFor() hydrates extras from the found patient\'s saved profile');
+  ok(/profileHydrated = true/.test(nvfFn[0]), 'newVisitFor() flags profileHydrated when hydration occurs');
+
+  const svFn = html.match(/function saveVisit\(\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!svFn, 'sanity: saveVisit() function body captured');
+  ok(/Store\.profileFromExtras\(extras\)/.test(svFn[0]), 'saveVisit() syncs the stable subset of extras back onto patient.profile');
+  ok(/profileConfirmedThisVisit \? Date\.now\(\) : priorConfirmedAt/.test(svFn[0]), 'saveVisit() only advances confirmedAt when the patient tapped "No changes"');
+
+  const lvFn = html.match(/function loadVisit\(identity, visit, showResults\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!lvFn, 'sanity: loadVisit() function body captured');
+  ok(/profileHydrated = false; hydratedProfile = null;/.test(lvFn[0]), 'loadVisit() clears the hydration banner state — an edited saved visit is not a fresh hydration');
+
+  const bannerFn = html.match(/function profileBanner\(\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!bannerFn, 'sanity: profileBanner() function body captured');
+  ok(/fmtDate\(/.test(bannerFn[0]), 'profileBanner() shows a formatted confirmation date');
+
+  ok(/function patientMeta\(p\)\s*\{[\s\S]*?profileUpdatedAt[\s\S]*?\n\}\n/.test(html), 'Records patientMeta() surfaces profile.profileUpdatedAt on the patient card');
 }
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');

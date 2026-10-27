@@ -21,6 +21,7 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         launchArgs: ['--disable-blink-features=AutomationControlled'],
+        launchOptions: { executablePath: '/opt/pw-browsers/chromium' },
       },
     },
   ],
