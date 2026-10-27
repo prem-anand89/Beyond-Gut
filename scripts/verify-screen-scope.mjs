@@ -67,13 +67,36 @@ async function main() {
   });
   ok(gsrsStillAnswered, 'the GSRS answer given before expanding is still selected after expanding — no data loss');
 
-  // 3) Results still compute cleanly in Gut mode (fresh session, no expand).
-  const gutResults = await page.evaluate(() => {
+  // 3) flow-phase-3.1 honesty fix, end-to-end: answer EVERY question a fresh
+  //    Gut Quick Screen actually shows (Safety's red flags + every GSRS/IMP
+  //    item), then view results — completeness must read 100%, not a
+  //    "Provisional result" caused by IM/BG/NU mandatory items that were
+  //    never shown counting as missing.
+  await page.evaluate(() => {
     const P = window.__req('ui-patient.js');
     P.newVisitFor({}, false);
-    return true;
   });
-  ok(gutResults, 'a fresh Gut Quick Screen session renders without throwing');
+  await page.waitForTimeout(30);
+  // Safety step: click "No" for every red-flag row (first .opt in each group).
+  await page.evaluate(() => {
+    document.querySelectorAll('#gstep-safety .opts').forEach(g => g.querySelector('.opt')?.click());
+  });
+  await page.locator('#gstepper .step', { hasText: 'Gut symptoms' }).click();
+  await page.waitForTimeout(30);
+  // Gut step: click the first option in every visible scale group (GSRS +
+  // IMP; Bristol/cluster-freq/pain/Rome cards use different widgets and are
+  // either optional or reveal-gated, so they're intentionally left alone —
+  // the completeness denominator never required them in the first place).
+  await page.evaluate(() => {
+    document.querySelectorAll('#gstep-gut .opts').forEach(g => g.querySelector('.opt')?.click());
+  });
+  await page.waitForTimeout(30);
+  await page.locator('button', { hasText: 'View results' }).click();
+  await page.waitForTimeout(100);
+
+  const resultsText = await page.evaluate(() => document.querySelector('#patient-results')?.textContent || '');
+  ok(/100% complete/.test(resultsText), `a fully-answered Gut Quick Screen reads 100% complete on the actual results screen (snippet: ${(resultsText.match(/\d+% complete/) || ['<none found>'])[0]})`);
+  ok(!/Provisional result/.test(resultsText), 'a fully-answered Gut Quick Screen does NOT show the "Provisional result" caveat');
 
   if (errors.length) { console.log('Page errors:', errors); failed += errors.length; }
 

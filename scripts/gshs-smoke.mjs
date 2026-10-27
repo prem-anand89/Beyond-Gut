@@ -1154,12 +1154,15 @@ ok(rome34h_toorecent.criteriaMet === false, 'classifyRomeIV onset-not-met correc
 const rome34h_explicit = rome.classifyRomeIV({ painFreq: 5, onset: 4, rm_assoc_defecation: true, rm_assoc_freqchange: true }, {}, 0);
 ok(rome34h_explicit.criteriaMet === true, 'explicit rome.onset still takes priority over sx_duration fallback when both present');
 
-// 34i. CSV export's computeScores(a) call takes only answers — bristol/
+// 34i. trend.js's visitScore() computeScores(a, ...) call — bristol/
 // clusterFreq/romePainFreq never fed the Index (a leftover `opts` param that
-// was silently unused; removed as dead code). Recomputation now can't diverge
-// on those fields because there's nothing left for it to diverge on.
-ok(/const sc = computeScores\(a\)/.test(html), 'CSV export computeScores() call takes only answers (no unused opts)');
-ok(!/function computeScores\(answers, opts\)/.test(html), 'computeScores() no longer declares the unused opts parameter');
+// carried them was unused dead code, removed). The only second argument
+// computeScores() takes now is `scope` (flow-phase-3.1, completeness-only —
+// see check below), carrying the VISIT's own saved screenScope so a Gut
+// Quick Screen visit's trend/CSV recompute doesn't drift from the live
+// score shown at the time (never bristol/clusterFreq/romePainFreq again).
+ok(/const sc = computeScores\(a, v\.screenScope\)/.test(html), "trend.js's computeScores() call takes answers + the visit's own screenScope, nothing else");
+ok(!/function computeScores\(answers, opts\)/.test(html), 'computeScores() does not carry back the old dead opts (bristol/clusterFreq) parameter');
 
 // A5/A9 CSV regression. Header/row column-count parity, medsOther surfaced,
 // formula-injection guard, no literal "null" for a core-skipped visit, and
@@ -2112,6 +2115,49 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
     'renderClinician() (on-screen) shows the gut-only caveat');
   ok(/GUT_SCOPE_CAVEAT/.test(html.match(/function buildClinicianPrint\(c, opts\)\s*\{[\s\S]*?\n(?=function )/)[0]),
     'buildClinicianPrint() (print/PDF) shows the same gut-only caveat');
+}
+
+// ── Gut Quick Screen reporting honesty (flow-phase-3.1) ────────────────────
+// Two confirmed bugs in the first Phase-3 cut: (1) completeness counted every
+// mandatory question across ALL sections, so a fully-answered gut-only visit
+// showed as ~56% complete/provisional — false. (2) Disruption Load and
+// Dysbiosis Correlate Load are array-length counts off meds/surgery/dys
+// signals that are simply absent in gut scope, so they rendered a confident
+// "Low" pill (reads as "assessed, clear") instead of "not assessed".
+{
+  const allGI = Object.fromEntries(schema.QUESTIONS.filter(q => q.section === 'GI' && !q.driverOnly).map(q => [q.id, 2]));
+  const allIMP = Object.fromEntries(schema.QUESTIONS.filter(q => q.section === 'IMP').map(q => [q.id, 1]));
+  const gutOnlyAnswers = { ...allGI, ...allIMP }; // every question Gut mode actually shows, fully answered
+
+  const fullScoped = scoring.computeScores(gutOnlyAnswers, 'full');
+  ok(fullScoped.completeness < 80, `sanity: scoring the SAME answers with scope 'full' still shows low completeness (got ${fullScoped.completeness}%) — proves the bug would reproduce without the fix`);
+
+  const gutScoped = scoring.computeScores(gutOnlyAnswers, 'gut');
+  ok(gutScoped.completeness === 100, `scope:'gut' completeness is 100% when every Gut-mode question is answered (got ${gutScoped.completeness}%) — IM/BG/NU blanks no longer count against it`);
+
+  const noScope = scoring.computeScores(gutOnlyAnswers);
+  ok(noScope.completeness === fullScoped.completeness, 'computeScores() with no scope argument behaves exactly as before (defaults to full/unscoped) — no behavior change for existing callers');
+
+  // Disruption/Correlate hiding: with zero meds/surgery/dys data (exactly
+  // what a gut-only visit has), scope:'gut' must drop both tiles from
+  // primaryList; scope:'full' (or omitted) keeps today's behavior.
+  const emptyEx = { meds: { abx: false, ppi: false, nsaid: false }, surgeries: [], dys: {} };
+  const headsGut = scoring.headlineOutputs(gutScoped, emptyEx, { signals: [] }, 'gut');
+  ok(headsGut.primaryList.length === 2, `scope:'gut' headlineOutputs() primaryList has only 2 tiles (Symptom, Nutrient), got ${headsGut.primaryList.length}`);
+  ok(!headsGut.primaryList.some(t => t.key === 'disruption_load' || t.key === 'dysbiosis_correlate_load'),
+    "scope:'gut' primaryList never includes Disruption Load or Dysbiosis Correlate Load");
+
+  const headsFull = scoring.headlineOutputs(fullScoped, emptyEx, { signals: [] }, 'full');
+  ok(headsFull.primaryList.length === 4, `scope:'full' headlineOutputs() primaryList keeps all 4 tiles, got ${headsFull.primaryList.length}`);
+  ok(headsFull.primary.disruption.band === 'Low', "scope:'full' still shows the (correct, since this IS full mode) Disruption Load 'Low' pill when genuinely assessed-and-clear");
+
+  // Source-level: every live-session call site threads session.screenScope
+  // through, so the fix actually reaches the on-screen/print results, not
+  // just the engine function in isolation.
+  ok(/computeScores\(answerArr, session\.screenScope\)/.test(html), 'computeAll() (live results) passes session.screenScope into computeScores()');
+  ok(/computeScores\(arr, session\.screenScope\)/.test(html), 'buildScoreSnapshot() (save-time freeze) passes session.screenScope into computeScores()');
+  ok(/headlineOutputs\(score, driverExtras, lens, session\.screenScope\)/.test(html), 'computeAll() passes session.screenScope into headlineOutputs()');
+  ok(/const live = computeScores\(a, v\.screenScope\)/.test(html), "pilotExportCSV()'s per-visit recompute uses that VISIT's own screenScope, not the live session's");
 }
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');

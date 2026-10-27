@@ -1499,12 +1499,25 @@ function bristolTransit(b) {
 // balanced index below is auditable at a glance.
 const GI_CLUSTERS = ['Reflux', 'Pain', 'Indigestion', 'Diarrhoea', 'Constipation'];
 
+// Sections a visit could actually have been asked, by screenScope (flow-
+// phase-3.1 completeness fix). A Gut Quick Screen visit never shows IM/BG/NU
+// — their mandatory items being blank is not incompleteness, it's a module
+// that was never offered. Full mode is unchanged (every section counts, same
+// as before screenScope existed). Exported so other completeness-adjacent
+// code (headline tiles) can reuse the same definition instead of re-deriving it.
+const SCOPE_SECTIONS = { gut: ['GI', 'IMP'] }; // 'full' (or any other value) = no filtering, all sections count
+function inScopeSections(scope) { return SCOPE_SECTIONS[scope] || null; }
+
 // answers: id-map OR positional array. `opts` no longer carries Bristol/
 // frequency nudge inputs — they were decoupled from the Index (Bristol now
 // feeds Rome IV subtyping only; frequency feeds the read-only Tranche G
 // severity×frequency widget only, reading extras.clusterFreq directly).
-function computeScores(answers) {
+// `scope` ('gut' | 'full', default 'full') narrows which sections count
+// toward the completeness denominator — see inScopeSections() above. It
+// never touches the Index/clusterNorm (already GI-only regardless).
+function computeScores(answers, scope) {
   const raw = Array.isArray(answers) ? (id) => answers[QID[id]] : (id) => answers[id];
+  const scopedSections = inScopeSections(scope);
 
   // GSRS-cluster aggregation — co-design output: per-cluster norms feed the
   // per-cluster bars on results and the pattern engine. Computed only over
@@ -1539,7 +1552,10 @@ function computeScores(answers) {
     bands[sec.id] = maxSum ? Math.min(3, Math.floor(sum / maxSum * 4)) : 0;
     const norm = maxSum > 0 ? sum / maxSum : null; // domain MEAN over APPLICABLE items, 0–1
     secNorm[sec.id] = norm;
-    scoredItems += denom; answeredItems += n;
+    // A section the current scope never offers (e.g. IM/BG/NU in a Gut Quick
+    // Screen) doesn't count toward completeness — its mandatory items being
+    // blank is "not assessed", not "incomplete".
+    if (!scopedSections || scopedSections.includes(sec.id)) { scoredItems += denom; answeredItems += n; }
   }
 
   // ── Cluster-balanced GI core index ──────────────────────────────────────
@@ -1661,7 +1677,17 @@ const loadBandFor = (count) => count >= 2 ? 'Elevated' : (count >= 1 ? 'Some' : 
 // and Impact are still shown, just one tier down.
 // Burden/Load convention: "Burden" = current symptom severity; "Load" =
 // exposure/risk accumulation; "Risk" = the malabsorption-risk read.
-function headlineOutputs(score, ex, dys) {
+// `scope` ('gut' | 'full', default 'full') — flow-phase-3.1 honesty fix.
+// Disruption Load and Dysbiosis Correlate Load are both built from
+// extras.meds / extras.surgeries / extras.dys, none of which a Gut Quick
+// Screen ever offers — they'd otherwise compute as an empty array (length 0)
+// and render a confident green "Low" pill that reads as "assessed, clear"
+// rather than "not assessed". Unlike the other primary/secondary tiles
+// (Nutrient/Inflammatory/Psychosocial/Impact), which already degrade to a
+// null value+band when their section wasn't answered, these two have no such
+// null state of their own — so in gut scope they're hidden from primaryList
+// entirely rather than shown with a misleading pill.
+function headlineOutputs(score, ex, dys, scope) {
   const S = __req('scales.js');
   const ax = axisProfile(score, ex, dys);
 
@@ -1708,8 +1734,12 @@ function headlineOutputs(score, ex, dys) {
   };
   return {
     primary, secondary,
-    // ordered flat lists for convenient rendering
-    primaryList:   [primary.symptom, primary.nutrient, primary.disruption, primary.correlate],
+    // ordered flat lists for convenient rendering — Disruption/Correlate
+    // dropped from the list (not just blanked) in Gut scope; see the
+    // function-level comment above for why these two specifically.
+    primaryList: scope === 'gut'
+      ? [primary.symptom, primary.nutrient]
+      : [primary.symptom, primary.nutrient, primary.disruption, primary.correlate],
     secondaryList: [secondary.inflammatory, secondary.psychosocial, secondary.impact],
   };
 }
@@ -1745,7 +1775,7 @@ function severityFrequencyMatrix(score, extras) {
   return cells;
 }
 
-__e.BANDS = BANDS; __e.computeScores = computeScores; __e.scoreConfidence = scoreConfidence;
+__e.BANDS = BANDS; __e.computeScores = computeScores; __e.scoreConfidence = scoreConfidence; __e.inScopeSections = inScopeSections;
 __e.bristolTransit = bristolTransit; __e.GI_CLUSTERS = GI_CLUSTERS;
 __e.bandForPct = bandForPct; __e.axisBand = axisBand; __e.axisProfile = axisProfile; __e.headlineOutputs = headlineOutputs;
 __e.severityFrequencyMatrix = severityFrequencyMatrix; __e.SEV_HI = SEV_HI;
@@ -2759,7 +2789,7 @@ function visitScore(v) {
   // regression: previously omitted, up to ~15pt drift). computeScores() takes
   // only answers — bristol/clusterFreq/romePainFreq never fed it (decoupled,
   // see the comment above the Index computation in scoring.js).
-  const sc = computeScores(a);
+  const sc = computeScores(a, v.screenScope);
   const drv = {
     pss4Score: pss4Score(ex.pss4), bgAnxiety: a.bg_anxiety, bgMood: a.bg_mood,
     dietFibre: ex.dietFibre, dietProcessed: ex.dietProcessed,
@@ -3036,7 +3066,7 @@ function pilotExportCSV(db) {
   d.patients.forEach((p, pi) => {
     (p.visits || []).forEach(v => {
       const a = v.answers || {}, ex = v.extras || {}, meds = ex.meds || null, pss = ex.pss4 || [];
-      const live = computeScores(a);
+      const live = computeScores(a, v.screenScope);
       // P2 — export the frozen snapshot's index/severity/norms when the visit has
       // one (so the pilot CSV reflects what the patient saw, not a recomputed
       // value); everything else (bristolSignal, patterns) comes from the live
@@ -3215,7 +3245,7 @@ function findPatient(db) {
 // was shown. Old visits (pre-snapshot) fall back to a live recompute everywhere.
 function buildScoreSnapshot(a, ex) {
   const arr = QUESTIONS.map(q => (a[q.id] == null ? null : a[q.id]));
-  const s = computeScores(arr);
+  const s = computeScores(arr, session.screenScope);
   return {
     index: s.index, severity: s.severity, secNorm: s.secNorm,
     clusterNorm: s.clusterNorm, coreUnknown: s.coreUnknown, completeness: s.completeness,
@@ -4948,7 +4978,7 @@ function questionRow(q) {
 // regenerate results without re-running the render pipeline.
 function computeAll() {
   const answerArr = QUESTIONS.map(q => (answers[q.id] == null ? null : answers[q.id]));
-  const score = computeScores(answerArr);
+  const score = computeScores(answerArr, session.screenScope);
   const sv = score.severity;
   const conf = scoreConfidence(score);
   const ps = pss4Score(extras.pss4);
@@ -4975,7 +5005,7 @@ function computeAll() {
   const lens = dysbiosisLens(extras);
   const rome = classifyRomeIV(extras.rome, score.clusterNorm, answers.sx_duration, extras.bristol, extras.bristolProps);
   const profile = axisProfile(score, driverExtras, lens);
-  const heads = headlineOutputs(score, driverExtras, lens);
+  const heads = headlineOutputs(score, driverExtras, lens, session.screenScope);
   const conditions = knownConditions(extras);
   const labs = knownLabs(extras);
   const meds = medConfounders(extras);
