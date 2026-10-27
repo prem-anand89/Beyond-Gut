@@ -1962,7 +1962,7 @@ ok(/\.gstep-empty/.test(pw) && /No questions in this section apply/.test(html),
 
 // State: currentStep is module-level, reset on a fresh questionnaire / loaded visit.
 ok(/let currentStep = 0;/.test(html), 'currentStep is module-level wizard state');
-ok(/function reset\(\) \{[\s\S]{0,200}currentStep = 0;/.test(html), 'reset() returns the wizard to step 1');
+ok(/function reset\(\) \{[\s\S]{0,400}currentStep = 0;/.test(html), 'reset() returns the wizard to step 1');
 ok(/loadedVisitId = v\.id \|\| null;[\s\S]{0,400}currentStep = Math\.max\(0, buildSteps\(\)\.length - 1\);/.test(html),
   'loadVisit() opens a loaded visit at its LAST step (every step is already answered), not the first');
 
@@ -2088,8 +2088,13 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
       `'${id}' step is gated to Full mode only (deferred in Gut Quick Screen)`);
   });
   ['background', 'meds'].forEach(id => {
-    ok(!new RegExp(`id: '${id}'[\\s\\S]{0,120}showIf:`).test(bs3),
+    ok(!new RegExp(`id: '${id}'[\\s\\S]{0,120}showIf: \\(\\) => session\\.screenScope`).test(bs3),
       `'${id}' step has no screenScope gate — shows its full chip list in both Gut and Full mode (flow-phase-3.2)`);
+    // flow-phase-4: these two DO still have a showIf — followupQuickMode,
+    // not screenScope — which drops them for a follow-up whose profile
+    // already hydrated on a device set to skip background review.
+    ok(new RegExp(`id: '${id}'[\\s\\S]{0,120}showIf: \\(\\) => !session\\.followupQuickMode`).test(bs3),
+      `'${id}' step IS gated by followupQuickMode (flow-phase-4) — distinct from the screenScope gate the other steps use`);
   });
   ok(/if \(session\.gender === 'Female' && session\.screenScope === 'full'\) c\.appendChild\(obstetricCard\(\)\)/.test(bs3),
     "obstetricCard() alone stays Full-mode-only within the Background step — not part of the audited Gut+ bundle");
@@ -2103,7 +2108,10 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
 
   const nvf3 = html.match(/function newVisitFor\(identity, followup\)\s*\{[\s\S]*?\n\}\n/)[0];
   const resetFn = html.match(/function reset\(\) \{[^\n]*\}/)[0];
-  ok(/screenScope = 'gut'/.test(resetFn), "reset() defaults screenScope to 'gut' for every new visit");
+  ok(/screenScope = deviceDefaultScope\(\)/.test(resetFn),
+    "reset() sets screenScope from this device's own default (flow-phase-4), falling back to 'gut' for a device that never set one");
+  ok(/function deviceDefaultScope\(\)\s*\{[\s\S]{0,250}\|\| 'gut'/.test(html),
+    "deviceDefaultScope() falls back to 'gut' when meta.screenDefaults was never set");
 
   const lvFn3 = html.match(/function loadVisit\(identity, visit, showResults\)\s*\{[\s\S]*?\n\}\n/)[0];
   ok(/session\.screenScope = v\.screenScope \|\| 'full'/.test(lvFn3),
@@ -2173,6 +2181,37 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
   ok(/computeScores\(arr, session\.screenScope\)/.test(html), 'buildScoreSnapshot() (save-time freeze) passes session.screenScope into computeScores()');
   ok(/headlineOutputs\(score, driverExtras, lens, session\.screenScope\)/.test(html), 'computeAll() passes session.screenScope into headlineOutputs()');
   ok(/const live = computeScores\(a, v\.screenScope\)/.test(html), "pilotExportCSV()'s per-visit recompute uses that VISIT's own screenScope, not the live session's");
+}
+
+// ── Clinic device settings (flow-phase-4) ───────────────────────────────────
+{
+  const blankDBFn = html.match(/function blankDB\(\)\s*\{[\s\S]*?\n\}\n/)[0];
+  ok(/screenDefaults: \{ defaultScope: 'gut', followupScope: 'full' \}/.test(blankDBFn),
+    "blankDB()'s meta carries screenDefaults, defaulting to today's behavior (gut scope, full follow-ups) for a device that never configured it");
+  ok(/branding: \{ poweredBy: '', poweredByUrl: '', clinicDisplayName: '' \}/.test(blankDBFn),
+    "blankDB()'s meta reserves a branding shape (data-only, no UI yet — Theranet-stage, deferred)");
+
+  // normalise()'s existing `{ ...blankDB().meta, ...(db.meta || {}) }` spread
+  // already backfills ANY new meta key for a legacy DB with no code change —
+  // confirm that still holds for a DB saved before screenDefaults/branding existed.
+  const legacyMetaDb = { patients: [], meta: { schemaVersion: 1, siteCode: 'OLD' } };
+  const migratedMeta = storage.normalise(legacyMetaDb).meta;
+  ok(!!migratedMeta.screenDefaults && migratedMeta.screenDefaults.defaultScope === 'gut',
+    'normalise() backfills screenDefaults for a pre-phase-4 DB with no code change needed (the blankDB-spread pattern already covers it)');
+  ok(migratedMeta.siteCode === 'OLD', "normalise()'s backfill does not clobber an existing meta field (siteCode) while adding the new ones");
+
+  const dds = html.match(/function deviceDefaultScope\(\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!dds, 'sanity: deviceDefaultScope() function body captured');
+  ok(/Store\.loadDB\(\)/.test(dds[0]), 'deviceDefaultScope() reads the live device DB, not a cached value');
+
+  const nvf4 = html.match(/function newVisitFor\(identity, followup\)\s*\{[\s\S]*?\n\}\n/)[0];
+  ok(/followupScope === 'symptoms_only'/.test(nvf4), 'newVisitFor() checks this device\'s followupScope setting');
+  ok(/session\.followup && profileHydrated && followupScope === 'symptoms_only'/.test(nvf4),
+    'followupQuickMode only activates when ALL three hold: this is a follow-up, the profile actually hydrated, and the device is set to skip — never for a first-time patient with no history to fall back on');
+
+  ok(/function clinicDeviceSettings\(\)/.test(html), 'sanity: clinicDeviceSettings() function defined');
+  ok(/dialogChoice\('Clinic device settings'/.test(html), 'clinicDeviceSettings() opens the dialogChoice UI, titled for a patient-safe reading on a shared device');
+  ok(/'⚙ Clinic device settings'/.test(html), 'Records tab exposes the settings button, named "Clinic device settings" (not "clinician config")');
 }
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');

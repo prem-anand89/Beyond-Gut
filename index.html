@@ -412,6 +412,35 @@ function dialogForm(title, fields, { okLabel = 'Save' } = {}) {
     $('#dlgCancel').onclick = () => { closeDlg(); resolve(null); };
   });
 }
+// Chip-toggle settings dialog (flow-phase-4) — for device-level choices with a
+// small fixed set of options (e.g. default screen scope), where dialogForm's
+// free-text inputs don't fit. `groups`: [{ key, label, sub, options: [{value,
+// label}], value }]. Resolves to { key: value, ... } or null on cancel.
+function dialogChoice(title, groups, { okLabel = 'Save' } = {}) {
+  return new Promise(resolve => {
+    const groupHtml = (g) => `
+      <label style="font-size:11px;font-weight:600;color:var(--inkt);display:block;margin-top:10px">${esc(g.label)}</label>
+      ${g.sub ? `<div class="q-sub" style="margin:2px 0 6px">${esc(g.sub)}</div>` : ''}
+      <div class="chips" data-group="${esc(g.key)}">
+        ${g.options.map(o => `<button type="button" class="chip-opt${o.value === g.value ? ' sel' : ''}" data-value="${esc(o.value)}">${esc(o.label)}</button>`).join('')}
+      </div>`;
+    openDlg(`
+      <div class="dlg-h">${esc(title)}</div>
+      <div class="dlg-b">${groups.map(groupHtml).join('')}</div>
+      <div class="dlg-acts">
+        <button class="btn btn-gh" id="dlgCancel">Cancel</button>
+        <button class="btn btn-g" id="dlgOk">${esc(okLabel)}</button>
+      </div>`);
+    $$('#dlg [data-group]').forEach(group => {
+      group.querySelectorAll('.chip-opt').forEach(btn => {
+        btn.onclick = () => { group.querySelectorAll('.chip-opt').forEach(b => b.classList.remove('sel')); btn.classList.add('sel'); };
+      });
+    });
+    const get = () => { const o = {}; $$('#dlg [data-group]').forEach(group => { const sel = group.querySelector('.chip-opt.sel'); o[group.dataset.group] = sel ? sel.dataset.value : null; }); return o; };
+    $('#dlgOk').onclick = () => { closeDlg(); resolve(get()); };
+    $('#dlgCancel').onclick = () => { closeDlg(); resolve(null); };
+  });
+}
 // Richer patient-details capture (name/age/gender/pregnant/ref). Gender and
 // pregnancy are chip selects, so this can't use the text-only dialogForm.
 // Resolves to { name, age, gender, pregnant, ref } or null on cancel.
@@ -459,7 +488,7 @@ function patientForm(initial = {}, { title = 'Patient details', okLabel = 'Start
     $('#dlgCancel').onclick = () => { closeDlg(); resolve(null); };
   });
 }
-__e.$ = $; __e.$$ = $$; __e.el = el; __e.esc = esc; __e.fmtDate = fmtDate; __e.toast = toast; __e.dialogConfirm = dialogConfirm; __e.dialogForm = dialogForm; __e.patientForm = patientForm; __e.syncHeaderHeight = syncHeaderHeight;
+__e.$ = $; __e.$$ = $$; __e.el = el; __e.esc = esc; __e.fmtDate = fmtDate; __e.toast = toast; __e.dialogConfirm = dialogConfirm; __e.dialogForm = dialogForm; __e.dialogChoice = dialogChoice; __e.patientForm = patientForm; __e.syncHeaderHeight = syncHeaderHeight;
 return __e;
 };
 
@@ -2879,7 +2908,21 @@ __modules['storage.js'] = function(__e){
 const { SCHEMA_VERSION } = __req('schema.js');
 const KEY = 'bmgutscreen_v2';
 
-function blankDB() { return { patients: [], meta: { schemaVersion: SCHEMA_VERSION, remindEvery: 5, visitsSinceExport: 0, patientSeq: 0, siteCode: '', lastExportedAt: null } }; }
+function blankDB() {
+  return { patients: [], meta: {
+    schemaVersion: SCHEMA_VERSION, remindEvery: 5, visitsSinceExport: 0, patientSeq: 0, siteCode: '', lastExportedAt: null,
+    // flow-phase-4: per-device clinic settings — not per-login (there is no
+    // login in the shipped product), just this browser's localStorage, same
+    // as siteCode above. UI copy calls this "Clinic device settings" so a
+    // patient who stumbles into it on a shared device doesn't read it as
+    // something they misconfigured.
+    screenDefaults: { defaultScope: 'gut', followupScope: 'full' },
+    // Reserved shape only — no UI reads/writes this yet. Kept here so a
+    // later (Theranet-stage) co-branding feature doesn't need a breaking
+    // schema change; see the gut-first-flow plan's "Deferred" section.
+    branding: { poweredBy: '', poweredByUrl: '', clinicDisplayName: '' },
+  } };
+}
 // Human-facing patient code. Prefixed with a per-clinic SITE CODE so several
 // clinics minting automated IDs into one central dataset never collide
 // (CLINA-0001 vs CLINB-0001). The internal uid() remains the true merge key.
@@ -3187,7 +3230,12 @@ let extras = blankExtras();
 // screenScope (flow-phase-3): 'gut' (default for every new anonymous session —
 // Safety + Gut symptoms only) or 'full' (today's complete flow). expandedFrom/
 // expandedAt record a mid-session gut->full expansion for honest reporting.
-let session = { name: '', age: '', gender: '', ref: '', followup: false, pregnant: '', screenScope: 'gut', expandedFrom: null, expandedAt: null };
+// followupQuickMode (flow-phase-4): set by newVisitFor() when this is a
+// follow-up for a patient whose profile hydrated AND this device's
+// followupScope setting is 'symptoms_only' — skips Background/Meds
+// entirely for that one visit (not just reordered past them) since the
+// whole point is "don't re-ask what hasn't changed, don't even show it".
+let session = { name: '', age: '', gender: '', ref: '', followup: false, pregnant: '', screenScope: 'gut', expandedFrom: null, expandedAt: null, followupQuickMode: false };
 let lastCalc = null;       // cached result from the most recent calc(); used by print functions
 let loadedVisitId = null;  // set when a saved visit is loaded; saveVisit() updates it in-place
 let currentStep = 0;       // guided-steps wizard: index of the visible step (0-based)
@@ -3200,7 +3248,15 @@ let profileHydrated = false;
 let profileConfirmedThisVisit = false;
 let hydratedProfile = null; // the Store.profile object used to hydrate, for the banner's date display
 
-function reset() { answers = {}; redflags = {}; extras = blankExtras(); session.followup = false; session.screenScope = 'gut'; session.expandedFrom = null; session.expandedAt = null; loadedVisitId = null; currentStep = 0; profileHydrated = false; profileConfirmedThisVisit = false; hydratedProfile = null; }
+// flow-phase-4: new visits start in whichever scope THIS device/browser was
+// set to default to (meta.screenDefaults.defaultScope), not a hardcoded
+// 'gut' — falls back to 'gut' for a device that never set one (still the
+// product default for anonymous web traffic).
+function deviceDefaultScope() {
+  const db = Store.loadDB();
+  return (db.meta && db.meta.screenDefaults && db.meta.screenDefaults.defaultScope) || 'gut';
+}
+function reset() { answers = {}; redflags = {}; extras = blankExtras(); session.followup = false; session.screenScope = deviceDefaultScope(); session.expandedFrom = null; session.expandedAt = null; session.followupQuickMode = false; loadedVisitId = null; currentStep = 0; profileHydrated = false; profileConfirmedThisVisit = false; hydratedProfile = null; }
 
 // Expand a Gut Quick Screen mid-session into the Full assessment, WITHOUT
 // restarting the wizard or discarding any answers already given — it just
@@ -3856,7 +3912,12 @@ function buildSteps() {
     // than not asking. Obstetric history alone stays Full-only — it wasn't
     // part of the audited Gut+ bundle (Anthropometrics/Lifestyle/Systemic/
     // Treatments are the only things still deferred).
+    // flow-phase-4: a device set to "skip on follow-up" (followupScope
+    // 'symptoms_only') drops Background/Meds entirely for a follow-up visit
+    // whose profile already hydrated — not just reordered past them, like
+    // screenScope gating does, but genuinely not shown at all this visit.
     { id: 'background', label: 'Background', sub: 'Conditions, labs & family/surgical history — optional, ~1 min',
+      showIf: () => !session.followupQuickMode,
       build(c) {
         if (profileHydrated) c.appendChild(profileBanner());
         c.appendChild(conditionsCard());
@@ -3868,6 +3929,7 @@ function buildSteps() {
         c.appendChild(surgicalCard());
       } },
     { id: 'meds', label: 'Medications', sub: 'Current medications & symptom-cause confounders',
+      showIf: () => !session.followupQuickMode,
       build(c) {
         c.appendChild(medsCard());
         c.appendChild(medConfoundersCard());
@@ -6162,12 +6224,19 @@ function newVisitFor(identity, followup) {
   // Hydrate stable history (conditions/surgeries/labs/family/meds-confounders)
   // from the patient's saved profile, if one exists, so a returning patient
   // doesn't re-enter it from scratch every visit.
-  const existing = findPatient(Store.loadDB());
+  const db = Store.loadDB();
+  const existing = findPatient(db);
   if (existing && existing.profile) {
     extras = Store.applyProfile(extras, existing.profile);
     profileHydrated = true;
     hydratedProfile = existing.profile;
   }
+  // flow-phase-4: a device set to followupScope 'symptoms_only' skips
+  // Background/Meds entirely on a follow-up, but ONLY when there's an
+  // actual hydrated profile to fall back on — a follow-up for a patient
+  // with no saved history yet still needs to ask once.
+  const followupScope = (db.meta && db.meta.screenDefaults && db.meta.screenDefaults.followupScope) || 'full';
+  session.followupQuickMode = !!(session.followup && profileHydrated && followupScope === 'symptoms_only');
   render();
 }
 
@@ -6414,7 +6483,7 @@ return __e;
 __modules['ui-record.js'] = function(__e){
 const { buildTrend } = __req('trend.js');
 const { dysbiosisLens, modifiableFactors } = __req('scales.js');
-const { el, esc, fmtDate, toast, dialogConfirm, dialogForm, patientForm } = __req('util.js');
+const { el, esc, fmtDate, toast, dialogConfirm, dialogForm, dialogChoice, patientForm } = __req('util.js');
 const Store = __req('storage.js');
 
 let ctx;                                   // { goQuestionnaire(ref, followup) }
@@ -6457,6 +6526,7 @@ function renderList(root, db) {
   fileInput.onchange = () => importMerge(fileInput.files[0]);
   bar.appendChild(imp); bar.appendChild(fileInput);
   bar.appendChild(el('button', { class: 'btn btn-gh', type: 'button', title: 'Per-clinic prefix for automated patient IDs — set a unique code at each clinic to avoid ID overlap when pooling data', onclick: setSiteCode }, `Site: ${esc(Store.sitePrefix(db))}`));
+  bar.appendChild(el('button', { class: 'btn btn-gh', type: 'button', title: 'What a new patient sees by default, and whether follow-ups skip background review — set once per device/browser', onclick: clinicDeviceSettings }, '⚙ Clinic device settings'));
   root.appendChild(bar);
 
   root.appendChild(el('div', { class: 'db-grid', id: 'dbGrid' }));
@@ -6477,6 +6547,31 @@ async function setSiteCode() {
   Store.saveDB(db);
   toast(`Site code set to ${Store.sitePrefix(db)} — new patient IDs will use this prefix.`);
   render();
+}
+
+// flow-phase-4: per-device defaults — not per-login (no login in the shipped
+// product), just this browser's localStorage, same storage as siteCode.
+// Named "Clinic device settings" in the UI (not "clinician config") so a
+// patient who stumbles into Records on a shared device doesn't read it as
+// something they personally misconfigured.
+async function clinicDeviceSettings() {
+  const db = Store.loadDB();
+  const cur = (db.meta && db.meta.screenDefaults) || { defaultScope: 'gut', followupScope: 'full' };
+  const r = await dialogChoice('Clinic device settings', [
+    { key: 'defaultScope', label: 'New patients on this device start with', value: cur.defaultScope,
+      options: [{ value: 'gut', label: 'Gut quick screen' }, { value: 'full', label: 'Full assessment' }] },
+    { key: 'followupScope', label: 'Follow-up visits', sub: 'Only applies when the returning patient’s background already hydrated (Phase 1) — a patient with no saved history still gets asked once.',
+      value: cur.followupScope,
+      options: [{ value: 'full', label: 'Review background each time' }, { value: 'symptoms_only', label: 'Skip straight to symptoms (~5 min)' }] },
+  ], { okLabel: 'Save' });
+  if (!r) return;
+  db.meta = db.meta || {};
+  db.meta.screenDefaults = {
+    defaultScope: r.defaultScope === 'full' ? 'full' : 'gut',
+    followupScope: r.followupScope === 'symptoms_only' ? 'symptoms_only' : 'full',
+  };
+  Store.saveDB(db);
+  toast('Clinic device settings saved — applies to new visits started on this device from now on.');
 }
 
 // Capture a new patient's details, then start their (baseline) questionnaire.
