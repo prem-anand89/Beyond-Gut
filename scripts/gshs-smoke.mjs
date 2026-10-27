@@ -1962,7 +1962,7 @@ ok(/\.gstep-empty/.test(pw) && /No questions in this section apply/.test(html),
 
 // State: currentStep is module-level, reset on a fresh questionnaire / loaded visit.
 ok(/let currentStep = 0;/.test(html), 'currentStep is module-level wizard state');
-ok(/function reset\(\) \{[\s\S]{0,200}currentStep = 0;/.test(html), 'reset() returns the wizard to step 1');
+ok(/function reset\(\) \{[\s\S]{0,400}currentStep = 0;/.test(html), 'reset() returns the wizard to step 1');
 ok(/loadedVisitId = v\.id \|\| null;[\s\S]{0,400}currentStep = Math\.max\(0, buildSteps\(\)\.length - 1\);/.test(html),
   'loadVisit() opens a loaded visit at its LAST step (every step is already answered), not the first');
 
@@ -2088,8 +2088,13 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
       `'${id}' step is gated to Full mode only (deferred in Gut Quick Screen)`);
   });
   ['background', 'meds'].forEach(id => {
-    ok(!new RegExp(`id: '${id}'[\\s\\S]{0,120}showIf:`).test(bs3),
+    ok(!new RegExp(`id: '${id}'[\\s\\S]{0,120}showIf: \\(\\) => session\\.screenScope`).test(bs3),
       `'${id}' step has no screenScope gate — shows its full chip list in both Gut and Full mode (flow-phase-3.2)`);
+    // flow-phase-4: these two DO still have a showIf — followupQuickMode,
+    // not screenScope — which drops them for a follow-up whose profile
+    // already hydrated on a device set to skip background review.
+    ok(new RegExp(`id: '${id}'[\\s\\S]{0,120}showIf: \\(\\) => !session\\.followupQuickMode`).test(bs3),
+      `'${id}' step IS gated by followupQuickMode (flow-phase-4) — distinct from the screenScope gate the other steps use`);
   });
   ok(/if \(session\.gender === 'Female' && session\.screenScope === 'full'\) c\.appendChild\(obstetricCard\(\)\)/.test(bs3),
     "obstetricCard() alone stays Full-mode-only within the Background step — not part of the audited Gut+ bundle");
@@ -2103,7 +2108,10 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
 
   const nvf3 = html.match(/function newVisitFor\(identity, followup\)\s*\{[\s\S]*?\n\}\n/)[0];
   const resetFn = html.match(/function reset\(\) \{[^\n]*\}/)[0];
-  ok(/screenScope = 'gut'/.test(resetFn), "reset() defaults screenScope to 'gut' for every new visit");
+  ok(/screenScope = deviceDefaultScope\(\)/.test(resetFn),
+    "reset() sets screenScope from this device's own default (flow-phase-4), falling back to 'gut' for a device that never set one");
+  ok(/function deviceDefaultScope\(\)\s*\{[\s\S]{0,250}\|\| 'gut'/.test(html),
+    "deviceDefaultScope() falls back to 'gut' when meta.screenDefaults was never set");
 
   const lvFn3 = html.match(/function loadVisit\(identity, visit, showResults\)\s*\{[\s\S]*?\n\}\n/)[0];
   ok(/session\.screenScope = v\.screenScope \|\| 'full'/.test(lvFn3),
@@ -2122,11 +2130,14 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
     'expandToFull() never resets answers/extras — it only reveals more steps, nothing already answered is lost');
 
   // Honest reporting: a gut-only visit must say so on BOTH the on-screen
-  // Clinician tab and the printed report, not just one.
-  ok(/GUT_SCOPE_CAVEAT/.test(html.match(/function renderClinician\(\)\s*\{[\s\S]*?\n\}\n/)[0]),
-    'renderClinician() (on-screen) shows the gut-only caveat');
-  ok(/GUT_SCOPE_CAVEAT/.test(html.match(/function buildClinicianPrint\(c, opts\)\s*\{[\s\S]*?\n(?=function )/)[0]),
-    'buildClinicianPrint() (print/PDF) shows the same gut-only caveat');
+  // Clinician tab and the printed report, not just one. (flow-phase-5-fix:
+  // both call sites now go through activeScopeCaveats(), which combines
+  // GUT_SCOPE_CAVEAT with FOLLOWUP_SKIP_CAVEAT — see the dedicated section
+  // below for why a single screenScope-only check was incomplete.)
+  ok(/activeScopeCaveats\(\)/.test(html.match(/function renderClinician\(\)\s*\{[\s\S]*?\n\}\n/)[0]),
+    'renderClinician() (on-screen) shows every caveat that applies to this visit');
+  ok(/activeScopeCaveats\(\)/.test(html.match(/function buildClinicianPrint\(c, opts\)\s*\{[\s\S]*?\n(?=function )/)[0]),
+    'buildClinicianPrint() (print/PDF) shows the same caveats');
 }
 
 // ── Gut Quick Screen reporting honesty (flow-phase-3.1) ────────────────────
@@ -2173,6 +2184,98 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
   ok(/computeScores\(arr, session\.screenScope\)/.test(html), 'buildScoreSnapshot() (save-time freeze) passes session.screenScope into computeScores()');
   ok(/headlineOutputs\(score, driverExtras, lens, session\.screenScope\)/.test(html), 'computeAll() passes session.screenScope into headlineOutputs()');
   ok(/const live = computeScores\(a, v\.screenScope\)/.test(html), "pilotExportCSV()'s per-visit recompute uses that VISIT's own screenScope, not the live session's");
+}
+
+// ── Clinic device settings (flow-phase-4) ───────────────────────────────────
+{
+  const blankDBFn = html.match(/function blankDB\(\)\s*\{[\s\S]*?\n\}\n/)[0];
+  ok(/screenDefaults: \{ defaultScope: 'gut', followupScope: 'full' \}/.test(blankDBFn),
+    "blankDB()'s meta carries screenDefaults, defaulting to today's behavior (gut scope, full follow-ups) for a device that never configured it");
+  ok(/branding: \{ poweredBy: '', poweredByUrl: '', clinicDisplayName: '' \}/.test(blankDBFn),
+    "blankDB()'s meta reserves a branding shape (data-only, no UI yet — Theranet-stage, deferred)");
+
+  // normalise()'s existing `{ ...blankDB().meta, ...(db.meta || {}) }` spread
+  // already backfills ANY new meta key for a legacy DB with no code change —
+  // confirm that still holds for a DB saved before screenDefaults/branding existed.
+  const legacyMetaDb = { patients: [], meta: { schemaVersion: 1, siteCode: 'OLD' } };
+  const migratedMeta = storage.normalise(legacyMetaDb).meta;
+  ok(!!migratedMeta.screenDefaults && migratedMeta.screenDefaults.defaultScope === 'gut',
+    'normalise() backfills screenDefaults for a pre-phase-4 DB with no code change needed (the blankDB-spread pattern already covers it)');
+  ok(migratedMeta.siteCode === 'OLD', "normalise()'s backfill does not clobber an existing meta field (siteCode) while adding the new ones");
+
+  const dds = html.match(/function deviceDefaultScope\(\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!dds, 'sanity: deviceDefaultScope() function body captured');
+  ok(/Store\.loadDB\(\)/.test(dds[0]), 'deviceDefaultScope() reads the live device DB, not a cached value');
+
+  // flow-phase-5-fix: this logic was factored out of newVisitFor() into
+  // recomputeFollowupQuickMode() so the patientBanner() "Mark as follow-up"
+  // toggle can re-run it too (previously only the initial newVisitFor() call
+  // set followupQuickMode, leaving it stale against session.followup after
+  // a mid-session toggle) — see that dedicated check below.
+  const nvf4 = html.match(/function newVisitFor\(identity, followup\)\s*\{[\s\S]*?\n\}\n/)[0];
+  ok(/recomputeFollowupQuickMode\(\)/.test(nvf4), 'newVisitFor() computes followupQuickMode via the shared, reusable function');
+  const rfqm = html.match(/function recomputeFollowupQuickMode\(\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!rfqm, 'sanity: recomputeFollowupQuickMode() function body captured');
+  ok(/followupScope === 'symptoms_only'/.test(rfqm[0]), 'recomputeFollowupQuickMode() checks this device\'s followupScope setting');
+  ok(/session\.followup && profileHydrated && followupScope === 'symptoms_only'/.test(rfqm[0]),
+    'followupQuickMode only activates when ALL three hold: this is a follow-up, the profile actually hydrated, and the device is set to skip — never for a first-time patient with no history to fall back on');
+  const toggleFn = html.match(/toggle\.onclick = \(\) => \{[^}]*\};/);
+  ok(!!toggleFn && /recomputeFollowupQuickMode\(\)/.test(toggleFn[0]),
+    'the "Mark as follow-up" banner toggle re-runs recomputeFollowupQuickMode() too, not just the initial newVisitFor() call — otherwise toggling follow-up mid-session leaves Background/Meds visibility stale');
+
+  ok(/function clinicDeviceSettings\(\)/.test(html), 'sanity: clinicDeviceSettings() function defined');
+  ok(/dialogChoice\('Clinic device settings'/.test(html), 'clinicDeviceSettings() opens the dialogChoice UI, titled for a patient-safe reading on a shared device');
+  ok(/'⚙ Clinic device settings'/.test(html), 'Records tab exposes the settings button, named "Clinic device settings" (not "clinician config")');
+}
+
+// ── Acceptance-criteria polish (flow-phase-5) ───────────────────────────────
+{
+  ok(/Data stays on this device — no account required\./.test(html), 'the privacy one-liner is shown on the start screen');
+  ok(/📄 Take this to my appointment/.test(html), 'the patient results screen has a clearly labeled "take this to my appointment" action, not the clinician-facing "🖨 Clinician report" label');
+  // Regression guard: the Clinician TAB's own print button (a genuinely
+  // different call site, for an actual clinician) must keep its own label —
+  // the fix above only renamed the patient-view instance.
+  ok(/function renderClinician\(\)\s*\{[\s\S]*?🖨 Clinician report/.test(html),
+    "renderClinician() (the actual Clinician tab) still has its own correctly-labeled print button, untouched by the patient-view rename");
+
+  const sbh = html.match(/function scopeBadgeHtml\(\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!sbh, 'sanity: scopeBadgeHtml() function body captured');
+  ok(/'Gut Screen' : 'Full Assessment'/.test(sbh[0]), 'scopeBadgeHtml() labels BOTH modes explicitly — Full Assessment is just as visible as Gut Screen, not only called out when short');
+  ok(/scopeBadgeHtml\(\)/.test(html.match(/function renderClinician\(\)\s*\{[\s\S]*?\n\}\n/)[0]),
+    'the mode badge renders on the on-screen Clinician tab');
+  ok(/scopeBadgeHtml\(\)/.test(html.match(/function buildClinicianPrint\(c, opts\)\s*\{[\s\S]*?\n(?=function )/)[0]),
+    'the mode badge renders on the printed report too — both surfaces, not just one');
+
+  const pw = html.match(/function paintWizard\(steps\)\s*\{[\s\S]*?\n\}\n/)[0];
+  ok(/STEP_TIME_MIN\[s\.id\]/.test(pw), "the stepper's sub-line sums STEP_TIME_MIN over the current + remaining steps for a live '~N min left' estimate");
+  ok(/const STEP_TIME_MIN = \{/.test(html), 'STEP_TIME_MIN is defined as a single source of truth, reused by the stepper time-left line');
+}
+
+// ── Self-review fixes: 3 confirmed bugs from reviewing all work this session ─
+{
+  // Bug 1: the live "Answered X of Y" counter counted against every
+  // mandatory question in the schema (34), not the subset Gut mode actually
+  // shows (20 — GI+IMP), so it could never reach 100% for a Gut Quick Screen
+  // patient even after answering everything shown.
+  const upFn = html.match(/function updateProgress\(\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!upFn, 'sanity: updateProgress() function body captured');
+  ok(/inScopeQuestions\(session\.screenScope\)/.test(upFn[0]),
+    'updateProgress() now counts against the same in-scope question set as the top-of-page time estimate and completeness — a Gut Quick Screen visit can reach 100% answered');
+  ok(/function inScopeQuestions\(scope\)/.test(html),
+    'inScopeQuestions() is a single shared helper, reused by render() and updateProgress() so they cannot drift apart again');
+
+  // Bug 2: GUT_SCOPE_CAVEAT only fired on screenScope === 'gut', so a device
+  // set to defaultScope:'full' + followupScope:'symptoms_only' could skip
+  // Background/Meds on a follow-up labeled "Full Assessment" with NO
+  // caveat anywhere — a silent omission under the banner that's supposed
+  // to mean "nothing was skipped".
+  ok(/const FOLLOWUP_SKIP_CAVEAT/.test(html), 'a second, independent caveat covers the Full-scope follow-up-skip case');
+  const asc = html.match(/function activeScopeCaveats\(\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!asc, 'sanity: activeScopeCaveats() function body captured');
+  ok(/session\.screenScope === 'gut'.*GUT_SCOPE_CAVEAT/.test(asc[0]) && /session\.followupQuickMode.*FOLLOWUP_SKIP_CAVEAT/.test(asc[0]),
+    'activeScopeCaveats() checks screenScope and followupQuickMode independently — either, both, or neither can apply to a given visit');
+
+  // Bug 3 is covered above (the toggle re-running recomputeFollowupQuickMode()).
 }
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
