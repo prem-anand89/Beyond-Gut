@@ -2130,11 +2130,14 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
     'expandToFull() never resets answers/extras — it only reveals more steps, nothing already answered is lost');
 
   // Honest reporting: a gut-only visit must say so on BOTH the on-screen
-  // Clinician tab and the printed report, not just one.
-  ok(/GUT_SCOPE_CAVEAT/.test(html.match(/function renderClinician\(\)\s*\{[\s\S]*?\n\}\n/)[0]),
-    'renderClinician() (on-screen) shows the gut-only caveat');
-  ok(/GUT_SCOPE_CAVEAT/.test(html.match(/function buildClinicianPrint\(c, opts\)\s*\{[\s\S]*?\n(?=function )/)[0]),
-    'buildClinicianPrint() (print/PDF) shows the same gut-only caveat');
+  // Clinician tab and the printed report, not just one. (flow-phase-5-fix:
+  // both call sites now go through activeScopeCaveats(), which combines
+  // GUT_SCOPE_CAVEAT with FOLLOWUP_SKIP_CAVEAT — see the dedicated section
+  // below for why a single screenScope-only check was incomplete.)
+  ok(/activeScopeCaveats\(\)/.test(html.match(/function renderClinician\(\)\s*\{[\s\S]*?\n\}\n/)[0]),
+    'renderClinician() (on-screen) shows every caveat that applies to this visit');
+  ok(/activeScopeCaveats\(\)/.test(html.match(/function buildClinicianPrint\(c, opts\)\s*\{[\s\S]*?\n(?=function )/)[0]),
+    'buildClinicianPrint() (print/PDF) shows the same caveats');
 }
 
 // ── Gut Quick Screen reporting honesty (flow-phase-3.1) ────────────────────
@@ -2204,10 +2207,21 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
   ok(!!dds, 'sanity: deviceDefaultScope() function body captured');
   ok(/Store\.loadDB\(\)/.test(dds[0]), 'deviceDefaultScope() reads the live device DB, not a cached value');
 
+  // flow-phase-5-fix: this logic was factored out of newVisitFor() into
+  // recomputeFollowupQuickMode() so the patientBanner() "Mark as follow-up"
+  // toggle can re-run it too (previously only the initial newVisitFor() call
+  // set followupQuickMode, leaving it stale against session.followup after
+  // a mid-session toggle) — see that dedicated check below.
   const nvf4 = html.match(/function newVisitFor\(identity, followup\)\s*\{[\s\S]*?\n\}\n/)[0];
-  ok(/followupScope === 'symptoms_only'/.test(nvf4), 'newVisitFor() checks this device\'s followupScope setting');
-  ok(/session\.followup && profileHydrated && followupScope === 'symptoms_only'/.test(nvf4),
+  ok(/recomputeFollowupQuickMode\(\)/.test(nvf4), 'newVisitFor() computes followupQuickMode via the shared, reusable function');
+  const rfqm = html.match(/function recomputeFollowupQuickMode\(\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!rfqm, 'sanity: recomputeFollowupQuickMode() function body captured');
+  ok(/followupScope === 'symptoms_only'/.test(rfqm[0]), 'recomputeFollowupQuickMode() checks this device\'s followupScope setting');
+  ok(/session\.followup && profileHydrated && followupScope === 'symptoms_only'/.test(rfqm[0]),
     'followupQuickMode only activates when ALL three hold: this is a follow-up, the profile actually hydrated, and the device is set to skip — never for a first-time patient with no history to fall back on');
+  const toggleFn = html.match(/toggle\.onclick = \(\) => \{[^}]*\};/);
+  ok(!!toggleFn && /recomputeFollowupQuickMode\(\)/.test(toggleFn[0]),
+    'the "Mark as follow-up" banner toggle re-runs recomputeFollowupQuickMode() too, not just the initial newVisitFor() call — otherwise toggling follow-up mid-session leaves Background/Meds visibility stale');
 
   ok(/function clinicDeviceSettings\(\)/.test(html), 'sanity: clinicDeviceSettings() function defined');
   ok(/dialogChoice\('Clinic device settings'/.test(html), 'clinicDeviceSettings() opens the dialogChoice UI, titled for a patient-safe reading on a shared device');
@@ -2235,6 +2249,33 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
   const pw = html.match(/function paintWizard\(steps\)\s*\{[\s\S]*?\n\}\n/)[0];
   ok(/STEP_TIME_MIN\[s\.id\]/.test(pw), "the stepper's sub-line sums STEP_TIME_MIN over the current + remaining steps for a live '~N min left' estimate");
   ok(/const STEP_TIME_MIN = \{/.test(html), 'STEP_TIME_MIN is defined as a single source of truth, reused by the stepper time-left line');
+}
+
+// ── Self-review fixes: 3 confirmed bugs from reviewing all work this session ─
+{
+  // Bug 1: the live "Answered X of Y" counter counted against every
+  // mandatory question in the schema (34), not the subset Gut mode actually
+  // shows (20 — GI+IMP), so it could never reach 100% for a Gut Quick Screen
+  // patient even after answering everything shown.
+  const upFn = html.match(/function updateProgress\(\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!upFn, 'sanity: updateProgress() function body captured');
+  ok(/inScopeQuestions\(session\.screenScope\)/.test(upFn[0]),
+    'updateProgress() now counts against the same in-scope question set as the top-of-page time estimate and completeness — a Gut Quick Screen visit can reach 100% answered');
+  ok(/function inScopeQuestions\(scope\)/.test(html),
+    'inScopeQuestions() is a single shared helper, reused by render() and updateProgress() so they cannot drift apart again');
+
+  // Bug 2: GUT_SCOPE_CAVEAT only fired on screenScope === 'gut', so a device
+  // set to defaultScope:'full' + followupScope:'symptoms_only' could skip
+  // Background/Meds on a follow-up labeled "Full Assessment" with NO
+  // caveat anywhere — a silent omission under the banner that's supposed
+  // to mean "nothing was skipped".
+  ok(/const FOLLOWUP_SKIP_CAVEAT/.test(html), 'a second, independent caveat covers the Full-scope follow-up-skip case');
+  const asc = html.match(/function activeScopeCaveats\(\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!asc, 'sanity: activeScopeCaveats() function body captured');
+  ok(/session\.screenScope === 'gut'.*GUT_SCOPE_CAVEAT/.test(asc[0]) && /session\.followupQuickMode.*FOLLOWUP_SKIP_CAVEAT/.test(asc[0]),
+    'activeScopeCaveats() checks screenScope and followupQuickMode independently — either, both, or neither can apply to a given visit');
+
+  // Bug 3 is covered above (the toggle re-running recomputeFollowupQuickMode()).
 }
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');

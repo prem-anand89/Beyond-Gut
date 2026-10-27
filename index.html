@@ -3462,7 +3462,7 @@ function patientBanner() {
   // Baseline / follow-up toggle (visit-scoped).
   const toggle = el('button', { class: `chip-opt${session.followup ? ' sel' : ''}`, type: 'button', style: 'margin-left:auto' },
     session.followup ? 'Follow-up ✓' : 'Mark as follow-up');
-  toggle.onclick = () => { session.followup = !session.followup; render(); };
+  toggle.onclick = () => { session.followup = !session.followup; recomputeFollowupQuickMode(); render(); };
   actions.appendChild(toggle);
 
   body.appendChild(actions);
@@ -3888,6 +3888,23 @@ function confirmProfileUnchanged() { profileConfirmedThisVisit = true; toast('Go
 // the on-screen Clinician tab and the printed report, so a skipped systemic
 // module is never silently absent from either surface.
 const GUT_SCOPE_CAVEAT = 'Gut quick screen — systemic assessment (immune, brain-gut, nutrient, lifestyle, psychosocial) not completed this session.';
+// flow-phase-5-fix: GUT_SCOPE_CAVEAT only fires on screenScope === 'gut', but
+// followupQuickMode (flow-phase-4) can ALSO skip Background/Meds in Full
+// scope (a device set to defaultScope:'full' + followupScope:'symptoms_only')
+// — that combination previously showed the "Full Assessment" badge with no
+// caveat at all, silently omitting background/medication review from a
+// report labeled as the complete assessment. Independent of the gut-scope
+// caveat above (either, both, or neither can apply to a given visit).
+const FOLLOWUP_SKIP_CAVEAT = 'Background/medications not reviewed this visit — skipped per this device’s follow-up setting; prior recorded history carried forward unchanged.';
+// Every caveat that applies to the CURRENT visit — independent conditions,
+// so gut-scope and the follow-up skip can both fire, either alone, or
+// neither. Callers wrap each text in whatever markup their surface uses.
+function activeScopeCaveats() {
+  const caveats = [];
+  if (session.screenScope === 'gut') caveats.push(GUT_SCOPE_CAVEAT);
+  if (session.followupQuickMode) caveats.push(FOLLOWUP_SKIP_CAVEAT);
+  return caveats;
+}
 // flow-phase-5 acceptance criterion: which mode a visit was screened in must
 // be visible on BOTH the on-screen Clinician tab and the printed report, as
 // a first-class badge — not just findable by reading the caveat line above.
@@ -3906,6 +3923,15 @@ function scopeBadgeHtml() {
 // stays honest as the patient progresses, instead of only ever quoting the
 // one number computed at the top of the page.
 const STEP_TIME_MIN = { anthro: 0.5, background: 1, meds: 0.5, safety: 0.5, gut: 2.5, lifestyle: 1.5, systemic: 3, treatments: 1 };
+
+// Single source of truth for "which QUESTIONS does the current screenScope
+// actually show" — reused by the top-of-page time estimate (render()) and
+// the live progress counter (updateProgress()), so they can't drift apart
+// the way they did before this helper existed (one was fixed for scope,
+// the other wasn't).
+function inScopeQuestions(scope) {
+  return scope === 'gut' ? QUESTIONS.filter(q => q.section === 'GI' || q.section === 'IMP') : QUESTIONS;
+}
 
 function buildSteps() {
   const steps = [
@@ -4023,11 +4049,8 @@ function render() {
   // ever shows GI + IMP, so counting the full question set here would
   // overstate the time commitment for the path most patients are on.
   const minutes = (n) => [Math.max(1, Math.round(n * 8 / 60)), Math.max(1, Math.round(n * 12 / 60))];
-  const inScopeQuestions = session.screenScope === 'gut'
-    ? QUESTIONS.filter(q => q.section === 'GI' || q.section === 'IMP')
-    : QUESTIONS;
-  const mainQ = inScopeQuestions.filter(q => !q.optional).length;
-  const optQ = inScopeQuestions.filter(q => q.optional).length;
+  const mainQ = inScopeQuestions(session.screenScope).filter(q => !q.optional).length;
+  const optQ = inScopeQuestions(session.screenScope).filter(q => q.optional).length;
   const [tLo0, tHi0] = minutes(mainQ);
   let tLo = Math.max(3, tLo0), tHi = Math.max(tLo + 1, tHi0);
   const [oLo, oHi] = minutes(optQ);
@@ -4411,8 +4434,14 @@ function refreshReveals() {
 
 // Live completion progress over the MANDATORY questions only (optional items
 // excluded, per design). Drives the header strip + the "answered N of M" text.
+// flow-phase-5-fix: the live "Answered X of Y" counter must count against
+// the SAME in-scope question set the completeness fix (computeScores()'s
+// `scope` param) and the top-of-page time estimate already use — otherwise
+// a Gut Quick Screen patient who answers every question actually shown
+// (GI+IMP, ~20 items) sees a counter stuck at "20 of 34" and never reaching
+// 100%, even though the results screen correctly reports 100% complete.
 function updateProgress() {
-  const mandatory = QUESTIONS.filter(q => !q.optional);
+  const mandatory = inScopeQuestions(session.screenScope).filter(q => !q.optional);
   const total = mandatory.length;
   const done = mandatory.filter(q => typeof answers[q.id] === 'number').length;
   const pct = total ? Math.round(done / total * 100) : 0;
@@ -5880,7 +5909,7 @@ function buildClinicianPrint(c, opts) {
     };
     h += `<div class="pr-kpi">${heads.primaryList.map(tileHtml).join('')}</div>
       <div class="pr-kpi-meta">Confidence: ${esc(conf.level)} · ${score.completeness}% complete${sv.peakEscalated ? ' · displayed band raised by a peak-symptom alert (below)' : ''}</div>
-      ${session.screenScope === 'gut' ? `<div class="pr-kpi-meta" style="color:#B23A3A">${esc(GUT_SCOPE_CAVEAT)}</div>` : ''}`;
+      ${activeScopeCaveats().map(t => `<div class="pr-kpi-meta" style="color:#B23A3A">${esc(t)}</div>`).join('')}`;
   }
 
   // ── Section 1 — Triage tier + care-track badges, then Red flags. ──────────
@@ -6261,20 +6290,29 @@ function newVisitFor(identity, followup) {
   // Hydrate stable history (conditions/surgeries/labs/family/meds-confounders)
   // from the patient's saved profile, if one exists, so a returning patient
   // doesn't re-enter it from scratch every visit.
-  const db = Store.loadDB();
-  const existing = findPatient(db);
+  const existing = findPatient(Store.loadDB());
   if (existing && existing.profile) {
     extras = Store.applyProfile(extras, existing.profile);
     profileHydrated = true;
     hydratedProfile = existing.profile;
   }
-  // flow-phase-4: a device set to followupScope 'symptoms_only' skips
-  // Background/Meds entirely on a follow-up, but ONLY when there's an
-  // actual hydrated profile to fall back on — a follow-up for a patient
-  // with no saved history yet still needs to ask once.
+  recomputeFollowupQuickMode();
+  render();
+}
+
+// flow-phase-5-fix: factored out of newVisitFor() so it can also be re-run
+// whenever session.followup changes AFTER the initial load (the
+// patientBanner() "Mark as follow-up" toggle) — previously only newVisitFor()
+// set followupQuickMode, so flipping that toggle mid-session left
+// Background/Meds visibility stale against the now-current follow-up flag.
+// Device set to followupScope 'symptoms_only' skips Background/Meds on a
+// follow-up, but ONLY when there's an actual hydrated profile to fall back
+// on — a follow-up for a patient with no saved history yet still needs to
+// ask once.
+function recomputeFollowupQuickMode() {
+  const db = Store.loadDB();
   const followupScope = (db.meta && db.meta.screenDefaults && db.meta.screenDefaults.followupScope) || 'full';
   session.followupQuickMode = !!(session.followup && profileHydrated && followupScope === 'symptoms_only');
-  render();
 }
 
 // Load a SAVED visit back into the live questionnaire state (answers, drivers,
@@ -6382,7 +6420,7 @@ function renderClinician() {
   kpi.appendChild(el('div', { class: 'conf-note' }, `Confidence: <b>${esc(conf.level)}</b> · ${score.completeness}% complete`));
   if (score.completeness < 80) kpi.appendChild(el('div', { class: 'prov-caveat' },
     `Provisional result — ${score.completeness}% of scored items answered.`));
-  if (session.screenScope === 'gut') kpi.appendChild(el('div', { class: 'prov-caveat' }, esc(GUT_SCOPE_CAVEAT)));
+  activeScopeCaveats().forEach(t => kpi.appendChild(el('div', { class: 'prov-caveat' }, esc(t))));
   root.appendChild(kpi);
 
   // Assessment & plan — triage verdict + care-track badges, leads page 1 (the
