@@ -2073,5 +2073,46 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
   ok(/function patientMeta\(p\)\s*\{[\s\S]*?profileUpdatedAt[\s\S]*?\n\}\n/.test(html), 'Records patientMeta() surfaces profile.profileUpdatedAt on the patient card');
 }
 
+// ── screenScope: Gut Quick Screen vs Full assessment (flow-phase-3) ────────
+{
+  const bs3 = html.match(/function buildSteps\(\)\s*\{[\s\S]*?\n\}\n/)[0];
+  ['anthro', 'background', 'meds', 'lifestyle', 'systemic', 'treatments'].forEach(id => {
+    ok(new RegExp(`id: '${id}'[\\s\\S]{0,250}showIf: \\(\\) => session\\.screenScope === 'full'`).test(bs3),
+      `'${id}' step is gated to Full mode only (deferred in Gut Quick Screen)`);
+  });
+  ok(/id: 'safety'[\s\S]{0,400}showIf: \(\) => RED_FLAGS\.length > 0/.test(bs3),
+    "'safety' step has NO screenScope gate — safety stays mandatory in every mode");
+  ok(!/id: 'gut'[\s\S]{0,60}showIf:/.test(bs3), "'gut' step has no screenScope gate — always shown");
+  ok(/id: 'gut'[\s\S]{0,900}if \(session\.screenScope === 'gut'\) \{[\s\S]{0,200}SECTIONS\.find\(s => s\.id === 'IMP'\)/.test(bs3),
+    "Gut mode renders IMP from within the 'gut' step itself (Full mode still renders IMP from 'systemic', never both)");
+
+  const nvf3 = html.match(/function newVisitFor\(identity, followup\)\s*\{[\s\S]*?\n\}\n/)[0];
+  const resetFn = html.match(/function reset\(\) \{[^\n]*\}/)[0];
+  ok(/screenScope = 'gut'/.test(resetFn), "reset() defaults screenScope to 'gut' for every new visit");
+
+  const lvFn3 = html.match(/function loadVisit\(identity, visit, showResults\)\s*\{[\s\S]*?\n\}\n/)[0];
+  ok(/session\.screenScope = v\.screenScope \|\| 'full'/.test(lvFn3),
+    "loadVisit() restores screenScope from the saved visit, defaulting pre-phase-3 visits to 'full' (how they actually behaved)");
+
+  const cvFn = html.match(/function currentVisit\(\)\s*\{[\s\S]*?\n\}\n/)[0];
+  ok(/screenScope: session\.screenScope \|\| 'full'/.test(cvFn), "currentVisit() persists screenScope");
+  ok(/expandedFrom: session\.expandedFrom \|\| null/.test(cvFn), "currentVisit() persists expandedFrom");
+
+  const etfFn = html.match(/function expandToFull\(\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!etfFn, 'sanity: expandToFull() function body captured');
+  ok(/session\.screenScope = 'full'/.test(etfFn[0]), "expandToFull() switches scope to 'full'");
+  ok(/newSteps\.findIndex\(s => s\.id === curId\)/.test(etfFn[0]),
+    'expandToFull() re-finds the current step by id after expanding (earlier steps shift its numeric position)');
+  ok(!/answers = \{\}|extras = blankExtras\(\)/.test(etfFn[0]),
+    'expandToFull() never resets answers/extras — it only reveals more steps, nothing already answered is lost');
+
+  // Honest reporting: a gut-only visit must say so on BOTH the on-screen
+  // Clinician tab and the printed report, not just one.
+  ok(/GUT_SCOPE_CAVEAT/.test(html.match(/function renderClinician\(\)\s*\{[\s\S]*?\n\}\n/)[0]),
+    'renderClinician() (on-screen) shows the gut-only caveat');
+  ok(/GUT_SCOPE_CAVEAT/.test(html.match(/function buildClinicianPrint\(c, opts\)\s*\{[\s\S]*?\n(?=function )/)[0]),
+    'buildClinicianPrint() (print/PDF) shows the same gut-only caveat');
+}
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

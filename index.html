@@ -3154,7 +3154,10 @@ let extras = blankExtras();
 // clinician can run baseline then follow-up in one sitting; the header chip's ✕
 // clears it. NOTE: with a name entered this record holds PII — it stays in this
 // browser's local storage only (never transmitted).
-let session = { name: '', age: '', gender: '', ref: '', followup: false, pregnant: '' };
+// screenScope (flow-phase-3): 'gut' (default for every new anonymous session —
+// Safety + Gut symptoms only) or 'full' (today's complete flow). expandedFrom/
+// expandedAt record a mid-session gut->full expansion for honest reporting.
+let session = { name: '', age: '', gender: '', ref: '', followup: false, pregnant: '', screenScope: 'gut', expandedFrom: null, expandedAt: null };
 let lastCalc = null;       // cached result from the most recent calc(); used by print functions
 let loadedVisitId = null;  // set when a saved visit is loaded; saveVisit() updates it in-place
 let currentStep = 0;       // guided-steps wizard: index of the visible step (0-based)
@@ -3167,7 +3170,26 @@ let profileHydrated = false;
 let profileConfirmedThisVisit = false;
 let hydratedProfile = null; // the Store.profile object used to hydrate, for the banner's date display
 
-function reset() { answers = {}; redflags = {}; extras = blankExtras(); session.followup = false; loadedVisitId = null; currentStep = 0; profileHydrated = false; profileConfirmedThisVisit = false; hydratedProfile = null; }
+function reset() { answers = {}; redflags = {}; extras = blankExtras(); session.followup = false; session.screenScope = 'gut'; session.expandedFrom = null; session.expandedAt = null; loadedVisitId = null; currentStep = 0; profileHydrated = false; profileConfirmedThisVisit = false; hydratedProfile = null; }
+
+// Expand a Gut Quick Screen mid-session into the Full assessment, WITHOUT
+// restarting the wizard or discarding any answers already given — it just
+// reveals the remaining full-mode steps. Keeps the patient on the same
+// step they were on (steps before it in the array shift the index, so the
+// step is re-found by id, not by its old numeric position).
+function expandToFull() {
+  if (session.screenScope === 'full') return;
+  const oldSteps = buildSteps();
+  const curId = oldSteps[currentStep] && oldSteps[currentStep].id;
+  session.screenScope = 'full';
+  session.expandedFrom = 'gut';
+  session.expandedAt = Date.now();
+  const newSteps = buildSteps();
+  const idx = newSteps.findIndex(s => s.id === curId);
+  if (idx >= 0) currentStep = idx;
+  render();
+  toast('Full assessment added — your gut answers are kept.');
+}
 
 // The patient's linking key: reference code if given, else name (so name-only
 // clinicians still get visit linking + trends).
@@ -3208,6 +3230,9 @@ function currentVisit() {
     visitSchemaVersion: SCHEMA_VERSION,             // track schema version at save-time for future migrations
     followup: !!session.followup,
     pregnant: session.pregnant || '',              // per-visit applicability flag — pregnancy can change between visits
+    screenScope: session.screenScope || 'full',     // flow-phase-3 — which modules this visit actually covered
+    expandedFrom: session.expandedFrom || null,     // 'gut' if this visit started as a quick screen and was expanded mid-session
+    expandedAt: session.expandedAt || null,
     answers: { ...answers },                       // includes 'na' values as-is
     extras: JSON.parse(JSON.stringify(extras)),    // deep-clone (pss4 array, meds object)
     redflags: { ...redflags },
@@ -3773,17 +3798,29 @@ function profileBanner() {
 }
 function confirmProfileUnchanged() { profileConfirmedThisVisit = true; toast('Got it — using your saved background.'); }
 
+// Honest-reporting text (flow-phase-3) for a gut-only visit — shown on both
+// the on-screen Clinician tab and the printed report, so a skipped systemic
+// module is never silently absent from either surface.
+const GUT_SCOPE_CAVEAT = 'Gut quick screen — systemic assessment (immune, brain-gut, nutrient, lifestyle, psychosocial) not completed this session.';
+
 function buildSteps() {
   const steps = [
     // Split from a single dense "About & history" step (flow-phase-2a) so a
     // quick anthropometrics entry isn't bundled with the much heavier set of
     // history chip-cards — the latter now also hosts the Phase-1 hydration
     // banner, since that's the content it's actually pre-filling.
+    // flow-phase-3: in Gut Quick Screen (session.screenScope === 'gut', the
+    // default for a new anonymous session), ONLY Safety + Gut symptoms(+IMP)
+    // show — everything below is deferred until the patient taps "Add full
+    // assessment" (expandToFull()) or a clinician starts in Full mode. Full
+    // mode's step set/order is completely unchanged from before this phase.
     { id: 'anthro', label: 'Anthropometrics', sub: 'Height, weight & waist — optional, ~30 sec',
+      showIf: () => session.screenScope === 'full',
       build(c) {
         c.appendChild(anthropometricsCard());
       } },
     { id: 'background', label: 'Background', sub: 'Conditions, labs & family/surgical history — optional, ~1–2 min',
+      showIf: () => session.screenScope === 'full',
       build(c) {
         if (profileHydrated) c.appendChild(profileBanner());
         c.appendChild(conditionsCard());
@@ -3794,12 +3831,21 @@ function buildSteps() {
         c.appendChild(surgicalCard());
       } },
     { id: 'meds', label: 'Medications', sub: 'Current medications & symptom-cause confounders',
+      showIf: () => session.screenScope === 'full',
       build(c) {
         c.appendChild(medsCard());
         c.appendChild(medConfoundersCard());
       } },
     { id: 'safety', label: 'Safety', sub: 'Alarm / red-flag features', showIf: () => RED_FLAGS.length > 0,
-      build(c) { c.appendChild(redFlagCard()); } },
+      build(c) {
+        // Safety is never gated by screenScope — it stays mandatory in every
+        // mode. The reassurance line only matters in Gut mode, where this is
+        // the very first thing a patient sees (no anthropometrics/history
+        // ahead of it to set context first).
+        if (session.screenScope === 'gut') c.appendChild(el('div', { class: 'q-sub', style: 'padding:0 2px 10px' },
+          'These questions help spot problems that need urgent attention — most patients answer "No" to all of them.'));
+        c.appendChild(redFlagCard());
+      } },
     { id: 'gut', label: 'Gut symptoms', sub: 'Core GI symptoms, stool form & pain',
       build(c) {
         const giSec = SECTIONS.find(s => s.id === 'GI');
@@ -3809,10 +3855,19 @@ function buildSteps() {
         // Pain + Rome IV are gated on reported abdominal pain (refreshReveals).
         c.appendChild(wrapHidden('reveal-card-pain', painCard()));
         c.appendChild(wrapHidden('reveal-card-rome', romeCard()));
+        // Gut mode keeps IMP (functional impact) here, since it's cheap and
+        // directly gut-adjacent; Full mode renders IMP from the Systemic step
+        // instead (mutually exclusive — never both).
+        if (session.screenScope === 'gut') {
+          const impSec = SECTIONS.find(s => s.id === 'IMP');
+          if (impSec) c.appendChild(sectionCard(impSec));
+        }
       } },
     { id: 'lifestyle', label: 'Lifestyle', sub: 'Diet, sleep & microbiome drivers',
+      showIf: () => session.screenScope === 'full',
       build(c) { c.appendChild(lifestyleCard()); c.appendChild(sleepCard()); c.appendChild(dysCard()); } },
     { id: 'systemic', label: 'Systemic', sub: 'Whole-body features & targeted follow-up',
+      showIf: () => session.screenScope === 'full',
       build(c) {
         SECTIONS.filter(s => ['IM', 'BG', 'NU', 'IMP'].includes(s.id)).forEach(sec => c.appendChild(sectionCard(sec)));
         c.appendChild(pss4Card());
@@ -3820,6 +3875,7 @@ function buildSteps() {
         c.appendChild(targetedSymptomsArea());
       } },
     { id: 'treatments', label: 'Treatments', sub: 'What has already been tried',
+      showIf: () => session.screenScope === 'full',
       build(c) { c.appendChild(treatmentsTriedCard()); } },
   ];
   return steps.filter(s => !s.showIf || s.showIf());
@@ -3835,16 +3891,38 @@ function render() {
   // title already states what this is; a repeated explanation just pushed
   // the first question further down.)
 
-  // How long this takes — the headline count/time is the mandatory questions only.
+  // How long this takes — the headline count/time is the mandatory questions
+  // only, scoped to what's actually visible (flow-phase-3): Gut mode only
+  // ever shows GI + IMP, so counting the full question set here would
+  // overstate the time commitment for the path most patients are on.
   const minutes = (n) => [Math.max(1, Math.round(n * 8 / 60)), Math.max(1, Math.round(n * 12 / 60))];
-  const mainQ = QUESTIONS.filter(q => !q.optional).length;
-  const optQ = QUESTIONS.filter(q => q.optional).length;
+  const inScopeQuestions = session.screenScope === 'gut'
+    ? QUESTIONS.filter(q => q.section === 'GI' || q.section === 'IMP')
+    : QUESTIONS;
+  const mainQ = inScopeQuestions.filter(q => !q.optional).length;
+  const optQ = inScopeQuestions.filter(q => q.optional).length;
   const [tLo0, tHi0] = minutes(mainQ);
   const tLo = Math.max(3, tLo0), tHi = Math.max(tLo + 1, tHi0);
   const [oLo, oHi] = minutes(optQ);
+  const metaLine = session.screenScope === 'gut'
+    ? `<span>📋 <b>Gut quick screen</b> · ${mainQ} questions · about <b>${tLo}–${tHi} minutes</b></span>`
+    : `<span>📋 <b>${mainQ} questions</b> · about <b>${tLo}–${tHi} minutes</b> <span class="muted">(plus optional history, lifestyle &amp; targeted follow-up questions when relevant — about ${oLo + 1}–${oHi + 1} min more)</span></span>`;
   root.appendChild(el('div', { class: 'form-meta' },
-    `<span>📋 <b>${mainQ} questions</b> · about <b>${tLo}–${tHi} minutes</b> <span class="muted">(plus optional history, lifestyle &amp; targeted follow-up questions when relevant — about ${oLo + 1}–${oHi + 1} min more)</span></span>
+    `${metaLine}
      <span id="progressText" class="muted"></span>`));
+
+  // Discoverable full/quick toggle (flow-phase-3) — visible on every step, not
+  // just at the start, and doubles as the mid-session "expand" control: no
+  // separate UI for the two is needed since they're the same action.
+  if (session.screenScope === 'gut') {
+    const expandRow = el('div', { class: 'form-meta', style: 'padding-top:0' });
+    const expandBtn = el('button', { class: 'btn btn-gh', type: 'button', style: 'font-size:12px;padding:4px 10px' },
+      'Add full assessment (~10 min more) →');
+    expandBtn.onclick = () => expandToFull();
+    expandRow.appendChild(el('span', { class: 'muted' }, 'Want a deeper, whole-body screen instead? '));
+    expandRow.appendChild(expandBtn);
+    root.appendChild(expandRow);
+  }
 
   root.appendChild(patientBanner());
 
@@ -5646,7 +5724,8 @@ function buildClinicianPrint(c, opts) {
       return `<div class="pr-kpi-tile"><div class="k">${esc(o.label)}</div><div class="v">${esc(String(val))}</div>${o.band ? prBandPill(o.band) : ''}</div>`;
     };
     h += `<div class="pr-kpi">${heads.primaryList.map(tileHtml).join('')}</div>
-      <div class="pr-kpi-meta">Confidence: ${esc(conf.level)} · ${score.completeness}% complete${sv.peakEscalated ? ' · displayed band raised by a peak-symptom alert (below)' : ''}</div>`;
+      <div class="pr-kpi-meta">Confidence: ${esc(conf.level)} · ${score.completeness}% complete${sv.peakEscalated ? ' · displayed band raised by a peak-symptom alert (below)' : ''}</div>
+      ${session.screenScope === 'gut' ? `<div class="pr-kpi-meta" style="color:#B23A3A">${esc(GUT_SCOPE_CAVEAT)}</div>` : ''}`;
   }
 
   // ── Section 1 — Triage tier + care-track badges, then Red flags. ──────────
@@ -6067,6 +6146,12 @@ function loadVisit(identity, visit, showResults) {
   // worse than showing no caveat.
   session.pregnant = v.pregnant || '';
   session.followup = !!v.followup;
+  // Restore which modules this visit actually covered. Visits saved before
+  // screenScope existed behaved exactly like today's Full mode (no gating
+  // existed yet), so they default to 'full', not 'gut'.
+  session.screenScope = v.screenScope || 'full';
+  session.expandedFrom = v.expandedFrom || null;
+  session.expandedAt = v.expandedAt || null;
   loadedVisitId = v.id || null;  // save → update this record in-place
   // Open a loaded visit at its LAST step, not the first — every step is
   // already answered (it's a saved visit), so step 1 has no special claim,
@@ -6135,6 +6220,7 @@ function renderClinician() {
   kpi.appendChild(el('div', { class: 'conf-note' }, `Confidence: <b>${esc(conf.level)}</b> · ${score.completeness}% complete`));
   if (score.completeness < 80) kpi.appendChild(el('div', { class: 'prov-caveat' },
     `Provisional result — ${score.completeness}% of scored items answered.`));
+  if (session.screenScope === 'gut') kpi.appendChild(el('div', { class: 'prov-caveat' }, esc(GUT_SCOPE_CAVEAT)));
   root.appendChild(kpi);
 
   // Assessment & plan — triage verdict + care-track badges, leads page 1 (the

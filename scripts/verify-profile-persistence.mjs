@@ -58,6 +58,18 @@ async function main() {
   });
   ok(hydrated, 'newVisitFor() + render() ran without throwing after reload');
 
+  // flow-phase-3: every new visit now defaults to the Gut Quick Screen, which
+  // doesn't show the Background step (or its hydration banner) at all. Click
+  // the real "Add full assessment" button — the same path an actual patient
+  // would use — before checking the banner/chips below.
+  await page.waitForTimeout(50);
+  const expandBtn = page.locator('button', { hasText: 'Add full assessment' });
+  await expandBtn.click();
+  await page.waitForTimeout(50);
+  // expandToFull() keeps the patient on whichever step they were on (by id),
+  // which was 'safety' here, not 'background' — jump to Background the same
+  // way a real patient would, via its stepper chip.
+  await page.locator('#gstepper button', { hasText: 'Background' }).click();
   await page.waitForTimeout(50);
   const bannerText = await page.evaluate(() => {
     const el = document.querySelector('#mode-patient')?.textContent || '';
