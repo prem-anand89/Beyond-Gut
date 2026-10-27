@@ -108,6 +108,55 @@ ok(storage.nextPatientCode(dbDefault).startsWith('BMG-'), 'default patient code 
 const dbSite = storage.blankDB(); dbSite.meta.siteCode = 'clina';
 ok(storage.nextPatientCode(dbSite).startsWith('CLINA-'), 'site code prefixes patient IDs (upper-cased)');
 
+// 8b. Patient-level profile persistence (flow-phase-1): stable history
+// (conditions/surgeries/labs/family/med-confounders) survives on the patient
+// record instead of being wiped on every newVisitFor()/reset().
+{
+  const extrasWithHistory = {
+    conditions: ['autoimmune', 'ibs'], surgeries: ['appendix'], surgeryOther: 'Appendectomy 2019',
+    familyHistory: ['fh_ibd'], obstetric: [], knownLabs: ['vitamins'], knownLabsDetail: { vitamins: 'B12 low' },
+    medsConfounders: ['nsaid'], medsOther: 'Occasional ibuprofen', meds: { abx: false, ppi: true, nsaid: true },
+    heightCm: 170,
+    // visit-varying fields that must NOT leak into the profile
+    bristol: 4, pss4: [1, 2, 3, 4], treatmentsTried: ['probiotic'],
+  };
+  const prof = storage.profileFromExtras(extrasWithHistory);
+  ok(JSON.stringify(prof.conditions) === JSON.stringify(['autoimmune', 'ibs']), 'profileFromExtras() carries conditions');
+  ok(JSON.stringify(prof.surgeries) === JSON.stringify(['appendix']) && prof.surgeryOther === 'Appendectomy 2019', 'profileFromExtras() carries surgical history');
+  ok(prof.knownLabsDetail.vitamins === 'B12 low', 'profileFromExtras() carries known-lab free-text detail');
+  ok(prof.meds.ppi === true && prof.meds.nsaid === true, 'profileFromExtras() carries chronic meds flags');
+  ok(prof.heightCm === 170, 'profileFromExtras() carries height');
+  ok(prof.bristol === undefined && prof.pss4 === undefined && prof.treatmentsTried === undefined,
+    'profileFromExtras() does NOT carry visit-varying fields (bristol/pss4/treatmentsTried stay visit-scoped)');
+
+  const freshExtras = { conditions: [], surgeries: [], meds: { abx: false, ppi: false, nsaid: false }, bristol: null };
+  storage.applyProfile(freshExtras, prof);
+  ok(JSON.stringify(freshExtras.conditions) === JSON.stringify(['autoimmune', 'ibs']), 'applyProfile() hydrates conditions onto a fresh extras object');
+  ok(freshExtras.meds.ppi === true, 'applyProfile() hydrates chronic meds flags');
+  ok(freshExtras.bristol === null, 'applyProfile() leaves visit-varying fields (bristol) untouched');
+
+  // Migration: a patient saved before profile persistence shipped (no
+  // p.profile) must be backfilled from their latest visit's extras, not left
+  // blank, when normalise() runs.
+  const legacyDb = { patients: [{ id: 'p1', code: 'BMG-0001', visits: [
+    { id: 'v1', date: 1, extras: { conditions: ['ibs'] } },
+    { id: 'v2', date: 2, extras: extrasWithHistory },
+  ] }], meta: {} };
+  const migrated = storage.normalise(legacyDb);
+  const mp = migrated.patients[0].profile;
+  ok(!!mp, 'normalise() backfills a missing patient.profile');
+  ok(JSON.stringify(mp.conditions) === JSON.stringify(['autoimmune', 'ibs']), 'normalise() backfills profile from the LATEST visit, not the first');
+
+  // A patient with no visits at all still gets a well-formed blank profile.
+  const noVisitsDb = { patients: [{ id: 'p2', code: 'BMG-0002', visits: [] }], meta: {} };
+  const mp2 = storage.normalise(noVisitsDb).patients[0].profile;
+  ok(!!mp2 && Array.isArray(mp2.conditions) && mp2.conditions.length === 0, 'normalise() gives a patient with no visits a blank (not missing) profile');
+
+  // Idempotence: normalise() must not clobber a profile that's already there.
+  const hasProfileDb = { patients: [{ id: 'p3', code: 'BMG-0003', visits: [], profile: Object.assign(storage.blankProfile(), { conditions: ['celiac'] }) }], meta: {} };
+  ok(storage.normalise(hasProfileDb).patients[0].profile.conditions[0] === 'celiac', 'normalise() does not overwrite an existing patient.profile');
+}
+
 // 9. PSS-4 reverse-scoring metadata present (drives the colour fix).
 ok(Array.isArray(scales.PSS4_REVERSED) && scales.PSS4_REVERSED.length === 4 && scales.PSS4_REVERSED[1] === true && scales.PSS4_REVERSED[2] === true, 'PSS-4 reverse-scored items flagged (2 & 3)');
 
@@ -1105,12 +1154,15 @@ ok(rome34h_toorecent.criteriaMet === false, 'classifyRomeIV onset-not-met correc
 const rome34h_explicit = rome.classifyRomeIV({ painFreq: 5, onset: 4, rm_assoc_defecation: true, rm_assoc_freqchange: true }, {}, 0);
 ok(rome34h_explicit.criteriaMet === true, 'explicit rome.onset still takes priority over sx_duration fallback when both present');
 
-// 34i. CSV export's computeScores(a) call takes only answers — bristol/
+// 34i. trend.js's visitScore() computeScores(a, ...) call — bristol/
 // clusterFreq/romePainFreq never fed the Index (a leftover `opts` param that
-// was silently unused; removed as dead code). Recomputation now can't diverge
-// on those fields because there's nothing left for it to diverge on.
-ok(/const sc = computeScores\(a\)/.test(html), 'CSV export computeScores() call takes only answers (no unused opts)');
-ok(!/function computeScores\(answers, opts\)/.test(html), 'computeScores() no longer declares the unused opts parameter');
+// carried them was unused dead code, removed). The only second argument
+// computeScores() takes now is `scope` (flow-phase-3.1, completeness-only —
+// see check below), carrying the VISIT's own saved screenScope so a Gut
+// Quick Screen visit's trend/CSV recompute doesn't drift from the live
+// score shown at the time (never bristol/clusterFreq/romePainFreq again).
+ok(/const sc = computeScores\(a, v\.screenScope\)/.test(html), "trend.js's computeScores() call takes answers + the visit's own screenScope, nothing else");
+ok(!/function computeScores\(answers, opts\)/.test(html), 'computeScores() does not carry back the old dead opts (bristol/clusterFreq) parameter');
 
 // A5/A9 CSV regression. Header/row column-count parity, medsOther surfaced,
 // formula-injection guard, no literal "null" for a core-skipped visit, and
@@ -1847,12 +1899,17 @@ ok(!!calcFn2 && /severityFrequencyCard\(score, extras\)/.test(calcFn2[0]),
 const buildStepsFn = html.match(/function buildSteps\(\)\s*\{[\s\S]*?\n\}\n/);
 ok(!!buildStepsFn, 'buildSteps() defined — the guided-steps flow spec');
 const bs = buildStepsFn ? buildStepsFn[0] : '';
-// The seven clinical steps, in order.
-const STEP_IDS = ['about', 'meds', 'safety', 'gut', 'lifestyle', 'systemic', 'treatments'];
+// The eight clinical steps, in order. 'about' was split into 'anthro' +
+// 'background' (flow-phase-2a) so a quick anthropometrics entry isn't
+// bundled with the much heavier set of history chip-cards.
+const STEP_IDS = ['anthro', 'background', 'meds', 'safety', 'gut', 'lifestyle', 'systemic', 'treatments'];
 STEP_IDS.forEach(id => ok(new RegExp(`id: '${id}'`).test(bs), `buildSteps() declares the '${id}' step`));
+ok(!/id: 'about'/.test(bs), 'buildSteps() no longer declares a single combined \'about\' step');
+ok(/id: 'background'[\s\S]{0,200}profileHydrated[\s\S]{0,60}profileBanner\(\)/.test(bs),
+  "the Phase-1 hydration banner is rendered from the 'background' step (where the chip cards it pre-fills actually are), not 'anthro'");
 ok(/id: 'safety'[\s\S]{0,120}showIf: \(\) => RED_FLAGS\.length > 0/.test(bs),
   "Safety step drops out (showIf) when the schema carries no red flags — numbering stays gap-free");
-ok(/return steps\.filter\(s => !s\.showIf \|\| s\.showIf\(\)\)/.test(bs),
+ok(/const visible = steps\.filter\(s => !s\.showIf \|\| s\.showIf\(\)\)/.test(bs),
   'buildSteps() renumbers over surviving steps (hidden steps do not leave a gap)');
 
 // Each step keeps the SAME cards/holders the old scroll produced — the reveal
@@ -1990,6 +2047,132 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
   ok(/tri\.redFlagUrgency/.test(s), 'schedulingPriorityHtml() branches on redFlagUrgency instead of blanket-assuming a red flag');
   ok(/no safety red flag present/.test(s),
     'schedulingPriorityHtml() gives a priority-referral message (not same-day) when Tier 1 fired without any red flag');
+}
+
+// ── Profile-persistence UI wiring (flow-phase-1) ────────────────────────────
+// The engine-level behaviour is covered above via the real storage.js
+// functions; these are source checks on the UI glue that calls them, since
+// newVisitFor/saveVisit/the banner touch module-level DOM state the DOM-free
+// harness above doesn't instantiate.
+{
+  const nvfFn = html.match(/function newVisitFor\(identity, followup\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!nvfFn, 'sanity: newVisitFor() function body captured');
+  ok(/Store\.applyProfile\(extras, existing\.profile\)/.test(nvfFn[0]), 'newVisitFor() hydrates extras from the found patient\'s saved profile');
+  ok(/profileHydrated = true/.test(nvfFn[0]), 'newVisitFor() flags profileHydrated when hydration occurs');
+
+  const svFn = html.match(/function saveVisit\(\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!svFn, 'sanity: saveVisit() function body captured');
+  ok(/Store\.profileFromExtras\(extras\)/.test(svFn[0]), 'saveVisit() syncs the stable subset of extras back onto patient.profile');
+  ok(/profileConfirmedThisVisit \? Date\.now\(\) : priorConfirmedAt/.test(svFn[0]), 'saveVisit() only advances confirmedAt when the patient tapped "No changes"');
+
+  const lvFn = html.match(/function loadVisit\(identity, visit, showResults\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!lvFn, 'sanity: loadVisit() function body captured');
+  ok(/profileHydrated = false; hydratedProfile = null;/.test(lvFn[0]), 'loadVisit() clears the hydration banner state — an edited saved visit is not a fresh hydration');
+
+  const bannerFn = html.match(/function profileBanner\(\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!bannerFn, 'sanity: profileBanner() function body captured');
+  ok(/fmtDate\(/.test(bannerFn[0]), 'profileBanner() shows a formatted confirmation date');
+
+  ok(/function patientMeta\(p\)\s*\{[\s\S]*?profileUpdatedAt[\s\S]*?\n\}\n/.test(html), 'Records patientMeta() surfaces profile.profileUpdatedAt on the patient card');
+}
+
+// ── screenScope: Gut Quick Screen vs Full assessment (flow-phase-3) ────────
+{
+  const bs3 = html.match(/function buildSteps\(\)\s*\{[\s\S]*?\n\}\n/)[0];
+  // flow-phase-3.2: only Anthropometrics/Lifestyle/Systemic/Treatments are
+  // still deferred to Full mode — Background/Meds now show the FULL chip
+  // lists in Gut mode too (a truncated 1-of-19 chip list would misrepresent
+  // what the tool is even asking), per the audited "Gut+" bundle.
+  ['anthro', 'lifestyle', 'systemic', 'treatments'].forEach(id => {
+    ok(new RegExp(`id: '${id}'[\\s\\S]{0,250}showIf: \\(\\) => session\\.screenScope === 'full'`).test(bs3),
+      `'${id}' step is gated to Full mode only (deferred in Gut Quick Screen)`);
+  });
+  ['background', 'meds'].forEach(id => {
+    ok(!new RegExp(`id: '${id}'[\\s\\S]{0,120}showIf:`).test(bs3),
+      `'${id}' step has no screenScope gate — shows its full chip list in both Gut and Full mode (flow-phase-3.2)`);
+  });
+  ok(/if \(session\.gender === 'Female' && session\.screenScope === 'full'\) c\.appendChild\(obstetricCard\(\)\)/.test(bs3),
+    "obstetricCard() alone stays Full-mode-only within the Background step — not part of the audited Gut+ bundle");
+  ok(/const order = \['safety', 'gut', 'background', 'meds'\]/.test(bs3),
+    'Gut mode explicitly reorders to Safety → Gut first, even though Background/Meds sit earlier in the array (which Full mode keeps unchanged)');
+  ok(/id: 'safety'[\s\S]{0,400}showIf: \(\) => RED_FLAGS\.length > 0/.test(bs3),
+    "'safety' step has NO screenScope gate — safety stays mandatory in every mode");
+  ok(!/id: 'gut'[\s\S]{0,60}showIf:/.test(bs3), "'gut' step has no screenScope gate — always shown");
+  ok(/id: 'gut'[\s\S]{0,900}if \(session\.screenScope === 'gut'\) \{[\s\S]{0,200}SECTIONS\.find\(s => s\.id === 'IMP'\)/.test(bs3),
+    "Gut mode renders IMP from within the 'gut' step itself (Full mode still renders IMP from 'systemic', never both)");
+
+  const nvf3 = html.match(/function newVisitFor\(identity, followup\)\s*\{[\s\S]*?\n\}\n/)[0];
+  const resetFn = html.match(/function reset\(\) \{[^\n]*\}/)[0];
+  ok(/screenScope = 'gut'/.test(resetFn), "reset() defaults screenScope to 'gut' for every new visit");
+
+  const lvFn3 = html.match(/function loadVisit\(identity, visit, showResults\)\s*\{[\s\S]*?\n\}\n/)[0];
+  ok(/session\.screenScope = v\.screenScope \|\| 'full'/.test(lvFn3),
+    "loadVisit() restores screenScope from the saved visit, defaulting pre-phase-3 visits to 'full' (how they actually behaved)");
+
+  const cvFn = html.match(/function currentVisit\(\)\s*\{[\s\S]*?\n\}\n/)[0];
+  ok(/screenScope: session\.screenScope \|\| 'full'/.test(cvFn), "currentVisit() persists screenScope");
+  ok(/expandedFrom: session\.expandedFrom \|\| null/.test(cvFn), "currentVisit() persists expandedFrom");
+
+  const etfFn = html.match(/function expandToFull\(\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!etfFn, 'sanity: expandToFull() function body captured');
+  ok(/session\.screenScope = 'full'/.test(etfFn[0]), "expandToFull() switches scope to 'full'");
+  ok(/newSteps\.findIndex\(s => s\.id === curId\)/.test(etfFn[0]),
+    'expandToFull() re-finds the current step by id after expanding (earlier steps shift its numeric position)');
+  ok(!/answers = \{\}|extras = blankExtras\(\)/.test(etfFn[0]),
+    'expandToFull() never resets answers/extras — it only reveals more steps, nothing already answered is lost');
+
+  // Honest reporting: a gut-only visit must say so on BOTH the on-screen
+  // Clinician tab and the printed report, not just one.
+  ok(/GUT_SCOPE_CAVEAT/.test(html.match(/function renderClinician\(\)\s*\{[\s\S]*?\n\}\n/)[0]),
+    'renderClinician() (on-screen) shows the gut-only caveat');
+  ok(/GUT_SCOPE_CAVEAT/.test(html.match(/function buildClinicianPrint\(c, opts\)\s*\{[\s\S]*?\n(?=function )/)[0]),
+    'buildClinicianPrint() (print/PDF) shows the same gut-only caveat');
+}
+
+// ── Gut Quick Screen reporting honesty (flow-phase-3.1) ────────────────────
+// Two confirmed bugs in the first Phase-3 cut: (1) completeness counted every
+// mandatory question across ALL sections, so a fully-answered gut-only visit
+// showed as ~56% complete/provisional — false. (2) Disruption Load and
+// Dysbiosis Correlate Load are array-length counts off meds/surgery/dys
+// signals that are simply absent in gut scope, so they rendered a confident
+// "Low" pill (reads as "assessed, clear") instead of "not assessed".
+{
+  const allGI = Object.fromEntries(schema.QUESTIONS.filter(q => q.section === 'GI' && !q.driverOnly).map(q => [q.id, 2]));
+  const allIMP = Object.fromEntries(schema.QUESTIONS.filter(q => q.section === 'IMP').map(q => [q.id, 1]));
+  const gutOnlyAnswers = { ...allGI, ...allIMP }; // every question Gut mode actually shows, fully answered
+
+  const fullScoped = scoring.computeScores(gutOnlyAnswers, 'full');
+  ok(fullScoped.completeness < 80, `sanity: scoring the SAME answers with scope 'full' still shows low completeness (got ${fullScoped.completeness}%) — proves the bug would reproduce without the fix`);
+
+  const gutScoped = scoring.computeScores(gutOnlyAnswers, 'gut');
+  ok(gutScoped.completeness === 100, `scope:'gut' completeness is 100% when every Gut-mode question is answered (got ${gutScoped.completeness}%) — IM/BG/NU blanks no longer count against it`);
+
+  const noScope = scoring.computeScores(gutOnlyAnswers);
+  ok(noScope.completeness === fullScoped.completeness, 'computeScores() with no scope argument behaves exactly as before (defaults to full/unscoped) — no behavior change for existing callers');
+
+  // Correlate hiding: flow-phase-3.2 moved Background/Meds (which feed
+  // Disruption Load) into Gut mode's always-shown bundle, so that tile now
+  // has real data there and must NOT be hidden. Dysbiosis Correlate Load
+  // still needs extras.dys (Lifestyle, still deferred), so it alone stays
+  // hidden in gut scope.
+  const emptyEx = { meds: { abx: false, ppi: false, nsaid: false }, surgeries: [], dys: {} };
+  const headsGut = scoring.headlineOutputs(gutScoped, emptyEx, { signals: [] }, 'gut');
+  ok(headsGut.primaryList.length === 3, `scope:'gut' headlineOutputs() primaryList has 3 tiles (Symptom, Nutrient, Disruption), got ${headsGut.primaryList.length}`);
+  ok(headsGut.primaryList.some(t => t.key === 'disruption_load'), "scope:'gut' primaryList DOES include Disruption Load now that Background/Meds feed it in Gut mode");
+  ok(!headsGut.primaryList.some(t => t.key === 'dysbiosis_correlate_load'),
+    "scope:'gut' primaryList still excludes Dysbiosis Correlate Load — extras.dys is still Lifestyle-only (deferred)");
+
+  const headsFull = scoring.headlineOutputs(fullScoped, emptyEx, { signals: [] }, 'full');
+  ok(headsFull.primaryList.length === 4, `scope:'full' headlineOutputs() primaryList keeps all 4 tiles, got ${headsFull.primaryList.length}`);
+  ok(headsFull.primary.disruption.band === 'Low', "scope:'full' still shows the (correct, since this IS full mode) Disruption Load 'Low' pill when genuinely assessed-and-clear");
+
+  // Source-level: every live-session call site threads session.screenScope
+  // through, so the fix actually reaches the on-screen/print results, not
+  // just the engine function in isolation.
+  ok(/computeScores\(answerArr, session\.screenScope\)/.test(html), 'computeAll() (live results) passes session.screenScope into computeScores()');
+  ok(/computeScores\(arr, session\.screenScope\)/.test(html), 'buildScoreSnapshot() (save-time freeze) passes session.screenScope into computeScores()');
+  ok(/headlineOutputs\(score, driverExtras, lens, session\.screenScope\)/.test(html), 'computeAll() passes session.screenScope into headlineOutputs()');
+  ok(/const live = computeScores\(a, v\.screenScope\)/.test(html), "pilotExportCSV()'s per-visit recompute uses that VISIT's own screenScope, not the live session's");
 }
 
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
