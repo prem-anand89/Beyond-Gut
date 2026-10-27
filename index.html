@@ -3775,12 +3775,17 @@ function confirmProfileUnchanged() { profileConfirmedThisVisit = true; toast('Go
 
 function buildSteps() {
   const steps = [
-    { id: 'about', label: 'About & history', sub: 'Anthropometrics, conditions & family/surgical history',
+    // Split from a single dense "About & history" step (flow-phase-2a) so a
+    // quick anthropometrics entry isn't bundled with the much heavier set of
+    // history chip-cards — the latter now also hosts the Phase-1 hydration
+    // banner, since that's the content it's actually pre-filling.
+    { id: 'anthro', label: 'Anthropometrics', sub: 'Height, weight & waist — optional, ~30 sec',
+      build(c) {
+        c.appendChild(anthropometricsCard());
+      } },
+    { id: 'background', label: 'Background', sub: 'Conditions, labs & family/surgical history — optional, ~1–2 min',
       build(c) {
         if (profileHydrated) c.appendChild(profileBanner());
-        c.appendChild(el('div', { class: 'grp-label', style: 'margin:2px 2px 2px' }, 'Anthropometrics'));
-        c.appendChild(anthropometricsCard());
-        c.appendChild(el('div', { class: 'grp-label', style: 'margin:12px 2px 2px' }, 'History'));
         c.appendChild(conditionsCard());
         c.appendChild(labsCard());
         c.appendChild(familyHistoryCard());

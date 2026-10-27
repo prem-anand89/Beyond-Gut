@@ -1896,9 +1896,14 @@ ok(!!calcFn2 && /severityFrequencyCard\(score, extras\)/.test(calcFn2[0]),
 const buildStepsFn = html.match(/function buildSteps\(\)\s*\{[\s\S]*?\n\}\n/);
 ok(!!buildStepsFn, 'buildSteps() defined — the guided-steps flow spec');
 const bs = buildStepsFn ? buildStepsFn[0] : '';
-// The seven clinical steps, in order.
-const STEP_IDS = ['about', 'meds', 'safety', 'gut', 'lifestyle', 'systemic', 'treatments'];
+// The eight clinical steps, in order. 'about' was split into 'anthro' +
+// 'background' (flow-phase-2a) so a quick anthropometrics entry isn't
+// bundled with the much heavier set of history chip-cards.
+const STEP_IDS = ['anthro', 'background', 'meds', 'safety', 'gut', 'lifestyle', 'systemic', 'treatments'];
 STEP_IDS.forEach(id => ok(new RegExp(`id: '${id}'`).test(bs), `buildSteps() declares the '${id}' step`));
+ok(!/id: 'about'/.test(bs), 'buildSteps() no longer declares a single combined \'about\' step');
+ok(/id: 'background'[\s\S]{0,200}profileHydrated[\s\S]{0,60}profileBanner\(\)/.test(bs),
+  "the Phase-1 hydration banner is rendered from the 'background' step (where the chip cards it pre-fills actually are), not 'anthro'");
 ok(/id: 'safety'[\s\S]{0,120}showIf: \(\) => RED_FLAGS\.length > 0/.test(bs),
   "Safety step drops out (showIf) when the schema carries no red flags — numbering stays gap-free");
 ok(/return steps\.filter\(s => !s\.showIf \|\| s\.showIf\(\)\)/.test(bs),

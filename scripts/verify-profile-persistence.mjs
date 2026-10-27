@@ -63,7 +63,7 @@ async function main() {
     const el = document.querySelector('#mode-patient')?.textContent || '';
     return el;
   });
-  ok(bannerText.includes('pre-filled from your last visit'), 'the hydration banner text renders on the About/history step for a returning patient');
+  ok(bannerText.includes('pre-filled from your last visit'), 'the hydration banner text renders on the Background step for a returning patient');
 
   const conditionChipSelected = await page.evaluate(() => {
     const btns = Array.from(document.querySelectorAll('.chip-opt'));
