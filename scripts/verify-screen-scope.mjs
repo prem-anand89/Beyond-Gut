@@ -22,16 +22,23 @@ async function main() {
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
   await page.evaluate(() => localStorage.clear());
 
-  // 1) A brand-new anonymous session defaults to Gut Quick Screen: 2 steps,
-  //    Safety first, no Anthropometrics/Background/Medications/etc.
+  // 1) A brand-new anonymous session defaults to Gut Quick Screen: 4 steps
+  //    (Safety, Gut symptoms, Background, Meds — flow-phase-3.2 added the
+  //    FULL Background/Meds chip lists back into Gut mode; only
+  //    Anthropometrics/Lifestyle/Systemic/Treatments stay Full-only), Safety
+  //    still leads despite Background/Meds sitting earlier in the array
+  //    (that array order is for Full mode's sake).
   const stepLabels1 = await page.evaluate(() => {
     const P = window.__req('ui-patient.js');
     P.newVisitFor({}, false);
     return Array.from(document.querySelectorAll('#gstepper .step')).map(s => s.textContent.trim());
   });
   await page.waitForTimeout(30);
-  ok(stepLabels1.length === 2, `new anonymous session shows exactly 2 steps by default (got ${stepLabels1.length})`);
-  ok(/Safety/.test(stepLabels1[0] || ''), 'Safety is the first step in Gut Quick Screen');
+  ok(stepLabels1.length === 4, `new anonymous session shows exactly 4 steps by default (got ${stepLabels1.length})`);
+  ok(/Safety/.test(stepLabels1[0] || ''), 'Safety is still the first step in Gut Quick Screen');
+  ok(/Gut symptoms/.test(stepLabels1[1] || ''), 'Gut symptoms is second');
+  ok(/Background/.test(stepLabels1[2] || '') && /Medications/.test(stepLabels1[3] || ''),
+    'Background and Medications follow, reordered after Safety/Gut (not in their Full-mode array position)');
 
   const metaText1 = await page.evaluate(() => document.querySelector('#mode-patient')?.textContent || '');
   ok(/Gut quick screen/.test(metaText1), 'the top banner names this a Gut quick screen');
@@ -57,7 +64,7 @@ async function main() {
     const labels = Array.from(document.querySelectorAll('#gstepper .step')).map(s => s.textContent.trim());
     return { nSteps: labels.length, hasAnthro: labels.some(l => /Anthropometrics/.test(l)) };
   });
-  ok(afterExpand.nSteps === 8, `expanding to full reveals all 8 steps (got ${afterExpand.nSteps})`);
+  ok(afterExpand.nSteps === 8, `expanding to full reveals all 8 steps, not just the 4 extra ones (got ${afterExpand.nSteps})`);
   ok(afterExpand.hasAnthro, 'Anthropometrics (a Full-only step) is now visible after expanding');
 
   const gsrsStillAnswered = await page.evaluate(() => {
@@ -91,12 +98,38 @@ async function main() {
     document.querySelectorAll('#gstep-gut .opts').forEach(g => g.querySelector('.opt')?.click());
   });
   await page.waitForTimeout(30);
+  // "View results" only renders once the LAST step is active — Medications
+  // is now last in Gut mode's order (Safety, Gut, Background, Medications),
+  // not Gut symptoms itself. Background/Meds chips are all optional
+  // (unscored extras, not QUESTIONS), so completeness doesn't need them
+  // touched — just navigate there.
+  await page.locator('#gstepper .step', { hasText: 'Medications' }).click();
+  await page.waitForTimeout(30);
   await page.locator('button', { hasText: 'View results' }).click();
   await page.waitForTimeout(100);
 
   const resultsText = await page.evaluate(() => document.querySelector('#patient-results')?.textContent || '');
   ok(/100% complete/.test(resultsText), `a fully-answered Gut Quick Screen reads 100% complete on the actual results screen (snippet: ${(resultsText.match(/\d+% complete/) || ['<none found>'])[0]})`);
   ok(!/Provisional result/.test(resultsText), 'a fully-answered Gut Quick Screen does NOT show the "Provisional result" caveat');
+
+  // 4) flow-phase-3.2: Disruption Load now has real data in Gut mode (PPI
+  //    toggle, part of the always-shown Medications step) and must appear
+  //    on the actual results screen — not stay hidden as it did in 3.1,
+  //    when meds/surgery data was entirely absent from Gut mode.
+  await page.evaluate(() => {
+    const P = window.__req('ui-patient.js');
+    P.newVisitFor({}, false);
+  });
+  await page.waitForTimeout(30);
+  await page.locator('#gstepper .step', { hasText: 'Medications' }).click();
+  await page.waitForTimeout(30);
+  await page.locator('.chip-opt', { hasText: 'Acid blocker (PPI/H2)' }).click();
+  await page.waitForTimeout(30);
+  await page.locator('button', { hasText: 'View results' }).click();
+  await page.waitForTimeout(100);
+  const resultsText2 = await page.evaluate(() => document.querySelector('#patient-results')?.textContent || '');
+  ok(/Disruption Load/.test(resultsText2), 'Disruption Load tile IS shown in Gut mode once meds data exists (reversed from the earlier, now-corrected, always-hidden behavior)');
+  ok(!/Dysbiosis Correlate Load/.test(resultsText2), 'Dysbiosis Correlate Load stays hidden — its data (extras.dys) is still Lifestyle-only, genuinely unassessed');
 
   if (errors.length) { console.log('Page errors:', errors); failed += errors.length; }
 

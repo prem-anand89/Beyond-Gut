@@ -1909,7 +1909,7 @@ ok(/id: 'background'[\s\S]{0,200}profileHydrated[\s\S]{0,60}profileBanner\(\)/.t
   "the Phase-1 hydration banner is rendered from the 'background' step (where the chip cards it pre-fills actually are), not 'anthro'");
 ok(/id: 'safety'[\s\S]{0,120}showIf: \(\) => RED_FLAGS\.length > 0/.test(bs),
   "Safety step drops out (showIf) when the schema carries no red flags — numbering stays gap-free");
-ok(/return steps\.filter\(s => !s\.showIf \|\| s\.showIf\(\)\)/.test(bs),
+ok(/const visible = steps\.filter\(s => !s\.showIf \|\| s\.showIf\(\)\)/.test(bs),
   'buildSteps() renumbers over surviving steps (hidden steps do not leave a gap)');
 
 // Each step keeps the SAME cards/holders the old scroll produced — the reveal
@@ -2079,10 +2079,22 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
 // ── screenScope: Gut Quick Screen vs Full assessment (flow-phase-3) ────────
 {
   const bs3 = html.match(/function buildSteps\(\)\s*\{[\s\S]*?\n\}\n/)[0];
-  ['anthro', 'background', 'meds', 'lifestyle', 'systemic', 'treatments'].forEach(id => {
+  // flow-phase-3.2: only Anthropometrics/Lifestyle/Systemic/Treatments are
+  // still deferred to Full mode — Background/Meds now show the FULL chip
+  // lists in Gut mode too (a truncated 1-of-19 chip list would misrepresent
+  // what the tool is even asking), per the audited "Gut+" bundle.
+  ['anthro', 'lifestyle', 'systemic', 'treatments'].forEach(id => {
     ok(new RegExp(`id: '${id}'[\\s\\S]{0,250}showIf: \\(\\) => session\\.screenScope === 'full'`).test(bs3),
       `'${id}' step is gated to Full mode only (deferred in Gut Quick Screen)`);
   });
+  ['background', 'meds'].forEach(id => {
+    ok(!new RegExp(`id: '${id}'[\\s\\S]{0,120}showIf:`).test(bs3),
+      `'${id}' step has no screenScope gate — shows its full chip list in both Gut and Full mode (flow-phase-3.2)`);
+  });
+  ok(/if \(session\.gender === 'Female' && session\.screenScope === 'full'\) c\.appendChild\(obstetricCard\(\)\)/.test(bs3),
+    "obstetricCard() alone stays Full-mode-only within the Background step — not part of the audited Gut+ bundle");
+  ok(/const order = \['safety', 'gut', 'background', 'meds'\]/.test(bs3),
+    'Gut mode explicitly reorders to Safety → Gut first, even though Background/Meds sit earlier in the array (which Full mode keeps unchanged)');
   ok(/id: 'safety'[\s\S]{0,400}showIf: \(\) => RED_FLAGS\.length > 0/.test(bs3),
     "'safety' step has NO screenScope gate — safety stays mandatory in every mode");
   ok(!/id: 'gut'[\s\S]{0,60}showIf:/.test(bs3), "'gut' step has no screenScope gate — always shown");
@@ -2138,14 +2150,17 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
   const noScope = scoring.computeScores(gutOnlyAnswers);
   ok(noScope.completeness === fullScoped.completeness, 'computeScores() with no scope argument behaves exactly as before (defaults to full/unscoped) — no behavior change for existing callers');
 
-  // Disruption/Correlate hiding: with zero meds/surgery/dys data (exactly
-  // what a gut-only visit has), scope:'gut' must drop both tiles from
-  // primaryList; scope:'full' (or omitted) keeps today's behavior.
+  // Correlate hiding: flow-phase-3.2 moved Background/Meds (which feed
+  // Disruption Load) into Gut mode's always-shown bundle, so that tile now
+  // has real data there and must NOT be hidden. Dysbiosis Correlate Load
+  // still needs extras.dys (Lifestyle, still deferred), so it alone stays
+  // hidden in gut scope.
   const emptyEx = { meds: { abx: false, ppi: false, nsaid: false }, surgeries: [], dys: {} };
   const headsGut = scoring.headlineOutputs(gutScoped, emptyEx, { signals: [] }, 'gut');
-  ok(headsGut.primaryList.length === 2, `scope:'gut' headlineOutputs() primaryList has only 2 tiles (Symptom, Nutrient), got ${headsGut.primaryList.length}`);
-  ok(!headsGut.primaryList.some(t => t.key === 'disruption_load' || t.key === 'dysbiosis_correlate_load'),
-    "scope:'gut' primaryList never includes Disruption Load or Dysbiosis Correlate Load");
+  ok(headsGut.primaryList.length === 3, `scope:'gut' headlineOutputs() primaryList has 3 tiles (Symptom, Nutrient, Disruption), got ${headsGut.primaryList.length}`);
+  ok(headsGut.primaryList.some(t => t.key === 'disruption_load'), "scope:'gut' primaryList DOES include Disruption Load now that Background/Meds feed it in Gut mode");
+  ok(!headsGut.primaryList.some(t => t.key === 'dysbiosis_correlate_load'),
+    "scope:'gut' primaryList still excludes Dysbiosis Correlate Load — extras.dys is still Lifestyle-only (deferred)");
 
   const headsFull = scoring.headlineOutputs(fullScoped, emptyEx, { signals: [] }, 'full');
   ok(headsFull.primaryList.length === 4, `scope:'full' headlineOutputs() primaryList keeps all 4 tiles, got ${headsFull.primaryList.length}`);

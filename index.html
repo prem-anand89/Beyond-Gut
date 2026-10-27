@@ -1677,16 +1677,16 @@ const loadBandFor = (count) => count >= 2 ? 'Elevated' : (count >= 1 ? 'Some' : 
 // and Impact are still shown, just one tier down.
 // Burden/Load convention: "Burden" = current symptom severity; "Load" =
 // exposure/risk accumulation; "Risk" = the malabsorption-risk read.
-// `scope` ('gut' | 'full', default 'full') — flow-phase-3.1 honesty fix.
-// Disruption Load and Dysbiosis Correlate Load are both built from
-// extras.meds / extras.surgeries / extras.dys, none of which a Gut Quick
-// Screen ever offers — they'd otherwise compute as an empty array (length 0)
-// and render a confident green "Low" pill that reads as "assessed, clear"
-// rather than "not assessed". Unlike the other primary/secondary tiles
-// (Nutrient/Inflammatory/Psychosocial/Impact), which already degrade to a
-// null value+band when their section wasn't answered, these two have no such
-// null state of their own — so in gut scope they're hidden from primaryList
-// entirely rather than shown with a misleading pill.
+// `scope` ('gut' | 'full', default 'full') — flow-phase-3.1 honesty fix,
+// revised in 3.2. Disruption Load (extras.meds/extras.surgeries) and
+// Dysbiosis Correlate Load (extras.dys) both have no null state of their
+// own — an unanswered section computes as an empty array (length 0) and
+// renders a confident green "Low" pill that reads as "assessed, clear"
+// rather than "not assessed", unlike every other tile here. Flow-phase-3.2
+// moved Background/Meds (which feed Disruption Load) into Gut mode's
+// always-shown bundle, so that tile now has real data there and should
+// render normally; Dysbiosis Correlate Load still needs extras.dys, which
+// lives in the still-deferred Lifestyle step, so it alone stays hidden.
 function headlineOutputs(score, ex, dys, scope) {
   const S = __req('scales.js');
   const ax = axisProfile(score, ex, dys);
@@ -1738,7 +1738,7 @@ function headlineOutputs(score, ex, dys, scope) {
     // dropped from the list (not just blanked) in Gut scope; see the
     // function-level comment above for why these two specifically.
     primaryList: scope === 'gut'
-      ? [primary.symptom, primary.nutrient]
+      ? [primary.symptom, primary.nutrient, primary.disruption]
       : [primary.symptom, primary.nutrient, primary.disruption, primary.correlate],
     secondaryList: [secondary.inflammatory, secondary.psychosocial, secondary.impact],
   };
@@ -3840,8 +3840,8 @@ function buildSteps() {
     // history chip-cards — the latter now also hosts the Phase-1 hydration
     // banner, since that's the content it's actually pre-filling.
     // flow-phase-3: in Gut Quick Screen (session.screenScope === 'gut', the
-    // default for a new anonymous session), ONLY Safety + Gut symptoms(+IMP)
-    // show — everything below is deferred until the patient taps "Add full
+    // default for a new anonymous session), Anthropometrics/Lifestyle/
+    // Systemic/Treatments are deferred until the patient taps "Add full
     // assessment" (expandToFull()) or a clinician starts in Full mode. Full
     // mode's step set/order is completely unchanged from before this phase.
     { id: 'anthro', label: 'Anthropometrics', sub: 'Height, weight & waist — optional, ~30 sec',
@@ -3849,19 +3849,25 @@ function buildSteps() {
       build(c) {
         c.appendChild(anthropometricsCard());
       } },
-    { id: 'background', label: 'Background', sub: 'Conditions, labs & family/surgical history — optional, ~1–2 min',
-      showIf: () => session.screenScope === 'full',
+    // flow-phase-3.2: Background and Meds are NOT scope-gated (both modes show
+    // the FULL lists) — a chip list's whole point is "tap any that apply";
+    // showing only 1-2 cherry-picked chips out of 19 conditions / 7 surgeries
+    // would look like the tool only cares about those few, which is worse
+    // than not asking. Obstetric history alone stays Full-only — it wasn't
+    // part of the audited Gut+ bundle (Anthropometrics/Lifestyle/Systemic/
+    // Treatments are the only things still deferred).
+    { id: 'background', label: 'Background', sub: 'Conditions, labs & family/surgical history — optional, ~1 min',
       build(c) {
         if (profileHydrated) c.appendChild(profileBanner());
         c.appendChild(conditionsCard());
         c.appendChild(labsCard());
         c.appendChild(familyHistoryCard());
-        // Obstetric/birth history is shown only for patients recorded as Female.
-        if (session.gender === 'Female') c.appendChild(obstetricCard());
+        // Obstetric/birth history is shown only for patients recorded as
+        // Female AND in Full mode — not part of the Gut+ bundle.
+        if (session.gender === 'Female' && session.screenScope === 'full') c.appendChild(obstetricCard());
         c.appendChild(surgicalCard());
       } },
     { id: 'meds', label: 'Medications', sub: 'Current medications & symptom-cause confounders',
-      showIf: () => session.screenScope === 'full',
       build(c) {
         c.appendChild(medsCard());
         c.appendChild(medConfoundersCard());
@@ -3908,7 +3914,18 @@ function buildSteps() {
       showIf: () => session.screenScope === 'full',
       build(c) { c.appendChild(treatmentsTriedCard()); } },
   ];
-  return steps.filter(s => !s.showIf || s.showIf());
+  const visible = steps.filter(s => !s.showIf || s.showIf());
+  // flow-phase-3.2: Full mode keeps the array's natural order (about → meds →
+  // safety → gut → ...) untouched. Gut mode still leads with Safety → Gut
+  // symptoms — a patient should hit the safety screen and their actual
+  // complaint before a background/meds review, even though Background/Meds
+  // now render in Gut mode too (they sit earlier in the array above, for
+  // Full mode's sake) — so they're explicitly reordered to come AFTER.
+  if (session.screenScope === 'gut') {
+    const order = ['safety', 'gut', 'background', 'meds'];
+    return order.map(id => visible.find(s => s.id === id)).filter(Boolean);
+  }
+  return visible;
 }
 
 function render() {
@@ -3932,10 +3949,16 @@ function render() {
   const mainQ = inScopeQuestions.filter(q => !q.optional).length;
   const optQ = inScopeQuestions.filter(q => q.optional).length;
   const [tLo0, tHi0] = minutes(mainQ);
-  const tLo = Math.max(3, tLo0), tHi = Math.max(tLo + 1, tHi0);
+  let tLo = Math.max(3, tLo0), tHi = Math.max(tLo + 1, tHi0);
   const [oLo, oHi] = minutes(optQ);
+  // flow-phase-3.2: the scored QUESTIONS count alone undercounts Gut mode's
+  // real time now that Background/Meds (chip cards, not scored QUESTIONS —
+  // so invisible to the count above) render in Gut mode too. +1 min is a
+  // rough, honest bump for that — not a precise per-chip model (that's
+  // Phase 5's job), just enough that the estimate isn't quietly wrong.
+  if (session.screenScope === 'gut') { tLo += 1; tHi += 1; }
   const metaLine = session.screenScope === 'gut'
-    ? `<span>📋 <b>Gut quick screen</b> · ${mainQ} questions · about <b>${tLo}–${tHi} minutes</b></span>`
+    ? `<span>📋 <b>Gut quick screen</b> · about <b>${tLo}–${tHi} minutes</b></span>`
     : `<span>📋 <b>${mainQ} questions</b> · about <b>${tLo}–${tHi} minutes</b> <span class="muted">(plus optional history, lifestyle &amp; targeted follow-up questions when relevant — about ${oLo + 1}–${oHi + 1} min more)</span></span>`;
   root.appendChild(el('div', { class: 'form-meta' },
     `${metaLine}
@@ -3946,8 +3969,11 @@ function render() {
   // separate UI for the two is needed since they're the same action.
   if (session.screenScope === 'gut') {
     const expandRow = el('div', { class: 'form-meta', style: 'padding-top:0' });
+    // ~7 min, not the original ~10 — flow-phase-3.2 already moved Background/
+    // Meds into Gut mode, so expanding now only adds Anthropometrics,
+    // Lifestyle, Systemic axes, and Treatments, not those too.
     const expandBtn = el('button', { class: 'btn btn-gh', type: 'button', style: 'font-size:12px;padding:4px 10px' },
-      'Add full assessment (~10 min more) →');
+      'Add full assessment (~7 min more) →');
     expandBtn.onclick = () => expandToFull();
     expandRow.appendChild(el('span', { class: 'muted' }, 'Want a deeper, whole-body screen instead? '));
     expandRow.appendChild(expandBtn);
