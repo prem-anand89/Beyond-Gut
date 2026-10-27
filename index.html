@@ -3888,6 +3888,24 @@ function confirmProfileUnchanged() { profileConfirmedThisVisit = true; toast('Go
 // the on-screen Clinician tab and the printed report, so a skipped systemic
 // module is never silently absent from either surface.
 const GUT_SCOPE_CAVEAT = 'Gut quick screen — systemic assessment (immune, brain-gut, nutrient, lifestyle, psychosocial) not completed this session.';
+// flow-phase-5 acceptance criterion: which mode a visit was screened in must
+// be visible on BOTH the on-screen Clinician tab and the printed report, as
+// a first-class badge — not just findable by reading the caveat line above.
+// Shown in every mode (not just gut), so "Full Assessment" is just as
+// explicit as "Gut Screen" rather than mode only being called out when it's
+// the shorter one.
+function scopeBadgeHtml() {
+  const gut = session.screenScope === 'gut';
+  const bg = gut ? '#185FA5' : 'var(--ok)';
+  return `<span class="pill" style="background:${bg};color:#fff">${gut ? 'Gut Screen' : 'Full Assessment'}</span>`;
+}
+
+// Rough per-step minute estimates (flow-phase-5) — feeds the stepper's
+// "~N min left" line (paintWizard()) and the step `sub` time hints below.
+// Not a precise per-question model; just enough that the live estimate
+// stays honest as the patient progresses, instead of only ever quoting the
+// one number computed at the top of the page.
+const STEP_TIME_MIN = { anthro: 0.5, background: 1, meds: 0.5, safety: 0.5, gut: 2.5, lifestyle: 1.5, systemic: 3, treatments: 1 };
 
 function buildSteps() {
   const steps = [
@@ -4049,8 +4067,12 @@ function render() {
   // session (sessionStorage) rather than on every render.
   const notices = el('div', { id: 'gstep-notices' });
   if (!sessionStorage.getItem('gshs-notice-dismissed')) {
+    // flow-phase-5 acceptance criterion: a privacy one-liner on the start
+    // screen ("data stays on this device, no account required"). Folded into
+    // the existing shared-device notice rather than added as a second line —
+    // same underlying fact (local-only storage), one place to read it.
     const line = el('div', { class: 'notice-line' },
-      `<span>🔒 Shared device — clear browser data after each patient.</span>`);
+      `<span>🔒 Data stays on this device — no account required. On a shared device, clear browser data after each patient.</span>`);
     const x = el('button', { class: 'x', type: 'button', title: 'Dismiss' }, '✕');
     x.onclick = () => { sessionStorage.setItem('gshs-notice-dismissed', '1'); line.remove(); };
     line.appendChild(x);
@@ -4144,12 +4166,19 @@ function paintWizard(steps) {
       stepper.appendChild(btn);
     });
   }
-  // Sub-line: names the immediate neighbours.
+  // Sub-line: names the immediate neighbours, plus a rough time-left
+  // estimate (flow-phase-5) summed over the current step and every step
+  // still ahead — not precise (that would need a live per-question timer),
+  // just enough that the estimate stays honest as the patient progresses,
+  // instead of only ever showing the one number from the top of the page.
   const sub = document.getElementById('gstepsub');
   if (sub) {
     const prev = currentStep > 0 ? steps[currentStep - 1].label : null;
     const next = currentStep < n - 1 ? steps[currentStep + 1].label : null;
-    sub.innerHTML = [prev ? `Previous: <b>${esc(prev)}</b>` : null,
+    const minsLeft = steps.slice(currentStep).reduce((t, s) => t + (STEP_TIME_MIN[s.id] || 1), 0);
+    const timeTxt = `~${Math.max(1, Math.round(minsLeft))} min left`;
+    sub.innerHTML = [timeTxt ? `<b>${esc(timeTxt)}</b>` : null,
+      prev ? `Previous: <b>${esc(prev)}</b>` : null,
       next ? `Next up: <b>${esc(next)}</b>` : 'Final step'].filter(Boolean).join(' · ');
   }
 
@@ -5333,6 +5362,19 @@ function calc() {
     } catch (e) { toast('Could not save: ' + (e && e.message || 'storage error')); }
   };
   actions.appendChild(saveBtn);
+  // flow-phase-5 acceptance criterion: a clearly labeled, prominent "take
+  // this to my appointment" action on the PATIENT's own results screen — the
+  // underlying export is the same consolidated print/PDF printSummary()
+  // always produced, but the button here previously read "🖨 Clinician
+  // report", which is a confusing label for a patient to click on their own
+  // screen (the Clinician tab's identical button, further down this file,
+  // keeps that label — it's correct there). Positioned right after Save,
+  // ahead of the CSV/Start-new housekeeping actions.
+  const takeBtn = el('button', { class: 'btn btn-g', type: 'button' }, '📄 Take this to my appointment');
+  const takeApxToggle = appendixToggleEl();
+  takeBtn.onclick = () => printSummary(takeApxToggle.querySelector('input').checked);
+  actions.appendChild(takeBtn);
+  actions.appendChild(takeApxToggle);
   const dlBtn = el('button', { class: 'btn', type: 'button' }, 'Download pilot CSV');
   dlBtn.onclick = () => {
     const db = Store.loadDB();
@@ -5349,11 +5391,6 @@ function calc() {
     Store.saveDB(db);
   };
   actions.appendChild(dlBtn);
-  const clPrintBtn = el('button', { class: 'btn btn-gh', type: 'button' }, '🖨 Clinician report');
-  const clApxToggle = appendixToggleEl();
-  clPrintBtn.onclick = () => printSummary(clApxToggle.querySelector('input').checked);
-  actions.appendChild(clPrintBtn);
-  actions.appendChild(clApxToggle);
   const newBtn = el('button', { class: 'btn', type: 'button' }, 'Start new');
   newBtn.onclick = () => { clearPatient(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   actions.appendChild(newBtn);
@@ -5810,7 +5847,7 @@ function buildClinicianPrint(c, opts) {
   const isMinor = !isNaN(ageNum) && ageNum < 18;
 
   const div = document.createElement('div');
-  let h = `<div class="pr-logo">Enterro360 · Gut & Systemic Health Screen</div>
+  let h = `<div class="pr-logo">Enterro360 · Gut & Systemic Health Screen ${scopeBadgeHtml()}</div>
     <div class="pr-meta">
       Patient: <b>${esc(patName)}</b>${session.ref ? ` · Ref: ${esc(session.ref)}` : ''}<br>
       Age: ${esc(session.age || '—')} · Gender: ${esc(session.gender || '—')}${isPregnant ? ' · <b>Pregnant</b>' : ''}${isMinor ? ' · <b>Under 18</b>' : ''}<br>
@@ -6320,7 +6357,7 @@ function renderClinician() {
   meta.push(session.followup ? 'Follow-up' : 'Baseline');
   const head = el('div', { class: 'card row', style: 'justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap' });
   head.appendChild(el('div', {},
-    `<div style="font-weight:700;font-size:16px">👤 ${esc(who)}</div>
+    `<div style="font-weight:700;font-size:16px">👤 ${esc(who)} ${scopeBadgeHtml()}</div>
      <div class="q-sub" style="margin:2px 0 0">${meta.join(' · ')}</div>`));
   // Clinician-only tool — one report, appendix opt-in via the checkbox.
   const printBtn = el('button', { class: 'btn btn-g', type: 'button' }, '🖨 Clinician report');

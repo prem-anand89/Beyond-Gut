@@ -13,7 +13,7 @@ Beyond-Gut is a **validated gut-symptom + systemic-screening + pattern-detection
 - **Specialty-specific investigation lists** matched to fired patterns
 - **Offline-first architecture** — zero cloud, zero authentication, data stays on the patient's device
 
-**Language:** Plain English, no jargon. **Time:** ~15 minutes for core, ~25 minutes if adaptive sections revealed. **Platform:** Single HTML file, works in any modern browser on desktop, tablet, or mobile.
+**Language:** Plain English, no jargon. **Time:** a public/patient link defaults to the **Gut quick screen (~4–6 min)** — Safety and Gut symptoms only; a clinician can switch to the **Full assessment (~10–12 min)** at any point, before or during the screen, without losing answers already given. **Platform:** Single HTML file, works in any modern browser on desktop, tablet, or mobile.
 
 ---
 
@@ -252,10 +252,10 @@ The tool is a **screening framework**, not a diagnostic engine. Know what it doe
 ## Getting Started
 
 ### For Patients
-1. **Fill the questionnaire** on screen or on paper (~15–25 min depending on complexity)
+1. **Fill the questionnaire** on screen — defaults to the Gut quick screen (~4–6 min); "Add full assessment" expands to the full systemic workup (~10–12 min) without losing any answers already given
 2. **Click "Save this response"** to store the visit
 3. **View your results** in the Patient tab
-4. **Share with your clinician** or download as PDF
+4. **Click "Take this to my appointment"** to print or save a PDF to share with your clinician
 
 ### For Clinicians
 1. **Ask your patient to fill the questionnaire** (you can assist or they can fill solo)

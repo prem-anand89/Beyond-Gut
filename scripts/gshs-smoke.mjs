@@ -2214,5 +2214,28 @@ ok(/GI clusters — first → latest visit/.test(trendPrintBlock) && /→<\/span
   ok(/'⚙ Clinic device settings'/.test(html), 'Records tab exposes the settings button, named "Clinic device settings" (not "clinician config")');
 }
 
+// ── Acceptance-criteria polish (flow-phase-5) ───────────────────────────────
+{
+  ok(/Data stays on this device — no account required\./.test(html), 'the privacy one-liner is shown on the start screen');
+  ok(/📄 Take this to my appointment/.test(html), 'the patient results screen has a clearly labeled "take this to my appointment" action, not the clinician-facing "🖨 Clinician report" label');
+  // Regression guard: the Clinician TAB's own print button (a genuinely
+  // different call site, for an actual clinician) must keep its own label —
+  // the fix above only renamed the patient-view instance.
+  ok(/function renderClinician\(\)\s*\{[\s\S]*?🖨 Clinician report/.test(html),
+    "renderClinician() (the actual Clinician tab) still has its own correctly-labeled print button, untouched by the patient-view rename");
+
+  const sbh = html.match(/function scopeBadgeHtml\(\)\s*\{[\s\S]*?\n\}\n/);
+  ok(!!sbh, 'sanity: scopeBadgeHtml() function body captured');
+  ok(/'Gut Screen' : 'Full Assessment'/.test(sbh[0]), 'scopeBadgeHtml() labels BOTH modes explicitly — Full Assessment is just as visible as Gut Screen, not only called out when short');
+  ok(/scopeBadgeHtml\(\)/.test(html.match(/function renderClinician\(\)\s*\{[\s\S]*?\n\}\n/)[0]),
+    'the mode badge renders on the on-screen Clinician tab');
+  ok(/scopeBadgeHtml\(\)/.test(html.match(/function buildClinicianPrint\(c, opts\)\s*\{[\s\S]*?\n(?=function )/)[0]),
+    'the mode badge renders on the printed report too — both surfaces, not just one');
+
+  const pw = html.match(/function paintWizard\(steps\)\s*\{[\s\S]*?\n\}\n/)[0];
+  ok(/STEP_TIME_MIN\[s\.id\]/.test(pw), "the stepper's sub-line sums STEP_TIME_MIN over the current + remaining steps for a live '~N min left' estimate");
+  ok(/const STEP_TIME_MIN = \{/.test(html), 'STEP_TIME_MIN is defined as a single source of truth, reused by the stepper time-left line');
+}
+
 console.log(failed ? `\n${failed} check(s) failed.` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

@@ -789,12 +789,30 @@ Major pattern (constipation/diarrhoea/reflux/malabsorption)?
 
 ## Section 12: How to Use This Tool in Practice
 
+### Public link (Gut screen) vs in-clinic full intake
+
+A link shared publicly (e.g. embedded on a clinic or practitioner website) and a link opened in-clinic are the **same tool**, not two builds — only the default starting scope differs, and either can switch to the other at any time without losing answers:
+
+| | **Gut quick screen** (public-link default) | **Full assessment** |
+|---|---|---|
+| Steps shown | Safety, Gut symptoms (+ functional impact) | All 8 steps — adds Anthropometrics, Background, Medications, Lifestyle, Systemic axes (immune/brain-gut/nutrient + PSS-4), Treatments |
+| Typical time | ~4–6 minutes | ~10–12 minutes |
+| What the clinician gets | Core Gut Symptom Burden, Rome IV subtype, red-flag safety routing, functional-impact read, bowel-pattern and reflux/BAM patterns where the data supports them | All of the above, plus the immune/nutrient/psychosocial axes, lifestyle/dysbiosis correlates, and every pattern that depends on them |
+| How it's labeled | "Gut Screen" badge on both the on-screen Clinician tab and the printed report; a caveat names exactly which modules weren't completed | "Full Assessment" badge, no caveat |
+
+**Switching modes:**
+- A patient can expand mid-screen via the persistent "Add full assessment" control (visible on every step) — this reveals the remaining steps in place, it never restarts the wizard or discards an answer already given.
+- A clinic that always wants the full intake by default (e.g. an in-clinic tablet) can set that once via **Records → ⚙ Clinic device settings → "New patients on this device start with: Full assessment"** — a per-device setting (no login), not a per-patient toggle.
+- The same settings panel can set follow-up visits to skip straight to symptoms (~5 min) once a returning patient's background is already on file — only activates when that patient actually has a saved profile to fall back on.
+
+**Reading a Gut-screen-only report:** treat the "Gut Screen" badge and its caveat as load-bearing, not decorative — a module listed as not completed genuinely wasn't assessed, which is different from having been assessed and found clear. Do not infer an immune, nutrient, or psychosocial finding from its absence; expand to the Full assessment (or ask the patient directly) before ruling one in or out.
+
 ### Patient Workflow
 
-1. **Questionnaire completion** — 15–25 minutes depending on adaptive section reveals
+1. **Questionnaire completion** — ~4–6 minutes (Gut quick screen, the public-link default) or ~10–12 minutes (Full assessment), per the table above
 2. **Clinician review** (same visit or follow-up):
    - Check red flags (safety first)
-   - Review primary outputs (4 burdens)
+   - Review primary outputs (4 burdens) — note the mode badge if some are absent/hidden on a Gut-screen-only visit
    - Check patterns + investigations
    - Read triage notes + Tier
    - Integrate with H&P + clinical judgment
